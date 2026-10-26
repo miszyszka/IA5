@@ -5,6 +5,11 @@ Najnowsze na górze.
 
 ---
 
+### D-009 · 2026-10-26 · Apps Script: zapis przez `documents:commit`, nie `PATCH`
+- **Decyzja:** świece i status zapisywane przez endpoint `commit` z `updateMask` w treści żądania, nagłówek `x-goog-user-project: project-ia5`.
+- **Powód:** `PATCH` wymaga listy pól w adresie URL — przy ~740 świecach w miesiącu adres przekracza limit długości UrlFetch. Nagłówek kieruje limity na projekt Firebase, a nie domyślny projekt skryptu.
+- **Ograniczenie:** święta (np. 25 grudnia) nie są w kalendarzu sesji — tego dnia status pokaże STOI. Do poprawy, gdy będzie przeszkadzać.
+
 ### D-008 · 2026-10-26 · Wielkość pozycji: % kapitału jako depozyt, domyślnie 5/10/15/20/30%
 - **Decyzja:** depozyt = X% kapitału, nominał = 5 × depozyt (dźwignia 1:5). Domyślnie liczymy X ∈ {5, 10, 15, 20, 30}%; strategia może podać własne (`SIZING`). Suma depozytów otwartych pozycji ≤ 100% kapitału; sygnał bez wolnego depozytu pomijany i liczony.
 - **Powód:** Michał: „zależy od strategii, domyślnie zawsze kilka opcji 5, 10, 15, 20, 30% kapitału". Limit depozytu utrzymuje łączną ekspozycję ≤ 1:5.

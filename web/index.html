@@ -18,7 +18,14 @@
   .kpi small { color:var(--mute); display:block; margin-bottom:6px; }
   .kpi b { font:600 22px "JetBrains Mono", monospace; font-variant-numeric:tabular-nums; }
   .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--mute); margin-right:8px; }
-  main { padding:0 16px 32px; color:var(--mute); }
+  .sub { color:var(--mute); font-size:12px; margin-top:6px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  main { padding:0 16px 32px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { padding:9px 14px; text-align:left; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--mute); font-weight:400; font-size:12px; }
+  td.num { font-family:"JetBrains Mono", monospace; font-variant-numeric:tabular-nums; text-align:right; }
+  .note { color:var(--mute); margin-top:16px; }
 </style>
 </head>
 <body>
@@ -28,10 +35,20 @@
 </header>
 <section class="kpis">
   <div class="kpi"><small>Dane</small><b><span class="dot" id="dataDot"></span><span id="dataState">—</span></b></div>
-  <div class="kpi"><small>Latencja ostatniej świecy</small><b id="latency">— s</b></div>
+  <div class="kpi"><small>Latencja ostatniej świecy</small><b id="latency">— s</b><div class="sub" id="latencySub"></div></div>
   <div class="kpi"><small>Świece w bazie</small><b id="bars">—</b></div>
   <div class="kpi"><small>Mac</small><b><span class="dot" id="macDot"></span><span id="macState">—</span></b></div>
+  <div class="kpi"><small>Flagi jakości danych</small><b id="flags">—</b><div class="sub" id="flagsSub"></div></div>
 </section>
-<main>Szkielet E0. Status podłączę do Firestore w E1, strategie w E4.</main>
+<main>
+  <div class="panel">
+    <table>
+      <thead><tr><th>Para</th><th>Ostatnia świeca</th><th style="text-align:right">Latencja s</th><th style="text-align:right">Świece</th><th style="text-align:right">Flagi</th></tr></thead>
+      <tbody id="pairsBody"></tbody>
+    </table>
+  </div>
+  <p class="note">Strategie — etap E4.</p>
+</main>
+<script type="module" src="status.js"></script>
 </body>
 </html>
