@@ -5,6 +5,22 @@ Najnowsze na górze.
 
 ---
 
+### D-021 · 2026-10-26 · Dukascopy: miesiąc zapisany w trakcie jest dociągany po jego końcu
+- **Problem:** `months_to_sync` pomijał każdy miesiąc, który miał już plik. Miesiąc zapisany np. 20-go (bo wtedy działał `ia5 start`) po przejściu na nowy miesiąc zostawał z trwałą luką od 20-go do końca miesiąca — kontrola jakości by ją zgłosiła, ale nic by jej nie uzupełniło.
+- **Decyzja:** miesiąc jest pełny, gdy ma dane z ostatniego dnia handlowego (pn–pt) albo plik zapisano ≥ 2 dni po końcu miesiąca (wtedy zawiera wszystko, co Dukascopy ma — np. przy święcie bez notowań). Niepełny → pobierany ponownie przy najbliższym `ia5 start`. Pusty plik = brak notowań w Dukascopy → pełny.
+- **Odrzucone:** osobny plik-znacznik pełnych miesięcy (nie naprawia plików już zapisanych na Macu); sama data modyfikacji pliku (zapis tuż po północy mógłby udawać pełny miesiąc).
+
+### D-020 · 2026-10-26 · Dziennik świec w `meta/status.daily`
+- **Decyzja:** Apps Script liczy świece w bazie wg dnia świecy (UTC), per para, ostatnie 60 dni; backfill przelicza, tick dolicza nowe. Pierwsze uruchomienie (i ręczne `rebuildDaily()`) zasiewa dziennik z dokumentów `candles/*` bieżącego i poprzedniego miesiąca. Zakładka Stats pokazuje 30 dni wobec oczekiwanych z kalendarza sesji.
+- **Z4:** 0 dodatkowych zapisów (pole jedzie w istniejącym zapisie statusu), 16 odczytów jednorazowo przy zasiewie, dashboard 0 dodatkowych odczytów (i tak nasłuchuje `meta/status`). Rozmiar: ok. 60 × 8 liczb.
+- **Odrzucone:** liczenie w przeglądarce ze świec na gałęzi `data` (zależne od działającego Maca, gałąź jeszcze bez świec); czytanie arkusza `log` (wymaga logowania do Google Sheets); dokument na każdy dzień (zbędne odczyty).
+- **Ograniczenie:** dziennik liczy Yahoo (monitoring). Kompletność Dukascopy (dane do backtestów) widać na razie tylko w terminalu `ia5 start` („luki N”).
+
+### D-019 · 2026-10-26 · Design: płasko, jeden akcent, stan w nagłówku, zakładka Stats (CLAUDE.md 10.1, 10.2, 11)
+- **Decyzja (Michał):** bardziej minimalistycznie i spójnie — bez gradientów, mniej kolorów, poświata. Wskaźnik „dane żyją” tuż obok „Mac połączony”, bez kafli KPI; liczba świec i reszta liczb w nowej zakładce **Stats** z dziennikiem dzień po dniu; pary jako jeden symboliczny kafelek bez danych i bez rozwijania.
+- **Jak:** jeden akcent (pomarańcz) wyłącznie dla „wybrane”; zielony/bursztyn/czerwony wyłącznie jako stan i znak wyniku; usunięty niebieski i błękit; poświata tylko na kropkach stanu (lekko „oddychają”, gdy system działa; wyłączone przy `prefers-reduced-motion`). Wykresy bez wypełnienia gradientem i bez poświaty linii.
+- **Odrzucone:** poświata na przyciskach, paskach i kartach (rozmywa znaczenie — świeci wszystko, więc nic); osobny pasek statusu pod nagłówkiem (więcej miejsca, a Michał chciał prościej).
+
 ### D-018 · 2026-10-26 · Detektor look-ahead: cięcia + zaburzenie przyszłości
 - **Decyzja:** oprócz 8 losowych cięć pełnych danych — 24 gęste cięcia na wycinku 2000 świec, a przy każdym porównanie sygnałów sprzed cięcia przy przyszłości ×1,3 i ×0,7.
 - **Powód:** same cięcia nie wykrywały „krótkiego” look-ahead (SMA z niezamkniętej świecy H4 zmienia średnią minimalnie). Zaburzenie przyszłości wykrywa go na każdej parze (test `test_unclosed_higher_timeframe_is_caught`).

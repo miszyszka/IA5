@@ -15,32 +15,25 @@
 </head>
 <body>
 <header class="top">
-  <a class="logo" href="#/" aria-label="IA5 — strona główna"><span>IA5</span></a>
+  <a class="logo" href="#/" aria-label="IA5 — strona główna">IA5</a>
   <nav aria-label="Zakładki">
     <a data-tab="strategies" href="#/">Strategie</a>
+    <a data-tab="stats" href="#/stats">Stats</a>
     <a data-tab="investors" href="#/inwestorzy">Inwestorzy</a>
   </nav>
+  <div id="status" class="live" aria-label="Stan systemu" aria-live="polite">
+    <a class="ind" id="ind-data" href="#/stats" data-state="mute"><i class="dot"></i><b>Dane</b><span class="s">…</span></a>
+    <span class="ind" id="ind-mac" data-state="mute"><i class="dot"></i><b>Mac</b><span class="s">—</span></span>
+    <a class="ind flags" id="ind-flags" href="#/stats" hidden></a>
+    <span class="pairs-tile" id="pairs-tile"></span>
+  </div>
   <div id="auth" class="auth"></div>
 </header>
-
-<section id="status" class="status" aria-label="Stan systemu">
-  <div class="kpi-tile" id="k-data" data-state="mute"><small>Dane (Yahoo → Firestore)</small><b class="v">…</b><span class="s"></span></div>
-  <div class="kpi-tile" id="k-lat" data-state="plain"><small>Latencja ostatniej świecy</small><b class="v">—</b><span class="s"></span></div>
-  <div class="kpi-tile" id="k-bars" data-state="plain"><small>Świece w bazie</small><b class="v">—</b><span class="s"></span></div>
-  <div class="kpi-tile" id="k-mac" data-state="mute"><small>Mac (ia5 start)</small><b class="v">—</b><span class="s"></span></div>
-  <div class="kpi-tile" id="k-flags" data-state="plain"><small>Flagi jakości danych</small><b class="v">—</b><span class="s"></span></div>
-  <details class="pairs">
-    <summary>Pary walutowe</summary>
-    <div class="tablewrap"><table class="data compact">
-      <thead><tr><th>Para</th><th>Ostatnia świeca (UTC)</th><th>Czas lokalny</th><th>Latencja s</th><th>Świece</th><th>Flagi</th></tr></thead>
-      <tbody id="pairs-body"></tbody>
-    </table></div>
-  </details>
-</section>
 
 <main>
   <section id="view-list" class="view"></section>
   <section id="view-card" class="view" hidden></section>
+  <section id="view-stats" class="view" hidden></section>
   <section id="view-investors" class="view" hidden>
     <div class="empty"><h2>Inwestorzy</h2><p>Wkrótce.</p></div>
   </section>

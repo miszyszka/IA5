@@ -2,6 +2,22 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-10-26 — sesja 2
+
+**Zrobione**
+- Dashboard: nowy design (D-019) — płasko, jeden akcent, poświata tylko na kropkach stanu. Nagłówek: zakładki + Dane i Mac obok siebie + flagi (tylko gdy są) + jeden kafelek „8 par”. Kafle KPI usunięte.
+- Nowa zakładka **Stats**: świece w bazie, latencja, kontrola krzyżowa, flagi, **dziennik dzień po dniu** (30 dni, dodane / oczekiwane, per para), tabela par, lista flag.
+- Apps Script: `meta/status.daily` (D-020) + ręczne `rebuildDaily()`.
+- Dukascopy: naprawiona trwała luka na końcu miesiąca, gdy `ia5 start` nie działał w ostatnim dniu miesiąca (D-021); test regresji.
+- Sprawdzone w headless Chromium na 1440 / 1100 / 390 px (lista, Stats, karta DEMO), bez błędów JS (błędy w logu to tylko blokowane czcionki i limit API GitHub w sesji Claude).
+
+**Następne (Michał)**
+1. Wkleić nowy `apps_script/Code.gs` do Apps Script (zapisz). Najbliższy `tick()` sam zasieje dziennik z bazy — Stats pokaże go od razu.
+2. Na Macu `git pull` — poprawka luk Dukascopy działa przy następnym `ia5 start`.
+
+**Znane problemy**
+- Dziennik w Stats liczy świece Yahoo. Kompletność Dukascopy dzień po dniu (dane do backtestów) — do zrobienia: Mac mógłby publikować ją na gałąź `data`.
+
 ## 2026-10-26 — sesja 1
 
 **Zrobione (kod w repo, testy zielone — 75)**

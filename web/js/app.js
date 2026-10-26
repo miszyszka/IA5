@@ -1,20 +1,24 @@
-// IA5 — dashboard. Router: #/ (strategie), #/s/{id} (karta), #/inwestorzy.
+// IA5 — dashboard. Router: #/ (strategie), #/s/{id} (karta), #/stats, #/inwestorzy.
 import { openCard } from './card.js';
 import { getJSON, refreshData } from './data.js';
 import { login, logout, onUser, watchStrategies } from './fb.js';
 import { initList, renderList } from './list.js';
+import { initStats, renderStats } from './stats.js';
 import { initStatus } from './status.js';
 import { $, $$, copy, h, store, toast } from './util.js';
 
 function route() {
   const hash = location.hash || '#/';
   const m = hash.match(/^#\/s\/(.+)$/);
-  const r = m ? { view: 'card', id: decodeURIComponent(m[1]) } : hash.startsWith('#/inwestorzy') ? { view: 'investors' } : { view: 'list' };
+  const r = m ? { view: 'card', id: decodeURIComponent(m[1]) }
+    : hash.startsWith('#/inwestorzy') ? { view: 'investors' } : hash.startsWith('#/stats') ? { view: 'stats' } : { view: 'list' };
   store.set('route', r);
   $$('.view').forEach((v) => { v.hidden = v.id !== `view-${r.view}`; });
-  $$('nav [data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === (r.view === 'investors' ? 'investors' : 'strategies')));
+  const tab = { investors: 'investors', stats: 'stats' }[r.view] || 'strategies';
+  $$('nav [data-tab]').forEach((b) => { b.classList.toggle('on', b.dataset.tab === tab); if (b.dataset.tab === tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   if (r.view === 'list') renderList();
   if (r.view === 'card') openCard(r.id);
+  if (r.view === 'stats') renderStats();
   window.scrollTo(0, 0);
 }
 
@@ -32,7 +36,7 @@ async function loadIndex() {
 function renderAuth(user) {
   const box = $('#auth');
   if (!user) {
-    box.replaceChildren(h('button', { id: 'login', class: 'btn', onclick: () => login().catch((e) => toast(e.message || String(e), 'bad', 15000)) }, 'Zaloguj (Google)'));
+    box.replaceChildren(h('button', { id: 'login', class: 'btn', onclick: () => login().catch((e) => toast(e.message || String(e), 'bad', 15000)), title: 'Zaloguj kontem Google' }, 'Zaloguj'));
     return;
   }
   const menu = h('div', { class: 'menu', hidden: true },
@@ -48,6 +52,7 @@ let unsubDocs = null;
 async function start() {
   initStatus();
   initList();
+  initStats();
   window.addEventListener('hashchange', route);
   route();
   loadIndex();

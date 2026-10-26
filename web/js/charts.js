@@ -1,5 +1,5 @@
 // Wykresy: ECharts (kapitał, heatmapa, krzywe) i Lightweight Charts (świece z transakcjami).
-// Zasada uczciwości (CLAUDE.md 11): bez wygładzania linii, osie z rzeczywistych wartości.
+// Zasada uczciwości (CLAUDE.md 11): bez wygładzania linii, osie z rzeczywistych wartości. Płasko, bez gradientów (D-019).
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const instances = new Set();
 
@@ -14,7 +14,7 @@ function base() {
   return {
     backgroundColor: 'transparent', animation: false,
     textStyle: { color: css('--text'), fontFamily: 'Inter, system-ui, sans-serif' },
-    tooltip: { backgroundColor: css('--panel-2'), borderColor: line, textStyle: { color: css('--text') }, confine: true },
+    tooltip: { backgroundColor: css('--raised'), borderColor: line, textStyle: { color: css('--text') }, confine: true },
     grid: { left: 64, right: 24, top: 24, bottom: 36 },
     axisDefaults: { axisLine: { lineStyle: { color: line } }, splitLine: { lineStyle: { color: line } }, axisLabel: { color: text } },
   };
@@ -54,12 +54,11 @@ export function equityChart(el, curve, dd, marks = []) {
     series: [
       { name: 'Kapitał', type: 'line', step: 'end', showSymbol: false, xAxisIndex: 0, yAxisIndex: 0,
         data: x.map((t, i) => [t, +curve.equity[i].toFixed(2)]),
-        lineStyle: { color: accent, width: 2, shadowColor: accent, shadowBlur: 8 },
-        areaStyle: { color: new window.echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: accent + '55' }, { offset: 1, color: accent + '00' }]) },
+        lineStyle: { color: accent, width: 1.75 },
         markLine: { symbol: 'none', label: { color: css('--muted'), formatter: '{b}' }, lineStyle: { color: css('--muted'), type: 'dashed' },
           data: marks.map((m) => ({ name: m.label, xAxis: m.ts * 1000 })) } },
       { name: 'Obsunięcie %', type: 'line', step: 'end', showSymbol: false, xAxisIndex: 1, yAxisIndex: 1,
-        data: x.map((t, i) => [t, +dd[i].toFixed(2)]), lineStyle: { color: bad, width: 1 }, areaStyle: { color: bad + '40' } },
+        data: x.map((t, i) => [t, +dd[i].toFixed(2)]), lineStyle: { color: bad, width: 1 }, areaStyle: { color: bad, opacity: 0.18 } },
     ],
   });
 }
@@ -78,7 +77,7 @@ export function heatmap(el, xs, ys, cells, onPick, label) {
     yAxis: { type: 'category', data: ys.map(String), name: 'SL × ATR', nameLocation: 'middle', nameGap: 40, ...ax },
     visualMap: { min: -m, max: m, calculable: false, orient: 'horizontal', left: 'center', bottom: 0, itemHeight: 140,
       text: [`+${m.toFixed(2)}`, `−${m.toFixed(2)}`], textStyle: { color: ax.axisLabel.color },
-      inRange: { color: [css('--bad'), css('--panel-2'), css('--ok')] } },
+      inRange: { color: [css('--bad'), css('--raised'), css('--ok')] } },
     series: [{ type: 'heatmap', data: cells.map((d) => [xs.indexOf(d.x), ys.indexOf(d.y), d.v ?? '-']),
       label: { show: true, color: css('--text'), fontSize: 10, formatter: (p) => (p.value[2] === '-' ? '·' : (+p.value[2]).toFixed(2)) },
       itemStyle: { borderColor: css('--bg'), borderWidth: 2 },
@@ -92,7 +91,7 @@ export function heatmap(el, xs, ys, cells, onPick, label) {
 export function lines(el, xs, series, xName) {
   const b = base();
   const ax = b.axisDefaults;
-  const colors = [css('--accent'), css('--info'), css('--muted')];
+  const colors = [css('--accent'), css('--text'), css('--muted')];
   return chart(el, {
     ...b,
     tooltip: { ...b.tooltip, trigger: 'axis' },

@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.5 · 2026-10-26 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
+Wersja 0.6 · 2026-10-26 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
 
 ---
 
@@ -147,6 +147,7 @@ candles/{PARA}_{RRRR-MM}            np. candles/EURUSD_2026-10
 
 meta/status
   lastRun: { startedAt, finishedAt, ok, error }
+  daily:   { "2026-10-26": { EURUSD: 19, ... }, ... }   # dziennik: świece w bazie wg dnia świecy, 60 dni
   pairs:   { EURUSD: { lastTs, latencySec, count, flags[] }, ... }
   totalBars, latency24h[], dataSha
 
@@ -318,16 +319,18 @@ Rozbicia: para, rok, kierunek, sesja (Azja 00–07, Europa 07–13, USA 13–21 
 
 ## 10. Dashboard
 
-### 10.1 Pasek statusu (zawsze widoczny, na górze)
-- **Dane:** DZIAŁA / OPÓŹNIENIE / STOI / RYNEK ZAMKNIĘTY (weekend to nie awaria).
-  Progi w godzinach rynku: OPÓŹNIENIE gdy świecy brak > 20 min po zamknięciu, STOI gdy > 75 min.
-- **Latencja ostatniej świecy** w sekundach + mediana 24 h + mini-wykres.
-- **Liczba świec w bazie** — łącznie i per para; ostatnia świeca per para (UTC i czas lokalny).
-- **Mac:** POŁĄCZONY / ROZŁĄCZONY, co liczy, postęp %, szacowany czas.
-- **Jakość danych:** liczba aktywnych flag (klik → lista).
+### 10.1 Stan systemu (zawsze widoczny, w nagłówku obok zakładek)
+- **Dane** i **Mac** — dwa wskaźniki tuż obok siebie, każdy z kropką stanu (jedyne świecące elementy strony; przy działającym systemie kropka lekko „oddycha”).
+  - Dane: działa / opóźnienie / stoi / rynek zamknięty (weekend to nie awaria); obok ostatnia świeca i odliczanie do następnej. Progi w godzinach rynku: OPÓŹNIENIE gdy świecy brak > 20 min po zamknięciu, STOI gdy > 75 min.
+  - Mac: połączony / synchronizuje / liczy (nazwa, postęp %) / rozłączony (od kiedy).
+- **Flagi jakości** — pojawiają się tylko, gdy są (klik → Stats).
+- **Pary** — jeden symboliczny kafelek („8 par” + kody walut), bez danych i bez rozwijania.
+- Bez kafli KPI. Liczby (świece w bazie, latencja, flagi, pary) są w zakładce **Stats**.
 
 ### 10.2 Zakładki
-**Strategie** | **Inwestorzy** (pusta, „wkrótce").
+**Strategie** | **Stats** | **Inwestorzy** (pusta, „wkrótce").
+
+**Stats** (wszystko z `meta/status`, 0 dodatkowych odczytów): świece w bazie i ostatnie pobranie, latencja (ostatnia, mediana 24 h, mini-wykres), kontrola krzyżowa, liczba flag; **dziennik dzień po dniu** — z ostatnich 30 dni, ile świec przybyło każdego dnia (wg dnia świecy, UTC) wobec oczekiwanych z kalendarza sesji, per para, z brakami na kolor; tabela par; lista flag.
 
 ### 10.3 Lista strategii
 Nazwa, status (do policzenia / liczy się x% / policzona / błąd / zamrożona), data, werdykt, kluczowe liczby najlepszego wariantu IS obok OOS.
@@ -356,14 +359,16 @@ Statyczny HTML + moduły ES, bez kroku budowania (`web/`). Biblioteki w repo (`w
 
 ---
 
-## 11. Design (z inspiracji)
+## 11. Design (D-019)
 
-- Tło `#0A0E13`, panele `#11161D`, obramowanie 1 px `#1C232D`, zaokrąglenia 10 px.
-- Akcent pomarańczowy `#FF7A1A` z poświatą na aktywnych elementach i końcówkach linii; gradient pomarańcz → przezroczystość pod krzywą kapitału.
-- Statusy: zielony `#3DDC84` (działa), bursztyn `#F5A524` (opóźnienie), czerwony `#FF4D4F` (stoi / błąd), szary (rynek zamknięty).
-- Układ: rząd kafli KPI na górze (jak monitoring agentów), gęste panele z wykresami (jak panel z odczytami), paski rankingu ze świecącym punktem (jak Digital Aura).
+- Tło `#0A0E13`, panele `#0F141A`, uniesione elementy `#151B23`, obramowanie 1 px `#1C232D`. Zaokrąglenia: panele 8 px, kontrolki 6 px, wskaźniki stanu w pełni zaokrąglone.
+- **Płasko:** bez gradientów i bez dekoracyjnych cieni — także na wykresach.
+- **Jeden akcent** — pomarańczowy `#FF7A1A` — tylko dla tego, co *wybrane*: aktywna zakładka, główny przycisk, zaznaczony wiersz/filtr, linia kapitału.
+- **Kolory stanu tylko jako stan:** zielony `#3DDC84` (działa, zysk), bursztyn `#F5A524` (opóźnienie, braki, flagi), czerwony `#FF4D4F` (stoi, błąd, strata), szary (rynek zamknięty, rozłączony). Żadnych innych kolorów (bez niebieskiego dla informacji).
+- **Poświata tylko na kropkach stanu** w nagłówku — jedyna „żywa” rzecz na stronie, więc coś znaczy. Ruch („oddychanie”) tylko przy działającym systemie, wyłączony przy `prefers-reduced-motion`.
+- Etykiety (DEMO, zamrożona, w kolejce) jako obrys, bez wypełnień; kolor tylko gdy niesie stan.
 - Liczby: JetBrains Mono z cyframi tabelarycznymi. Tekst: Inter.
-- **Zasada uczciwości wykresów:** dekoracja nigdy nie zmienia danych. Ceny i kapitał bez wygładzania krzywych (inspiracja 3 wygładza — tego nie kopiujemy). Zysk i strata zawsze ze znakiem, nie tylko kolorem.
+- **Zasada uczciwości wykresów:** dekoracja nigdy nie zmienia danych. Ceny i kapitał bez wygładzania krzywych. Zysk i strata zawsze ze znakiem, nie tylko kolorem.
 
 ---
 
@@ -378,7 +383,7 @@ IA5/
 │  ├─ STRATEGIE.md           # jak pisać strategie + reguła „zrób mi strategię” (K1–K3)
 │  └─ SETUP.md               # kroki do kliknięcia
 ├─ web/                      # dashboard (GitHub Pages): index.html, css/, js/ (app, list, card, charts, editor,
-│                            #   status, data, fb, metrics, util, config), vendor/
+│                            #   status, stats, session, data, fb, metrics, util, config), vendor/
 ├─ scripts/                  # check_strategy.py (kontrola kodu bez danych Michała), demo.py
 ├─ apps_script/              # Code.gs + appsscript.json (clasp)
 ├─ runner/                   # program na Maca

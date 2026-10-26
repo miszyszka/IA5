@@ -38,3 +38,20 @@ test('kontrola kodu w przeglądarce', () => {
   assert.equal(bad.errors.length, 2);
   assert.ok(bad.warnings.some((w) => w.includes('HYPOTHESIS')) && bad.warnings.some((w) => w.includes('całej serii')));
 });
+
+test('dziennik świec: oczekiwane wg kalendarza sesji, braki, dzień w toku i sobota', async () => {
+  const { dailyRows, expectedOnDay, parseFlag } = await import('../../web/js/session.js');
+  const now = Date.UTC(2026, 9, 26, 17, 5) / 1000; // pn 17:05 UTC → zamknięte świece 00:00…16:00 = 17
+  assert.equal(expectedOnDay('2026-10-26', now), 17);
+  assert.equal(expectedOnDay('2026-10-23', now), 21); // piątek do 20:00
+  assert.equal(expectedOnDay('2026-10-24', now), 0); // sobota
+  assert.equal(expectedOnDay('2026-10-25', now), 2); // niedziela od 22:00
+  const rows = dailyRows({ '2026-10-26': { EURUSD: 17, USDJPY: 16 }, '2026-10-23': { EURUSD: 21, USDJPY: 22 } }, ['EURUSD', 'USDJPY'], now, 4);
+  assert.deepEqual(rows.map((r) => r.day), ['2026-10-26', '2026-10-25', '2026-10-24', '2026-10-23']);
+  assert.equal(rows[0].open, true);
+  assert.equal(rows[0].missing, 1);
+  assert.equal(rows[1].missing, 4); // niedziela bez świec w dzienniku
+  assert.equal(rows[2].closed, true);
+  assert.equal(rows[3].missing, 0); // nadmiar jednej pary nie znosi braków — tu brak braków
+  assert.deepEqual(parseFlag('luka@1793016000'), { kind: 'luka', ts: 1793016000 });
+});
