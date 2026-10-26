@@ -302,7 +302,7 @@ def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray],
          "family": ex.family, "exit": ex.label(), **{f"x_{k}": v for k, v in asdict(ex).items()}}
         for pid in range(len(params)) for xid, ex in enumerate(exits)
     ])
-    return {"entries": entries, "outcomes": outcomes, "variants": variants,
+    return {"entries": entries, "outcomes": outcomes, "variants": variants, "preps": preps,
             "skipped": skipped, "cutoff": cutoff, "n_variants": len(variants)}
 
 

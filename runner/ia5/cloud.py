@@ -85,11 +85,27 @@ def set_data_sha(sha: str) -> None:
     db().collection("meta").document("status").set({"dataSha": sha}, merge=True)
 
 
-def watch_queue(on_job):
-    """Nasłuch strategii ze statusem do_policzenia (bez odpytywania w pętli — Z2)."""
+def update_strategy(sid: str, fields: dict) -> None:
+    db().collection("strategies").document(sid).set(fields, merge=True)
+
+
+def delete_strategy(sid: str) -> None:
+    db().collection("strategies").document(sid).delete()
+
+
+def frozen_strategies() -> list[tuple[str, dict]]:
+    """Policzone strategie z datą zamrożenia (odczyt: tyle dokumentów, ile policzonych strategii)."""
     from google.cloud.firestore_v1.base_query import FieldFilter
 
-    q = db().collection("strategies").where(filter=FieldFilter("status", "==", "do_policzenia"))
+    q = db().collection("strategies").where(filter=FieldFilter("status", "==", "policzona"))
+    return [(s.id, s.to_dict()) for s in q.stream() if (s.to_dict() or {}).get("frozenAt")]
+
+
+def watch_queue(on_job):
+    """Nasłuch strategii do policzenia i do usunięcia (bez odpytywania w pętli — Z2)."""
+    from google.cloud.firestore_v1.base_query import FieldFilter
+
+    q = db().collection("strategies").where(filter=FieldFilter("status", "in", ["do_policzenia", "do_usuniecia"]))
 
     def cb(snaps, _changes, _read_time):
         for s in snaps:

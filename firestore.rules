@@ -10,10 +10,11 @@ service cloud.firestore {
       allow read, delete: if isOwner();
       allow create: if isOwner()
         && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.status == "do_policzenia";
+        && request.resource.data.status in ["do_policzenia", "do_usuniecia"];
       allow update: if isOwner()
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(["name", "hypothesis", "status", "frozenAt"]);
+             .hasOnly(["name", "hypothesis", "code", "status", "frozenAt", "frozenVariant"])
+        && request.resource.data.status in ["do_policzenia", "do_usuniecia", "policzona", "blad"];
     }
   }
 }

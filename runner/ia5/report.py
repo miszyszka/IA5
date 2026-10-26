@@ -7,7 +7,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .config import LEVERAGE, PAIRS
+from .config import LEVERAGE, PAIRS, START_CAPITAL
+
+VERDICT = {"green": "🟢 ZIELONY", "yellow": "🟡 ŻÓŁTY", "red": "🔴 CZERWONY"}
 
 
 def _d(ts) -> str:
@@ -15,8 +17,13 @@ def _d(ts) -> str:
 
 
 def _f(x, nd=2) -> str:
-    if x is None or (isinstance(x, float) and (np.isnan(x) or np.isinf(x))):
-        return "—" if x is None or np.isnan(x) else "∞"
+    if x is None:
+        return "—"
+    x = float(x)
+    if np.isnan(x):
+        return "—"
+    if np.isinf(x):
+        return "∞"
     return f"{x:,.{nd}f}".replace(",", " ")
 
 
@@ -27,71 +34,95 @@ def _table(df: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
-def write_report(out: Path, m: dict, variants: pd.DataFrame, res: dict, code: str) -> None:
-    o = res["outcomes"]
-    ranked = variants.dropna(subset=["rank_is"]).head(10) if "rank_is" in variants else variants.head(0)
+def _params(p) -> str:
+    return ", ".join(f"{k}={v}" for k, v in (p or {}).items()) or "—"
+
+
+def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFrame, v: dict, code: str) -> None:
+    ranked = variants.dropna(subset=["rank_is"]).sort_values("rank_is").head(10)
     top = pd.DataFrame({
-        "#": ranked["rank_is"].astype(int) if len(ranked) else [],
-        "wyjście": ranked.get("exit", []),
-        "parametry wejścia": ranked["params"].map(lambda p: ", ".join(f"{k}={v}" for k, v in p.items()) or "—")
-        if len(ranked) else [],
-        "IS transakcje": ranked.get("is_trades", pd.Series(dtype=float)).map(lambda x: _f(x, 0)),
-        "IS śr. R": ranked.get("is_exp_r", pd.Series(dtype=float)).map(_f),
-        "IS śr. pips": ranked.get("is_exp_pips", pd.Series(dtype=float)).map(_f),
-        "IS win %": ranked.get("is_win_rate", pd.Series(dtype=float)).map(lambda x: _f(100 * x, 1)),
-        "OOS transakcje": ranked.get("oos_trades", pd.Series(dtype=float)).map(lambda x: _f(x, 0)),
-        "OOS śr. R": ranked.get("oos_exp_r", pd.Series(dtype=float)).map(_f),
-        "OOS śr. pips": ranked.get("oos_exp_pips", pd.Series(dtype=float)).map(_f),
-    })
-    best = ranked.iloc[0] if len(ranked) else None
-    by_pair = by_year = pd.DataFrame()
-    if best is not None and not o.empty:
-        b = o[o["variant_id"] == best["variant_id"]].copy()
-        b["rok"] = pd.to_datetime(b["exit_ts"], unit="s", utc=True).dt.year
-        agg = {"transakcje": ("pips_net", "size"), "śr. pips": ("pips_net", "mean"), "suma pips": ("pips_net", "sum"),
-               "win %": ("pips_net", lambda x: 100 * (x > 0).mean())}
-        by_pair = b.groupby("pair").agg(**agg).reset_index().rename(columns={"pair": "para"})
-        by_year = b.groupby("rok").agg(**agg).reset_index()
-        for t in (by_pair, by_year):
-            for c in ("śr. pips", "suma pips", "win %"):
-                t[c] = t[c].map(lambda x: _f(x, 1))
-    n_amb = float(o["ambiguous"].mean() * 100) if not o.empty else 0.0
+        "#": ranked["rank_is"].astype(int), "wyjście": ranked["exit"], "parametry": ranked["params"].map(_params),
+        "IS trans.": ranked["is_trades"].map(lambda x: _f(x, 0)), "IS śr. R": ranked["is_exp_r"].map(_f),
+        "IS śr. pips": ranked["is_exp_pips"].map(_f), "IS win %": ranked["is_win_rate"].map(lambda x: _f(100 * x, 1)),
+        "OOS trans.": ranked["oos_trades"].map(lambda x: _f(x, 0)), "OOS śr. R": ranked["oos_exp_r"].map(_f),
+        "OOS śr. pips": ranked["oos_exp_pips"].map(_f),
+    }) if len(ranked) else pd.DataFrame()
+    n_var = m["n_variants"]
+    sk = m["skipped"]
     spreads = ", ".join(f"{p} {c.spread_pips:g}" for p, c in PAIRS.items())
+    vd = v.get("verdict", {})
 
     parts = [
         f"# Raport strategii: {m['name']}",
         f"Run `{m['run_id']}` · silnik {m['engine_version']} · kod `{m['code_hash']}` · dane `{m['data_hash']}`",
-        "## Hipoteza", m.get("hypothesis") or "_Brak hipotezy (ostrzeżenie: spisz ją przed liczeniem)._",
+        f"## Werdykt: {VERDICT.get(vd.get('color'), '—')} — {vd.get('note', '')}",
+        _table(pd.DataFrame([{"test": c["test"], "wynik": "✔" if c["ok"] else "✘",
+                              "wartość": _f(c["value"]) if isinstance(c["value"], (int, float)) else "—"}
+                             for c in vd.get("checks", [])])) if vd.get("checks") else "",
+        "## Hipoteza", m.get("hypothesis") or "_Brak hipotezy — spisz ją przed liczeniem._",
         "## Dane i model wykonania",
         f"- Pary: {', '.join(m['pairs'])}; świece H1 od {_d(m['data_from'])} do {_d(m['data_to'])}; źródło: {m['data_source']}.",
-        f"- In-sample do {_d(m['oos_cutoff'])}, out-of-sample (ostatnie 25%) od tej daty. Ranking tylko po IS.",
-        "- Wejście na open świecy po sygnale. TP/SL w tej samej świecy: "
-        + ("rozstrzygane na M1, a w tej samej minucie — SL." if m["m1_resolver"] else "przyjęty SL (brak danych M1)."),
-        f"- Spread odejmowany raz na transakcję (pips): {spreads}. Swapy pominięte. Dźwignia 1:{LEVERAGE}.",
+        f"- In-sample do {_d(m['oos_cutoff'])}, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS.",
+        "- Wejście na open świecy po sygnale. TP i SL w tej samej świecy: "
+        + ("rozstrzygane na M1, w tej samej minucie — SL." if m["m1_resolver"] else "przyjęty SL (brak danych M1)."),
+        f"- Spread raz na transakcję (pips): {spreads}. Swapy pominięte.",
+        f"- Kapitał {START_CAPITAL:,.0f} USD, dźwignia 1:{LEVERAGE}, depozyt na pozycję: "
+        + ", ".join(f"{x:g}%" for x in m["sizing"]) + "; suma depozytów ≤ 100% kapitału.",
         "## Skala przeszukiwania",
-        f"- **Przetestowane warianty: {m['n_variants']}** ({len(m['params'])} wejścia × {m['n_exits']} wyjść). "
-        "Najlepszy wariant z tak wielu jest w dużej mierze szczęściarzem — patrz OOS.",
-        f"- Pominięte sygnały, średnio na wariant: {m['skipped']['B8'] / m['n_variants']:,.0f} (otwarta pozycja w parze), "
-        f"{m['skipped']['brak_danych'] / m['n_variants']:,.1f} (brak danych do wyjścia); "
-        f"{m['skipped'].get('rozgrzewka', 0)} wejść w okresie rozgrzewki ATR.",
-        f"- Transakcje z niejednoznaczną kolejnością TP/SL: {n_amb:.2f}%.",
+        f"- **Przetestowane warianty: {n_var}** ({len(m['params'])} wejścia × {m['n_exits']} wyjść).",
+        f"- Pominięte sygnały, średnio na wariant: {sk['B8'] / n_var:,.0f} (otwarta pozycja w parze), "
+        f"{sk['brak_danych'] / n_var:,.1f} (brak danych do wyjścia); {sk.get('rozgrzewka', 0)} wejść w rozgrzewce ATR.",
         "## Top 10 wariantów (ranking po IS, min. 30 transakcji IS)",
         _table(top) if len(top) else "_Żaden wariant nie ma 30 transakcji w IS._",
     ]
-    if best is not None:
-        parts += [f"## Najlepszy wariant IS: {best['exit']}", "### Według pary", _table(by_pair),
-                  "### Według roku", _table(by_year)]
+    if "best_variant_id" in v:
+        bt = trades[trades["variant_id"] == v["best_variant_id"]].copy()
+        bt["rok"] = pd.to_datetime(bt["exit_ts"], unit="s", utc=True).dt.year
+        agg = {"transakcje": ("pips_net", "size"), "śr. pips": ("pips_net", "mean"), "suma pips": ("pips_net", "sum"),
+               "win %": ("pips_net", lambda x: 100 * (x > 0).mean())}
+        tabs = []
+        for key, label in (("pair", "para"), ("rok", "rok"), ("sample", "próba")):
+            t = bt.groupby(key).agg(**agg).reset_index().rename(columns={key: label})
+            for c in ("śr. pips", "suma pips", "win %"):
+                t[c] = t[c].map(lambda x: _f(x, 1))
+            tabs.append(t)
+        b = v["benchmark"]
+        eq = pd.DataFrame([{"depozyt": f"{k}%", "kapitał końcowy": _f(e.get("final"), 0), "zwrot %": _f(e.get("return_pct"), 1),
+                            "CAGR %": _f(e.get("cagr_pct"), 1), "max obsunięcie %": _f(e.get("max_dd_pct"), 1),
+                            "Sharpe": _f(e.get("sharpe")), "pominięte (depozyt)": e.get("skipped_margin", 0)}
+                           for k, e in v["equity"].items()])
+        wf = v["walk_forward"]
+        parts += [
+            f"## Najlepszy wariant IS: {v['best_exit']} ({_params(v['best_params'])})",
+            "### Według pary", _table(tabs[0]), "### Według roku", _table(tabs[1]), "### IS i OOS", _table(tabs[2]),
+            "### Kapitał", _table(eq),
+            "## Walidacja",
+            f"- **Benchmark losowych wejść** ({b.get('sims', 0)} losowań, te same pary, kierunki i wyjście): "
+            f"wynik {_f(b.get('actual_mean_pips'))} pips/transakcję, percentyl **{_f(b.get('percentile'), 1)}** "
+            f"(losowe: 5%={_f(b.get('p5'))}, mediana={_f(b.get('p50'))}, 95%={_f(b.get('p95'))}).",
+            f"- **Deflated Sharpe Ratio**: {_f(v['dsr'].get('dsr'), 3)} (Sharpe na transakcję {_f(v['dsr'].get('sharpe'), 3)}, "
+            f"próg przy {v['dsr'].get('trials')} próbach {_f(v['dsr'].get('sharpe0'), 3)}).",
+            f"- **PBO** (CSCV, {v['pbo'].get('blocks', '—')} bloków, {v['pbo'].get('variants', 0)} wariantów): "
+            f"{_f(v['pbo'].get('pbo'), 3)} — szansa, że najlepszy wariant IS wypada poniżej mediany poza próbą.",
+            f"- **Walk-forward** (okna kotwiczone, wybór najlepszego wariantu przed każdym oknem): "
+            f"{wf['trades']} transakcji, śr. {_f(wf['mean_pips'])} pips, {_f(wf['mean_r'])} R.",
+            f"- **Bootstrap 95%** średnich pipsów: całość [{_f(v['bootstrap']['all']['low'])}; {_f(v['bootstrap']['all']['high'])}], "
+            f"OOS [{_f(v['bootstrap']['oos']['low'])}; {_f(v['bootstrap']['oos']['high'])}].",
+            f"- **Spread**: ×1 {_f(v['spread']['x1'])}, ×1,5 {_f(v['spread']['x1_5'])}, ×2 {_f(v['spread']['x2'])}"
+            + (f", faktyczny {_f(v['spread']['real'])}" if "real" in v["spread"] else "") + " pips/transakcję.",
+            f"- TP i SL w tej samej świecy bez rozstrzygnięcia: {_f(v['ambiguous_pct'])}% transakcji.",
+        ]
     parts += [
-        "## Walidacja",
-        "_Deflated Sharpe, PBO, benchmark losowych wejść, walk-forward i test spreadu — etap E5 (jeszcze nie liczone)._",
         "## Znane ograniczenia",
-        "- Brak swapów. Spread stały z tabeli. Pesymistyczne założenie SL przy niejednoznacznej świecy.",
-        "- Wyniki w pipsach i R; symulacja kapitału (5–30% depozytu) — etap E5.",
+        "- Brak swapów. Spread stały z tabeli. Przy nierozstrzygniętej kolejności TP/SL przyjmowany SL.",
+        "- Kapitał: zwrot liczony na nominale w walucie kwotowanej (dla EUR/GBP, EUR/JPY, USD/JPY, USD/CHF, USD/CAD "
+        "przybliżenie — pomija zmianę kursu przeliczenia w trakcie transakcji).",
+        "- Benchmark losowy nie stosuje reguły jednej pozycji na parę.",
         "## Kod strategii", "```python", code.strip(), "```",
         "## Pytania do recenzenta",
-        "1. Czy wynik OOS potwierdza IS, czy najlepszy wariant to efekt przeszukania?",
+        "1. Czy OOS i walk-forward potwierdzają IS, czy najlepszy wariant to efekt przeszukania?",
         "2. Czy sąsiednie warianty (podobne TP/SL) dają podobny wynik — płaskowyż czy pojedynczy pik?",
         "3. Czy wynik nie opiera się na jednej parze lub jednym roku?",
         "4. Co w kodzie wejścia może być dopasowane do historii?",
     ]
-    (out / "report.md").write_text("\n\n".join(parts) + "\n", encoding="utf-8")
+    (out / "report.md").write_text("\n\n".join(p for p in parts if p) + "\n", encoding="utf-8")

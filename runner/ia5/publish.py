@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+from pathlib import Path
 
 import pandas as pd
 
@@ -72,3 +73,70 @@ def publish_candles(h1: dict[str, pd.DataFrame], source: str, log=print) -> str 
     sha = _git("rev-parse", "HEAD")
     log(f"  gałąź data: {changed} plików, {sha[:7]}")
     return sha
+
+
+# ---------- wyniki strategii (results/{id}/ + results/index.json) ----------
+
+def index_entry(res_dir: Path) -> dict:
+    m = json.loads((res_dir / "manifest.json").read_text(encoding="utf-8"))
+    v = json.loads((res_dir / "validation.json").read_text(encoding="utf-8"))
+    return {
+        "id": m["id"], "name": m["name"], "run_id": m["run_id"], "created": m["created"],
+        "verdict": v.get("verdict", {}).get("color"), "verdict_note": v.get("verdict", {}).get("note"),
+        "n_variants": m["n_variants"], "hypothesis": m.get("hypothesis"), "pairs": m["pairs"],
+        "data_from": m["data_from"], "data_to": m["data_to"], "source": m["data_source"],
+        "engine_version": m["engine_version"], "best_exit": v.get("best_exit"),
+        "is_mean_r": v.get("is_mean_r"), "oos_mean_r": v.get("oos_mean_r"), "oos_mean_pips": v.get("oos_mean_pips"),
+        "oos_trades": v.get("oos_trades"), "demo": bool(m.get("demo")),
+    }
+
+
+def _write_index(entries: list[dict]) -> None:
+    p = DATA_REPO / "results" / "index.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    entries = sorted(entries, key=lambda e: e.get("created", 0), reverse=True)
+    p.write_text(json.dumps({"strategies": entries}, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def _read_index() -> list[dict]:
+    p = DATA_REPO / "results" / "index.json"
+    return json.loads(p.read_text(encoding="utf-8"))["strategies"] if p.exists() else []
+
+
+def publish_result(res_dir: Path, log=print) -> str:
+    """Kopiuje wynik na gałąź data (zastępuje poprzedni run tej strategii) i aktualizuje indeks."""
+    import shutil
+
+    ensure_repo()
+    entry = index_entry(res_dir)
+    dst = DATA_REPO / "results" / entry["id"]
+    if dst.exists():
+        shutil.rmtree(dst)
+    shutil.copytree(res_dir, dst)
+    _write_index([e for e in _read_index() if e["id"] != entry["id"]] + [entry])
+    _git("add", "-A")
+    _git("commit", "-q", "-m", f"wyniki: {entry['name']} ({entry['run_id']})")
+    _git("push", "-q", "origin", "data")
+    sha = _git("rev-parse", "HEAD")
+    log(f"  opublikowano results/{entry['id']} ({sha[:7]})")
+    return sha
+
+
+def delete_result(strategy_id: str, log=print) -> str | None:
+    """Usuwa wynik strategii z gałęzi data i z indeksu (historia gita zostaje — G4)."""
+    import shutil
+
+    ensure_repo()
+    dst = DATA_REPO / "results" / strategy_id
+    before = _read_index()
+    after = [e for e in before if e["id"] != strategy_id]
+    if not dst.exists() and len(after) == len(before):
+        return None
+    if dst.exists():
+        shutil.rmtree(dst)
+    _write_index(after)
+    _git("add", "-A")
+    _git("commit", "-q", "-m", f"usunięto strategię {strategy_id}")
+    _git("push", "-q", "origin", "data")
+    log(f"  usunięto results/{strategy_id}")
+    return _git("rev-parse", "HEAD")

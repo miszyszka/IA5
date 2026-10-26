@@ -20,7 +20,7 @@ import pandas as pd
 
 ALLOWED_IMPORTS = {"numpy", "pandas", "math"}
 FORBIDDEN_NAMES = {"open", "exec", "eval", "compile", "__import__", "input", "breakpoint", "globals", "vars"}
-LOOKAHEAD_CUTS = 4
+LOOKAHEAD_CUTS = 8
 WARMUP = 300
 
 

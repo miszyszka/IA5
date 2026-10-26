@@ -89,12 +89,20 @@ def test_full_run_writes_results_and_report(h1_dir, tmp_path):
     out = run_file(GOOD, "test", h1_dir, tmp_path / "results", log=lambda m: None)
     m = json.loads((out / "manifest.json").read_text())
     assert m["n_variants"] == 2 * 233 and m["engine_version"] and m["code_hash"] and m["data_hash"]  # D6, W2
-    v = pd.read_parquet(out / "variants.parquet")
-    assert len(v) == 466 and {"is_exp_r", "oos_exp_r", "rank_is"} <= set(v.columns)
-    o = pd.read_parquet(out / "outcomes.parquet")
-    assert set(o["sample"]) == {"IS", "OOS"}
+    v = pd.DataFrame(json.loads((out / "variants.json").read_text()))
+    assert len(v) == 466 and {"is_exp_r", "oos_exp_r", "rank_is", "row_start", "row_end"} <= set(v.columns)
+    t = pd.read_parquet(out / "trades.parquet")
+    assert set(t["sample"]) == {"IS", "OOS"} and t["variant_id"].is_monotonic_increasing
+    row = v.dropna(subset=["rank_is"]).iloc[0]
+    part = t.iloc[int(row.row_start):int(row.row_end)]
+    assert (part["variant_id"] == row.variant_id).all() and len(part) == row.all_trades
+    val = json.loads((out / "validation.json").read_text())
+    assert val["verdict"]["color"] in {"green", "yellow", "red"}
+    assert val["benchmark"]["sims"] == 1000 and 0 <= val["pbo"]["pbo"] <= 1
+    assert set(val["equity"]) == {"5.0", "10.0", "15.0", "20.0", "30.0"}
+    assert (out / "candles" / "EURUSD.parquet").exists()
     rep = (out / "report.md").read_text()
-    assert "Przetestowane warianty: 466" in rep and "## Kod strategii" in rep
+    assert "Przetestowane warianty: 466" in rep and "## Walidacja" in rep and "## Kod strategii" in rep
 
 
 def test_full_run_refuses_lookahead(h1_dir, tmp_path):

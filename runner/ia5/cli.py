@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import queue
 import signal
@@ -103,8 +104,13 @@ def cmd_start(_args) -> int:
 
     owner = config().get("owner_uid")
     jobs: queue.Queue = queue.Queue()
+    seen: set = set()
 
     def on_job(sid, data):
+        key = (sid, data.get("status"))
+        if key in seen:
+            return
+        seen.add(key)
         if not owner:
             log(f"Strategia {sid}: pomijam — brak owner_uid w {HOME / 'config.json'} (S1)")
         elif data.get("createdBy") != owner:
@@ -115,10 +121,90 @@ def cmd_start(_args) -> int:
     cloud.watch_queue(on_job)
     state["now"] = "idle"
     cloud.heartbeat("idle")
+    enqueue_frozen(jobs, owner)
     log("Połączony. Czekam na strategie (Ctrl+C kończy).")
+    last_sync = time.time()
     while True:
-        sid, data = jobs.get()
-        log(f"Strategia {sid} „{data.get('name')}”: silnik powstaje w etapie E3 — na razie tylko odbiór.")
+        try:
+            sid, data = jobs.get(timeout=60)
+        except queue.Empty:
+            if time.time() - last_sync > RESYNC_SECONDS:  # nowe świece → forward test zamrożonych (W4)
+                state["now"] = "syncing"
+                do_sync()
+                last_sync = time.time()
+                state["now"] = "idle"
+                enqueue_frozen(jobs, owner)
+            continue
+        state["queue"] = jobs.qsize()
+        if data.get("status") == "do_usuniecia":
+            handle_delete(sid)
+        else:
+            handle_job(sid, data, state)
+        seen.discard((sid, data.get("status")))
+
+
+RESYNC_SECONDS = 6 * 3600
+
+
+def enqueue_frozen(jobs: queue.Queue, owner: str | None) -> None:
+    """Zamrożone strategie liczone ponownie na nowych danych — karta pokazuje wynik od daty zamrożenia (W4)."""
+    from . import cloud
+
+    for sid, data in cloud.frozen_strategies():
+        if owner and data.get("createdBy") == owner:
+            log(f"Forward test: {data.get('name', sid)}")
+            jobs.put((sid, {**data, "status": "forward"}))
+
+
+PHASES = {"Sygnały": 10, "Silnik": 25, "Walidacja: benchmark": 60, "Walidacja: Deflated": 80, "Gotowe": 90}
+
+
+def handle_job(sid: str, data: dict, state: dict) -> None:
+    from . import cloud, publish
+    from .backtest import run_file
+    from .sandbox import StrategyError
+
+    name = data.get("name") or sid
+    log(f"Strategia „{name}” ({sid}): liczenie…")
+    state["now"] = "computing"
+    state["job"] = {"id": sid, "name": name, "progress": 0, "phase": "start"}
+    cloud.update_strategy(sid, {"status": "liczy_sie", "error": None})
+
+    def step(msg):
+        log(msg)
+        for k, p in PHASES.items():
+            if msg.startswith(k):
+                state["job"] = {"id": sid, "name": name, "progress": p, "phase": msg[:60]}
+                cloud.heartbeat("computing", state["job"])
+
+    try:
+        out = run_file(data.get("code", ""), name, DATA / "h1", HOME / "results", m1_dir=DATA / "m1",
+                       log=step, source="dukascopy", strategy_id=sid)
+        sha = publish.publish_result(out, log=log)
+        v = json.loads((out / "validation.json").read_text(encoding="utf-8"))
+        cloud.update_strategy(sid, {"status": "policzona", "result": {"sha": sha, "path": f"results/{sid}",
+                                    "run_id": out.name, "verdict": v.get("verdict", {}).get("color")}})
+        log(f"Strategia „{name}”: gotowa.")
+    except (StrategyError, SystemExit) as e:
+        cloud.update_strategy(sid, {"status": "blad", "error": str(e)[:2000]})
+        log(f"Strategia „{name}”: błąd — {e}")
+    except Exception as e:  # noqa: BLE001 — błąd nie może zatrzymać programu
+        cloud.update_strategy(sid, {"status": "blad", "error": f"{type(e).__name__}: {e}"[:2000]})
+        log(f"Strategia „{name}”: nieoczekiwany błąd — {e}")
+    finally:
+        state["now"] = "idle"
+        state["job"] = None
+        cloud.heartbeat("idle")
+
+
+def handle_delete(sid: str) -> None:
+    from . import cloud, publish
+
+    log(f"Usuwanie strategii {sid}…")
+    try:
+        publish.delete_result(sid, log=log)
+    finally:
+        cloud.delete_strategy(sid)
 
 
 def cmd_sync(_args) -> int:
@@ -150,6 +236,21 @@ def cmd_run(args) -> int:
     return 0
 
 
+def cmd_check(args) -> int:
+    """Kontrola kodu strategii na prawdziwych danych (bez pełnego liczenia)."""
+    from pathlib import Path
+
+    from .check import check_code_on, format_result
+
+    h1_dir = Path(args.h1) if args.h1 else DATA / "h1"
+    if not any(h1_dir.glob("*.parquet")):
+        print(f"Brak świec H1 w {h1_dir} — najpierw `ia5 sync`.")
+        return 1
+    res = check_code_on(Path(args.file).read_text(encoding="utf-8"), h1_dir)
+    print(format_result(res, str(h1_dir)))
+    return 0 if res["ok"] else 1
+
+
 def cmd_status(_args) -> int:
     print(f"IA5 runner · silnik {ENGINE_VERSION}")
     print("Pary:", ", ".join(PAIRS))
@@ -167,6 +268,10 @@ def main(argv=None) -> int:
     p_run.add_argument("--name")
     p_run.add_argument("--h1", help="katalog ze świecami H1 (domyślnie ~/.ia5/data/h1)")
     p_run.set_defaults(func=cmd_run)
+    p_chk = sub.add_parser("check", help="sprawdź kod strategii (kontrakt, look-ahead, sygnały)")
+    p_chk.add_argument("file")
+    p_chk.add_argument("--h1")
+    p_chk.set_defaults(func=cmd_check)
     sub.add_parser("status").set_defaults(func=cmd_status)
     args = parser.parse_args(argv)
     return args.func(args)

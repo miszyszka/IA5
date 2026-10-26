@@ -56,3 +56,36 @@ def test_no_lookahead_in_indicators(ohlc):
     full = ind.rsi(ohlc.close, 14)
     cut = ind.rsi(ohlc.close.iloc[:1500], 14)
     same(full.iloc[:1500], cut)
+
+
+@pytest.mark.parametrize("f,s,g", [(12, 26, 9), (5, 35, 5)])
+def test_macd(ohlc, f, s, g):
+    m, sig, h = talib.MACD(ohlc.close.to_numpy(), f, s, g)
+    ours = ind.macd(ohlc.close, f, s, g)
+    same(ours["macd"], m)
+    same(ours["signal"], sig)
+    same(ours["hist"], h)
+
+
+@pytest.mark.parametrize("k,sk,d", [(14, 3, 3), (5, 3, 3)])
+def test_stoch(ohlc, k, sk, d):
+    ks, ds = talib.STOCH(ohlc.high.to_numpy(), ohlc.low.to_numpy(), ohlc.close.to_numpy(), k, sk, 0, d, 0)
+    ours = ind.stoch(ohlc, k, sk, d)
+    same(ours.k, ks)
+    same(ours.d, ds)
+
+
+@pytest.mark.parametrize("n", [14, 7])
+def test_adx(ohlc, n):
+    h, lo, c = ohlc.high.to_numpy(), ohlc.low.to_numpy(), ohlc.close.to_numpy()
+    ours = ind.adx(ohlc, n)
+    same(ours.adx, talib.ADX(h, lo, c, n))
+    same(ours.plus_di, talib.PLUS_DI(h, lo, c, n))
+    same(ours.minus_di, talib.MINUS_DI(h, lo, c, n))
+
+
+def test_time_helpers():
+    idx = pd.to_datetime([1761523200, 1761523200 + 13 * 3600], unit="s", utc=True)  # pon 00:00, 13:00
+    df = pd.DataFrame({"close": [1, 2]}, index=idx)
+    assert ind.hour(df).tolist() == [0, 13] and ind.weekday(df).tolist() == [0, 0]
+    assert ind.session(df).tolist() == ["azja", "usa"]
