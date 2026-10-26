@@ -19,6 +19,17 @@ def log(msg: str) -> None:
     print(time.strftime("%H:%M:%S"), msg, flush=True)
 
 
+def keep_awake():
+    """Komputer nie usypia, dopóki działa ia5 (macOS: caffeinate, Windows: SetThreadExecutionState)."""
+    if sys.platform == "darwin":
+        return subprocess.Popen(["caffeinate", "-i", "-w", str(os.getpid())])
+    if sys.platform == "win32":
+        import ctypes
+
+        ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000001)  # CONTINUOUS | SYSTEM_REQUIRED
+    return None
+
+
 def do_sync() -> None:
     from . import cloud, dukascopy, publish, quality
     from .bars import m1_to_h1
@@ -61,7 +72,7 @@ def cmd_start(_args) -> int:
     from . import cloud
 
     HOME.mkdir(parents=True, exist_ok=True)
-    caff = subprocess.Popen(["caffeinate", "-i", "-w", str(os.getpid())]) if sys.platform == "darwin" else None
+    caff = keep_awake()
     stop = threading.Event()
 
     def beat():

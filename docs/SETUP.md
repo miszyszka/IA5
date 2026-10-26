@@ -8,7 +8,9 @@
 6. **Apps Script:** w arkuszu Google → Rozszerzenia → Apps Script. Kod wgram w E1 (przez `clasp`).
 7. Po pierwszym logowaniu na stronie podam Ci, jak odczytać swój UID — wpiszemy go do `firestore.rules` i wdrożymy reguły.
 
-## E2 — program na Macu
+## E2 — program na Macu lub Windows
+
+### Mac
 
 ```bash
 # raz: narzędzia (Homebrew: https://brew.sh)
@@ -24,3 +26,20 @@ ia5 start                                    # pierwszy raz: pobieranie Dukascop
 - Aktualizacja programu: `cd ~/IA5 && git pull`.
 - Pierwsze `ia5 start` można przerwać (Ctrl+C) i wznowić — gotowe miesiące się nie powtarzają.
 - Push na gałąź `data` używa Twoich danych logowania do GitHub (np. `gh auth login`).
+
+### Windows (wiersz poleceń `cmd`)
+
+```bat
+:: raz: uv (git już jest)
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+:: zamknij i otwórz nowe okno cmd, potem:
+git clone https://github.com/miszyszka/IA5.git %USERPROFILE%\IA5
+cd /d %USERPROFILE%\IA5
+uv tool install -e runner
+:: klucz Firebase: %USERPROFILE%\.ia5\service-account.json
+ia5 status
+ia5 start
+```
+
+- Repo i dane trzymamy poza OneDrive (`%USERPROFILE%\IA5`, `%USERPROFILE%\.ia5`) — kilka GB danych nie powinno się synchronizować.
+- Aktualizacja: `cd /d %USERPROFILE%\IA5 && git pull`.
