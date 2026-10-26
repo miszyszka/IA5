@@ -1,0 +1,27 @@
+{
+ "strategies": [
+  {
+   "id": "demo-sma200-rsi",
+   "name": "DEMO · SMA200 rośnie + RSI poniżej progu",
+   "run_id": "20261026-152110",
+   "created": 1793028070,
+   "verdict": "red",
+   "verdict_note": "brak przewagi",
+   "n_variants": 1398,
+   "hypothesis": "Gdy długoterminowy trend jest wzrostowy (SMA200 rośnie), głębokie krótkoterminowe\nwyprzedanie (RSI14 spada poniżej progu) jest chwilowe i cena wraca w górę.",
+   "pairs": [
+    "EURUSD"
+   ],
+   "data_from": 1492592400,
+   "data_to": 1518015600,
+   "source": "DEMO: przykładowe świece EUR/USD H1 2017–2018 z pakietu backtesting.py (nie Twoja baza)",
+   "engine_version": "0.0.1",
+   "best_exit": "po 48 świecach",
+   "is_mean_r": 1.746854,
+   "oos_mean_r": 0.865756,
+   "oos_mean_pips": 13.225001,
+   "oos_trades": 12,
+   "demo": true
+  }
+ ]
+}

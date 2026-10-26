@@ -1,0 +1,63 @@
+{
+ "id": "demo-sma200-rsi",
+ "name": "DEMO · SMA200 rośnie + RSI poniżej progu",
+ "run_id": "20261026-152110",
+ "engine_version": "0.0.1",
+ "code_hash": "e7358eef8dfb6cc3",
+ "data_hash": "94c50fcf4885a784",
+ "data_source": "DEMO: przykładowe świece EUR/USD H1 2017–2018 z pakietu backtesting.py (nie Twoja baza)",
+ "m1_resolver": false,
+ "candles": "pełne",
+ "pairs": [
+  "EURUSD"
+ ],
+ "params": [
+  {
+   "rsi_level": 30,
+   "slope_bars": 5
+  },
+  {
+   "rsi_level": 30,
+   "slope_bars": 20
+  },
+  {
+   "rsi_level": 35,
+   "slope_bars": 5
+  },
+  {
+   "rsi_level": 35,
+   "slope_bars": 20
+  },
+  {
+   "rsi_level": 40,
+   "slope_bars": 5
+  },
+  {
+   "rsi_level": 40,
+   "slope_bars": 20
+  }
+ ],
+ "n_variants": 1398,
+ "n_exits": 233,
+ "oos_cutoff": 1511659800,
+ "sizing": [
+  5.0,
+  10.0,
+  15.0,
+  20.0,
+  30.0
+ ],
+ "data_from": 1492592400,
+ "data_to": 1518015600,
+ "skipped": {
+  "B8": 26440,
+  "brak_danych": 64,
+  "rozgrzewka": 0
+ },
+ "hypothesis": "Gdy długoterminowy trend jest wzrostowy (SMA200 rośnie), głębokie krótkoterminowe\nwyprzedanie (RSI14 spada poniżej progu) jest chwilowe i cena wraca w górę.",
+ "trades_rows": 73919,
+ "created": 1793028070,
+ "seconds": 10.5,
+ "verdict": "red",
+ "demo": true
+}
