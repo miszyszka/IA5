@@ -21,6 +21,8 @@ import pandas as pd
 ALLOWED_IMPORTS = {"numpy", "pandas", "math"}
 FORBIDDEN_NAMES = {"open", "exec", "eval", "compile", "__import__", "input", "breakpoint", "globals", "vars"}
 LOOKAHEAD_CUTS = 8
+DENSE_CUTS = 24
+DENSE_BARS = 2000
 WARMUP = 300
 
 
@@ -78,21 +80,44 @@ def _as_signal(s, df) -> np.ndarray:
 
 
 def lookahead_cuts(fn, df, p, ind, seed: int = 0) -> list[int]:
-    """B2: sygnały na danych obciętych w losowych punktach muszą równać się sygnałom z pełnych danych.
+    """B2: sygnały na danych obciętych w punkcie c muszą równać się sygnałom z pełnych danych (do c).
 
-    Zwraca listę punktów cięcia (pozycji), w których wynik się różni — pusta lista = brak look-ahead.
+    Dwa przebiegi:
+    - LOOKAHEAD_CUTS losowych cięć na pełnych danych — łapie statystyki z całej serii (mean(), max()…);
+    - DENSE_CUTS gęstych cięć na wycinku DENSE_BARS świec — łapie „krótki” look-ahead (niezamknięta świeca
+      wyższego interwału, maksimum dnia z przyszłych godzin), który zmienia tylko kilka świec przed cięciem.
+    Zwraca pozycje cięć z różnicą (względem pełnych danych) — pusta lista = brak look-ahead.
     """
     n = len(df)
     if n < WARMUP + 10:
         return []
-    full = _as_signal(fn(df.copy(), p, ind), df)
     rng = np.random.default_rng(seed)
     bad = []
+    full = _as_signal(fn(df.copy(), p, ind), df)
     for cut in sorted(rng.integers(WARMUP, n - 1, LOOKAHEAD_CUTS)):
         part = df.iloc[:cut].copy()
-        s = _as_signal(fn(part, p, ind), part)
-        if not np.array_equal(s, full[:cut]):
+        if not np.array_equal(_as_signal(fn(part, p, ind), part), full[:cut]):
             bad.append(int(cut))
+    if bad:
+        return bad
+    a = max(0, n // 2 - DENSE_BARS // 2)
+    seg = df.iloc[a:a + DENSE_BARS]
+    seg_full = _as_signal(fn(seg.copy(), p, ind), seg)
+    lo = min(WARMUP * 2, len(seg) // 3)
+    cols = ["open", "high", "low", "close"]
+    for cut in np.unique(np.linspace(lo, len(seg) - 1, DENSE_CUTS).astype(int) + rng.integers(0, 4, DENSE_CUTS)):
+        cut = int(min(cut, len(seg) - 1))
+        part = seg.iloc[:cut].copy()
+        if not np.array_equal(_as_signal(fn(part, p, ind), part), seg_full[:cut]):
+            bad.append(a + cut)
+            break
+        # zaburzenie przyszłości: ceny po cięciu ×1,3 i ×0,7 — sygnały sprzed cięcia nie mogą się zmienić
+        up, dn = seg.copy(), seg.copy()
+        up.iloc[cut:, up.columns.get_indexer(cols)] *= 1.3
+        dn.iloc[cut:, dn.columns.get_indexer(cols)] *= 0.7
+        if not np.array_equal(_as_signal(fn(up, p, ind), up)[:cut], _as_signal(fn(dn, p, ind), dn)[:cut]):
+            bad.append(a + cut)
+            break
     return bad
 
 

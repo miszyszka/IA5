@@ -47,7 +47,9 @@ def check_code_on(code: str, h1_dir: Path) -> dict:
     if meta["lookahead"]:
         for la in meta["lookahead"][:3]:
             errors.append(f"Look-ahead (B2): {la['pair']}, parametry #{la['param_id']} — sygnały zmieniają się po dopisaniu "
-                          "przyszłych świec. Szukaj shift(-k), statystyk z całej serii, center=True.")
+                          "przyszłych świec. Szukaj: shift(-k), statystyk z całej serii, center=True, niezamkniętej świecy "
+                          "wyższego interwału (resample bez shift(1)), maksimum/minimum dnia przez transform "
+                          "(docs/STRATEGIE.md, sekcja 6).")
     params = meta["params"]
     n_exits = len(meta["exits"]) if meta.get("exits") else len(default_exits())
     n_var = len(params) * n_exits

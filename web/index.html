@@ -3,52 +3,51 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>IA5</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
-<style>
-  :root { --bg:#0A0E13; --panel:#11161D; --line:#1C232D; --accent:#FF7A1A; --ok:#3DDC84; --warn:#F5A524; --bad:#FF4D4F; --mute:#7A8594; --text:#E6EAF0; }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:14px Inter, sans-serif; }
-  header { display:flex; align-items:center; gap:24px; padding:14px 16px; border-bottom:1px solid var(--line); }
-  .logo { font-weight:600; color:var(--accent); text-shadow:0 0 12px rgba(255,122,26,.6); }
-  nav button { background:none; border:0; color:var(--mute); font:inherit; padding:6px 10px; cursor:pointer; }
-  nav button.on { color:var(--text); border-bottom:2px solid var(--accent); }
-  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; padding:16px; }
-  .kpi { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; }
-  .kpi small { color:var(--mute); display:block; margin-bottom:6px; }
-  .kpi b { font:600 22px "JetBrains Mono", monospace; font-variant-numeric:tabular-nums; }
-  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--mute); margin-right:8px; }
-  .sub { color:var(--mute); font-size:12px; margin-top:6px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-  main { padding:0 16px 32px; }
-  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow-x:auto; }
-  table { width:100%; border-collapse:collapse; }
-  th, td { padding:9px 14px; text-align:left; border-bottom:1px solid var(--line); white-space:nowrap; }
-  th { color:var(--mute); font-weight:400; font-size:12px; }
-  td.num { font-family:"JetBrains Mono", monospace; font-variant-numeric:tabular-nums; text-align:right; }
-  .note { color:var(--mute); margin-top:16px; }
-</style>
+<title>IA5 — laboratorium strategii FX</title>
+<meta name="description" content="Szukanie i weryfikacja strategii FX na świecach H1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230A0E13'/%3E%3Cpath d='M6 22 L12 14 L17 18 L26 8' stroke='%23FF7A1A' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+<script src="vendor/echarts.min.js" defer></script>
+<script src="vendor/lightweight-charts.js" defer></script>
 </head>
 <body>
-<header>
-  <span class="logo">IA5</span>
-  <nav><button class="on">Strategie</button><button>Inwestorzy</button></nav>
+<header class="top">
+  <a class="logo" href="#/" aria-label="IA5 — strona główna"><span>IA5</span></a>
+  <nav aria-label="Zakładki">
+    <a data-tab="strategies" href="#/">Strategie</a>
+    <a data-tab="investors" href="#/inwestorzy">Inwestorzy</a>
+  </nav>
+  <div id="auth" class="auth"></div>
 </header>
-<section class="kpis">
-  <div class="kpi"><small>Dane</small><b><span class="dot" id="dataDot"></span><span id="dataState">—</span></b></div>
-  <div class="kpi"><small>Latencja ostatniej świecy</small><b id="latency">— s</b><div class="sub" id="latencySub"></div></div>
-  <div class="kpi"><small>Świece w bazie</small><b id="bars">—</b></div>
-  <div class="kpi"><small>Mac</small><b><span class="dot" id="macDot"></span><span id="macState">—</span></b></div>
-  <div class="kpi"><small>Flagi jakości danych</small><b id="flags">—</b><div class="sub" id="flagsSub"></div></div>
+
+<section id="status" class="status" aria-label="Stan systemu">
+  <div class="kpi-tile" id="k-data" data-state="mute"><small>Dane (Yahoo → Firestore)</small><b class="v">…</b><span class="s"></span></div>
+  <div class="kpi-tile" id="k-lat" data-state="plain"><small>Latencja ostatniej świecy</small><b class="v">—</b><span class="s"></span></div>
+  <div class="kpi-tile" id="k-bars" data-state="plain"><small>Świece w bazie</small><b class="v">—</b><span class="s"></span></div>
+  <div class="kpi-tile" id="k-mac" data-state="mute"><small>Mac (ia5 start)</small><b class="v">—</b><span class="s"></span></div>
+  <div class="kpi-tile" id="k-flags" data-state="plain"><small>Flagi jakości danych</small><b class="v">—</b><span class="s"></span></div>
+  <details class="pairs">
+    <summary>Pary walutowe</summary>
+    <div class="tablewrap"><table class="data compact">
+      <thead><tr><th>Para</th><th>Ostatnia świeca (UTC)</th><th>Czas lokalny</th><th>Latencja s</th><th>Świece</th><th>Flagi</th></tr></thead>
+      <tbody id="pairs-body"></tbody>
+    </table></div>
+  </details>
 </section>
+
 <main>
-  <div class="panel">
-    <table>
-      <thead><tr><th>Para</th><th>Ostatnia świeca</th><th style="text-align:right">Latencja s</th><th style="text-align:right">Świece</th><th style="text-align:right">Flagi</th></tr></thead>
-      <tbody id="pairsBody"></tbody>
-    </table>
-  </div>
-  <p class="note">Strategie — etap E4.</p>
+  <section id="view-list" class="view"></section>
+  <section id="view-card" class="view" hidden></section>
+  <section id="view-investors" class="view" hidden>
+    <div class="empty"><h2>Inwestorzy</h2><p>Wkrótce.</p></div>
+  </section>
 </main>
-<script type="module" src="status.js"></script>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<noscript><p class="empty">Dashboard wymaga JavaScript.</p></noscript>
+<script type="module" src="js/app.js"></script>
 </body>
 </html>

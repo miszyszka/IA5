@@ -28,3 +28,16 @@ def signals(df, p, ind):
 '''
     res = check_code_on(bad, syn)
     assert not res["ok"] and any("Look-ahead" in e for e in res["errors"])
+
+
+def test_unclosed_higher_timeframe_is_caught(syn):
+    """Subtelny look-ahead: SMA z niezamkniętej świecy H4 (resample bez shift(1)) — zaburzenie przyszłości go wykrywa."""
+    bad = '''
+def signals(df, p, ind):
+    h4 = ind.sma(df.close.resample("4h").last().dropna(), 50)
+    return ind.cross_above(df.close, h4.reindex(df.index, method="ffill")).astype("int8")
+'''
+    res = check_code_on(bad, syn)
+    assert any("Look-ahead" in e for e in res["errors"])
+    good = bad.replace(".dropna(), 50)", ".dropna(), 50).shift(1)")
+    assert check_code_on(good, syn)["ok"]

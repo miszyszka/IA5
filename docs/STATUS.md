@@ -4,26 +4,25 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
 ## 2026-10-26 — sesja 1
 
-**Zrobione**
-- E0: `CLAUDE.md` v0.2, dziennik decyzji, szkielet repo, CI, Pages, reguły Firestore, `docs/SETUP.md`. Michał wykonał kroki z SETUP.
-- E1 (kod): `apps_script/Code.gs` — backfill 730 dni, `tick()` co 5 min, upsert przez `commit`, kontrola jakości (OHLC, ts, luki, korekty, test krzyżowy), `meta/status` z latencją, log w arkuszu.
-- Dashboard: pasek statusu na żywo (dane, latencja + mediana 24 h + wykres, liczba świec, Mac, flagi) i tabela par.
-- E1 uruchomione przez Michała (Apps Script, reguły, wyjątek indeksu) — „wszystko jest".
-- E2 (kod): `ia5 start` / `ia5 sync` — Dukascopy M1 → H1, sync Yahoo z Firestore, kontrole (OHLC, luki, trójkąty, Dukascopy vs Yahoo), publikacja świec Yahoo na gałąź `data`, heartbeat, caffeinate, nasłuch kolejki z kontrolą właściciela. 13 testów.
+**Zrobione (kod w repo, testy zielone — 75)**
+- E0: infrastruktura, CI, Pages, reguły Firestore, SETUP.
+- E1: Apps Script (Yahoo → Firestore co 5 min, kontrola jakości, latencja) — uruchomione przez Michała.
+- E2: `ia5 start` — Dukascopy M1 → H1, sync Yahoo, kontrole, gałąź `data`, heartbeat, kolejka, resync co 6 h, forward test zamrożonych.
+- E3: wskaźniki zgodne z TA-Lib, silnik 233 wyjść (B1–B8, resolver M1), zgodność z backtesting.py, sandbox + detektor look-ahead (cięcia + zaburzenie przyszłości).
+- E4: dashboard — status, lista (szukaj, sortuj, usuń), okno nowej strategii z kontrolą na żywo, karta strategii (werdykt, walidacja, filtry par/kierunku/próby/depozytu, ranking, heatmapa TP×SL, krzywa wyjść czasowych, kapitał + obsunięcie, świece z transakcjami, rozbicia, tabela + CSV, raport dla Claude, zamrażanie, ponowne liczenie). Przetestowany w headless Chromium (bez błędów konsoli), także na szerokości telefonu.
+- E5: walidacja — benchmark losowych wejść, DSR, PBO (CSCV), walk-forward, bootstrap, spread ×1,5/×2/faktyczny, kapitał 5–30%, werdykt.
+- Reguła „zrób mi strategię” (K1–K3, `docs/STRATEGIE.md`), `scripts/check_strategy.py`, `ia5 check`, 6 przykładów w `strategies/examples/`.
+- DEMO na gałęzi `data`: strategia z przykładu CLAUDE.md policzona na prawdziwym EUR/USD H1 2017–2018 (dane z backtesting.py) — do podglądu, usuwa się przyciskiem.
 
-- E3: wskaźniki zgodne z TA-Lib, silnik (233 wyjścia, B1–B8, resolver M1), sandbox z detektorem look-ahead, `ia5 run plik.py` → parquet + manifest + `report.md`. Zgodność z backtesting.py. 51 testów.
-
-**Następne**
-1. Michał (później, na Macu): instalacja `ia5` i pierwsze `ia5 start` — potwierdzić format Dukascopy (D-011).
-1a. E5: symulacja kapitału (5–30%), DSR, PBO, benchmark losowych wejść, walk-forward, test spreadu, werdykt.
-1b. E4: dashboard — lista strategii, okno nowej strategii, karta wyników.
-2. Zalogowanie przez Google na stronie → UID do `firestore.rules` i `~/.ia5/config.json`.
-3. E3: silnik.
+**Następne (Michał)**
+1. Zalogować się na stronie (Google) → menu konta → „Kopiuj mój UID”.
+2. Wkleić aktualne `firestore.rules` z UID w miejsce `<OWNER_UID>` → Publish (reguły się zmieniły — trzeba wkleić na nowo).
+3. Na Macu: `~/.ia5/config.json` = `{"owner_uid": "<UID>"}`, instalacja i `ia5 start` (docs/SETUP.md).
+4. Pierwsza własna strategia z dashboardu → sprawdzić cały obieg.
 
 **Znane problemy / ryzyka**
-- Yahoo bez oficjalnego API (tylko monitoring).
-- Święta nie są w kalendarzu sesji (D-009).
-- `clasp` jeszcze nieustawiony — na razie kod wklejany z repo; repo pozostaje źródłem prawdy.
+- Format plików Dukascopy sprawdzony tylko na danych syntetycznych (D-011) — potwierdzi pierwsze `ia5 start`.
+- Windows: `403 Missing or insufficient permissions` z Firestore przy kluczu service account — odłożone.
+- Yahoo bez oficjalnego API (tylko monitoring). Święta poza kalendarzem sesji (D-009).
+- `clasp` nieustawiony — kod Apps Script wklejany z repo.
 - O5 (swapy) otwarte.
-- Format plików Dukascopy sprawdzony tylko na danych syntetycznych (D-011).
-- Windows: `ia5 start` dostaje `403 Missing or insufficient permissions` z Firestore mimo klucza service account (rola IAM dodana?, nazwa bazy?). Odłożone — Michał uruchomi na Macu.

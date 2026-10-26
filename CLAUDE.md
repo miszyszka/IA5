@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.4 · 2026-10-26 · Status: zatwierdzone decyzje O1–O4, O6 (sekcja 14)
+Wersja 0.5 · 2026-10-26 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
 
 ---
 
@@ -56,6 +56,11 @@ Zakładka **Inwestorzy** istnieje, ale jest pusta („wkrótce"). Nie budujemy j
 - **Z2.** Dashboard nie czyta świec ani wyników z Firestore — czyta je z gałęzi `data` na GitHub. Z Firestore czyta tylko `meta/status`, `runner/heartbeat` i listę `strategies` (nasłuch `onSnapshot`, bez odpytywania w pętli).
 - **Z3.** Liczniki (np. liczba świec) są przechowywane w `meta/status`, nigdy liczone zapytaniem.
 - **Z4.** Każda nowa funkcja, która czyta lub zapisuje Firestore, ma w commicie oszacowanie dziennego zużycia.
+
+### Strategie (K) — gdy Michał mówi „zrób mi strategię …”
+- **K1.** Claude postępuje według procedury z `docs/STRATEGIE.md` (sekcja 1): interpretacje → hipoteza → `PARAMS` (≤ ~12 kombinacji) → kod według kontraktu → **kontrola `python scripts/check_strategy.py plik.py` z wynikiem OK** → odpowiedź z jednym blokiem kodu gotowym do wklejenia w dashboard.
+- **K2.** Strategia definiuje wyłącznie wejścia (`signals`). Wyjścia, spread, dźwignię i wielkość pozycji liczy silnik; własne `EXITS` / `SIZING` tylko na wyraźne życzenie.
+- **K3.** Claude nie podaje przewidywanych wyników strategii. Wyniki liczy Mac; ocenę robi się na raporcie według sekcji 9.
 
 ### Praca w repo (Claude)
 - **G1.** Start sesji: `git pull`, przeczytaj ten plik, `docs/STATUS.md`, `docs/DECISIONS.md`.
@@ -159,28 +164,9 @@ strategies/{id}
 - Rozmiar: ~744 świece × 4 liczby ≈ 30 KB na dokument (limit 1 MiB). Backfill: 8 par × ~25 miesięcy ≈ 200 zapisów.
 - Statusy strategii: `do_policzenia` → `liczy_sie` → `policzona` | `blad` ; opcjonalnie `zamrozona`.
 
-### Reguły Firestore (szkic)
+### Reguły Firestore
 
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{db}/documents {
-    function isOwner() { return request.auth != null && request.auth.uid == "<OWNER_UID>"; }
-    match /meta/{d}     { allow read: if true;    allow write: if false; }
-    match /runner/{d}   { allow read: if true;    allow write: if false; }
-    match /candles/{d}  { allow read: if isOwner(); allow write: if false; }
-    match /strategies/{id} {
-      allow read, delete: if isOwner();
-      allow create: if isOwner()
-        && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.status == "do_policzenia";
-      allow update: if isOwner()
-        && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(["name", "hypothesis", "status", "frozenAt"]);
-    }
-  }
-}
-```
+Aktualne reguły: [`firestore.rules`](firestore.rules) (wklejane w Firebase → Firestore → Rules, z `<OWNER_UID>` zamienionym na UID Michała). Zasada: `meta/*` i `runner/*` czyta każdy (pasek statusu), piszą tylko Apps Script i Mac; `candles/*` czyta właściciel; `strategies/*` czyta i zmienia wyłącznie właściciel, tworzyć można tylko ze statusem `do_policzenia` albo `do_usuniecia`, zmieniać tylko pola `name, hypothesis, code, status, frozenAt, frozenVariant`.
 
 Apps Script i Mac działają na uprawnieniach administracyjnych (OAuth właściciela / service account) i reguł nie potrzebują.
 
@@ -244,39 +230,39 @@ Dane Dukascopy (M1 i zbudowane z nich H1) zostają na Macu: są za duże na GitH
   7. `Ctrl+C` → heartbeat `offline`, czyste wyjście.
 - Pozostałe komendy: `ia5 status`, `ia5 sync`, `ia5 run <plik.py>` (liczenie lokalne, bez dashboardu; wyniki w `~/.ia5/results/{nazwa}/{run}/`).
 - Dashboard pokazuje „połączony", gdy `teraz − lastSeen < 90 s`.
+- Co 6 h działający `ia5 start` dociąga nowe dane i przelicza strategie zamrożone (forward test, W4).
+
+### Protokół dashboard ↔ Mac (jedyna droga komunikacji: Firestore `strategies/{id}` + gałąź `data`)
+
+| Krok | Kto | Zapis | Odczyt |
+|---|---|---|---|
+| Nowa strategia | dashboard (zalogowany właściciel) | `strategies/{id}`: `name, hypothesis, code, status="do_policzenia", createdBy, createdAt` | Mac: nasłuch `status in [do_policzenia, do_usuniecia]` |
+| Start liczenia | Mac | `status="liczy_sie"`; `runner/heartbeat.job = {id, name, progress, phase}` | dashboard: pasek postępu |
+| Wynik | Mac | push `results/{id}/` + `results/index.json` na gałąź `data`; `status="policzona"`, `result={sha, path, run_id, verdict}` | dashboard: odświeża SHA gałęzi `data`, karta strategii |
+| Błąd | Mac | `status="blad"`, `error` (kontrakt, look-ahead, wyjątek) | dashboard: komunikat + „Popraw kod” |
+| Popraw / policz ponownie | dashboard | `code, hypothesis, status="do_policzenia"` (tworzy dokument, gdy strategia była tylko na gałęzi `data`) | Mac jak wyżej |
+| Usunięcie | dashboard | `status="do_usuniecia"` — strategia znika z listy od razu | Mac: usuwa `results/{id}/` i wpis z indeksu, potem dokument |
+| Zamrożenie | dashboard | `frozenAt, frozenVariant` | Mac: co 6 h przelicza; karta: filtr „tylko forward” |
+
+Reguły Firestore (`firestore.rules`) pozwalają na te zapisy wyłącznie właścicielowi (S1); Mac dodatkowo sprawdza `createdBy == owner_uid` z `~/.ia5/config.json`.
 
 ---
 
 ## 7. Kontrakt strategii (to wpisuję w okno dialogowe)
 
+**Pełny przewodnik i reguła dla Claude: [`docs/STRATEGIE.md`](docs/STRATEGIE.md)** — kontrakt, lista funkcji `ind`, wzorce, pułapki look-ahead, procedura „zrób mi strategię”. Wzorce działające: `strategies/examples/` (sprawdzane w CI).
+
 ```python
-HYPOTHESIS = """Na rynku w trendzie wzrostowym głębokie wyprzedanie
-na H1 jest chwilowe i cena wraca w górę."""   # spisane PRZED liczeniem
+HYPOTHESIS = """Dlaczego to działa — spisane PRZED liczeniem."""
+PARAMS = {"rsi_level": [25, 30, 35], "slope_bars": [5, 20]}   # każda kombinacja = wariant wejścia
 
-PARAMS = {                      # opcjonalna siatka parametrów wejścia
-    "rsi_level": [25, 30],      # każdy punkt = osobny wariant (liczy się do W2)
-    "slope_bars": [5, 20],
-}
-
-def signals(df, p, ind):
-    """df: jedna para, kolumny open/high/low/close, indeks UTC (czas otwarcia),
-    tylko zamknięte, oczyszczone świece.
-    Zwraca pd.Series int8 na indeksie df: +1 long, -1 short, 0 brak.
-    Sygnał obowiązuje na zamknięciu świecy; wejście silnik robi na open następnej."""
-    sma200 = ind.sma(df.close, 200)
-    rsi = ind.rsi(df.close, 14)
-    rising = sma200 > sma200.shift(p["slope_bars"])          # „SMA200 rosnąca"
-    crossed = (rsi < p["rsi_level"]) & (rsi.shift(1) >= p["rsi_level"])  # „RSI spadło poniżej" = przecięcie
-    return (rising & crossed).astype("int8")
-
-# EXITS = {...}            # opcjonalnie: nadpisanie domyślnej siatki wyjść (8.2)
-# SIZING = [5, 10, 20]     # opcjonalnie: % kapitału jako depozyt na pozycję (domyślnie 5, 10, 15, 20, 30)
+def signals(df, p, ind):          # df: H1 jednej pary, indeks UTC = czas otwarcia; p: jedna kombinacja PARAMS
+    trend_up = ind.rising(ind.sma(df.close, 200), p["slope_bars"])   # „SMA200 rośnie”
+    oversold = ind.cross_below(ind.rsi(df.close, 14), p["rsi_level"])  # zdarzenie, nie stan
+    return (trend_up & oversold).astype("int8")                       # +1 long / −1 short / 0
 ```
 
-Zasady:
-- Dozwolone importy: `numpy`, `pandas`. Wskaźniki tylko z `ind` (B9).
-- Gdy Michał opisuje strategię słowami, Claude tłumaczy ją na kod i **zapisuje każdą interpretację w komentarzu** (jak wyżej: co znaczy „rosnąca", czy „poniżej 30" to stan czy przecięcie).
-- Brak `HYPOTHESIS` = ostrzeżenie w karcie strategii.
+Egzekwowanie: `runner/ia5/sandbox.py` (osobny proces, dozwolone importy `numpy`, `pandas`, `math`), detektor look-ahead (cięcia danych + zaburzenie przyszłości), `ia5 check` / `scripts/check_strategy.py`, kontrola w edytorze dashboardu.
 
 ---
 
@@ -347,7 +333,7 @@ Rozbicia: para, rok, kierunek, sesja (Azja 00–07, Europa 07–13, USA 13–21 
 Nazwa, status (do policzenia / liczy się x% / policzona / błąd / zamrożona), data, werdykt, kluczowe liczby najlepszego wariantu IS obok OOS.
 
 ### 10.4 Nowa strategia
-Duże okno z edytorem kodu (podświetlanie składni), pola: nazwa, hipoteza, kod. Szablon startowy z sekcji 7. Zapis → status `do_policzenia`.
+Duże okno: nazwa, hipoteza, kod (pole tekstowe z czcionką o stałej szerokości, Tab = 4 spacje, Ctrl/⌘+Enter = wyślij). Kontrola kontraktu na żywo (`checkStrategyCode`) blokuje wysłanie przy błędzie. Szablon startowy. Zapis → status `do_policzenia`.
 
 ### 10.5 Karta strategii
 - Nagłówek: werdykt, hipoteza, liczba wariantów, `ENGINE_VERSION`, zakres danych, hashe.
@@ -366,7 +352,7 @@ Stała struktura: hipoteza → kod → dane (zakres, pary, koszty, model wykonan
 Liczby w tabelach markdown, bez obrazków — tak, żeby model mógł je czytać.
 
 ### 10.7 Technologia
-Statyczny HTML + moduły ES, bez kroku budowania. Firebase JS SDK (modułowy). Lightweight Charts (TradingView, Apache-2.0) — świece z transakcjami. ECharts — kapitał, heatmapy, paski. DuckDB-WASM — filtrowanie plików Parquet w przeglądarce. CodeMirror 6 — edytor kodu. Wdrażanie przez GitHub Actions → Pages.
+Statyczny HTML + moduły ES, bez kroku budowania (`web/`). Biblioteki w repo (`web/vendor/`, bez zależności od CDN): ECharts 5.5 (kapitał, heatmapy, krzywe), Lightweight Charts 4.2 (świece z transakcjami), hyparquet 1.31 (czytanie fragmentów Parquet zakresami HTTP — tylko wiersze wybranego wariantu). Firebase JS SDK 10.14 ładowany dynamicznie z gstatic — gdy zawiedzie, wyniki z GitHub nadal działają. Logika obliczeń w `web/js/metrics.js` testowana w Node (`tests/web`), kapitał zgodny z `runner/ia5/portfolio.py`. Wdrażanie przez GitHub Actions → Pages. Test w przeglądarce: parametry `?data=<url>&nofb=1`.
 
 ---
 
@@ -388,16 +374,21 @@ IA5/
 ├─ CLAUDE.md                 # ten plik
 ├─ docs/
 │  ├─ STATUS.md              # stan prac, aktualizowany co sesję
-│  └─ DECISIONS.md           # dziennik decyzji
-├─ web/                      # dashboard (GitHub Pages)
+│  ├─ DECISIONS.md           # dziennik decyzji
+│  ├─ STRATEGIE.md           # jak pisać strategie + reguła „zrób mi strategię” (K1–K3)
+│  └─ SETUP.md               # kroki do kliknięcia
+├─ web/                      # dashboard (GitHub Pages): index.html, css/, js/ (app, list, card, charts, editor,
+│                            #   status, data, fb, metrics, util, config), vendor/
+├─ scripts/                  # check_strategy.py (kontrola kodu bez danych Michała), demo.py
 ├─ apps_script/              # Code.gs + appsscript.json (clasp)
 ├─ runner/                   # program na Maca
 │  ├─ pyproject.toml
 │  └─ ia5/  cli.py  config.py  session.py  store.py
 │           dukascopy.py  bars.py  quality.py  cloud.py  publish.py      # dane (E2)
 │           indicators.py  engine.py  sandbox.py  backtest.py  report.py # silnik (E3)
-│           validate.py  portfolio.py                                     # walidacja, kapitał (E5)
-├─ tests/                    # golden/, test_indicators, test_engine, test_lookahead, test_reconcile
+│           validate.py  portfolio.py  check.py                           # walidacja, kapitał, kontrola (E5)
+├─ tests/                    # wskaźniki vs TA-Lib, złote scenariusze, zgodność z backtesting.py, walidacja,
+│                            #   strategie, publikacja, przykłady, web/ (Node)
 ├─ strategies/examples/
 ├─ firestore.rules
 └─ .github/workflows/        # ci.yml (pytest, lint), pages.yml
@@ -419,7 +410,7 @@ Gałąź `data` — osobna, tylko dane (sekcja 4).
 | **E5** Walidacja | OOS, walk-forward, benchmark losowy, DSR, PBO, zamrażanie + forward | Werdykt w karcie |
 | **E6** Inwestorzy | Później, osobna specyfikacja | — |
 
-Każdy etap: testy zielone → push → `STATUS.md` zaktualizowany → działa na żywej stronie.
+Każdy etap: testy zielone → push → `STATUS.md` zaktualizowany → działa na żywej stronie. Aktualny stan etapów: `docs/STATUS.md`.
 
 **Do kliknięcia przez Michała w E0** (Claude prowadzi krok po kroku): włączenie Firestore, włączenie logowania Google w Firebase Auth (+ domena `miszyszka.github.io`), klucz service account do `~/.ia5/`, ograniczenie klucza API do domeny strony w Google Cloud Console, projekt Apps Script podpięty pod arkusz, włączenie GitHub Pages przez Actions.
 

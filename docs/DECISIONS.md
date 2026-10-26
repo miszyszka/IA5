@@ -5,6 +5,28 @@ Najnowsze na górze.
 
 ---
 
+### D-018 · 2026-10-26 · Detektor look-ahead: cięcia + zaburzenie przyszłości
+- **Decyzja:** oprócz 8 losowych cięć pełnych danych — 24 gęste cięcia na wycinku 2000 świec, a przy każdym porównanie sygnałów sprzed cięcia przy przyszłości ×1,3 i ×0,7.
+- **Powód:** same cięcia nie wykrywały „krótkiego” look-ahead (SMA z niezamkniętej świecy H4 zmienia średnią minimalnie). Zaburzenie przyszłości wykrywa go na każdej parze (test `test_unclosed_higher_timeframe_is_caught`).
+
+### D-017 · 2026-10-26 · Reguła „zrób mi strategię” (K1–K3) i `scripts/check_strategy.py`
+- **Decyzja:** procedura w `docs/STRATEGIE.md`; Claude przed oddaniem kodu uruchamia kontrolę na danych syntetycznych (8 par) i prawdziwym EUR/USD 2017–2018 z backtesting.py; na Macu to samo robi `ia5 check` na danych Dukascopy.
+- **Powód:** kod wklejony do dashboardu ma działać za pierwszym razem; błędy kontraktu i look-ahead wychodzą przed liczeniem, nie po godzinie.
+- **Biblioteka `ind` rozszerzona** o MACD, stochastyk, ADX/DI, Donchian, rising/falling, godzinę/dzień/sesję — każdy wskaźnik zgodny z TA-Lib.
+
+### D-016 · 2026-10-26 · Protokół dashboard ↔ Mac
+- **Decyzja:** jedynym kanałem jest dokument `strategies/{id}` (statusy `do_policzenia → liczy_sie → policzona | blad`, `do_usuniecia`) + heartbeat z postępem + wyniki na gałęzi `data`. Usunięcie = status `do_usuniecia` (strategia znika z listy od razu, pliki usuwa Mac). Strategie istniejące tylko na gałęzi `data` (np. DEMO) dostają dokument przy pierwszej akcji (usuń / policz ponownie).
+- **Powód:** dashboard nie ma uprawnień do zapisu na GitHub (brak tokenu w przeglądarce) — pisze tylko do Firestore; Mac jest jedynym zapisującym gałąź `data`. Lista działa także bez Firestore (tylko odczyt z GitHub).
+- **Odświeżanie:** dashboard pobiera SHA gałęzi `data` z API GitHub (60 zapytań/h na IP — wystarcza), ponownie po zakończeniu liczenia (heartbeat `computing → idle`) i po zmianie statusu na `policzona`.
+
+### D-015 · 2026-10-26 · Dashboard: biblioteki w repo, hyparquet zamiast DuckDB-WASM, pole tekstowe zamiast CodeMirror
+- **Decyzja:** ECharts, Lightweight Charts i hyparquet skopiowane do `web/vendor/` (licencje obok). Parquet czytany przez hyparquet — tylko zakres wierszy wybranego wariantu (`row_start`, `row_end` w `variants.json`, plik posortowany po `variant_id`). Kod strategii w zwykłym polu tekstowym z obsługą Tab i kontrolą na żywo.
+- **Powód:** brak zależności od CDN (strona działa, gdy CDN ma awarię); DuckDB-WASM to kilkadziesiąt MB do pobrania dla prostego filtra; CodeMirror wymaga bundlera lub wielu modułów z CDN. Do zmiany, gdy edytor okaże się za ubogi.
+
+### D-014 · 2026-10-26 · Kapitał: zwrot na nominale w walucie kwotowanej
+- **Decyzja:** zysk transakcji = nominał × (pipsy netto × pips ÷ cena wejścia). Ta sama funkcja w Pythonie (`portfolio.py`) i JS (`metrics.js`), zgodność sprawdzana testem.
+- **Powód:** prosto i identycznie w obu miejscach; dla par bez USD jako waluty kwotowanej pomija zmianę kursu przeliczenia w trakcie transakcji (efekt drugiego rzędu).
+
 ### D-013 · 2026-10-26 · E3: R po kosztach, rozgrzewka, granice sandboxa
 - **R po kosztach** = pipsy netto ÷ ryzyko w pipsach (SL w pipsach albo 1×ATR14 dla wyjść bez SL). Wcześniejsze przeskalowanie przez netto/brutto wybuchało przy transakcjach bliskich zeru — wykryte testem w realnej skali.
 - **Rozgrzewka:** wejścia, dla których ATR5 lub ATR14 jeszcze nie istnieje, są pomijane i liczone w raporcie.
