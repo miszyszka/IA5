@@ -32,7 +32,7 @@ async function loadIndex() {
 function renderAuth(user) {
   const box = $('#auth');
   if (!user) {
-    box.replaceChildren(h('button', { id: 'login', class: 'btn', onclick: () => login().catch((e) => toast(e.message || String(e), 'bad', 7000)) }, 'Zaloguj (Google)'));
+    box.replaceChildren(h('button', { id: 'login', class: 'btn', onclick: () => login().catch((e) => toast(e.message || String(e), 'bad', 15000)) }, 'Zaloguj (Google)'));
     return;
   }
   const menu = h('div', { class: 'menu', hidden: true },

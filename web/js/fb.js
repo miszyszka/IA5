@@ -30,10 +30,26 @@ export async function onUser(cb) {
   fb.A.onAuthStateChanged(fb.auth, cb);
 }
 
+const AUTH_ERRORS = [
+  [/requests-from-referer|api-key|API_KEY|referer/i, 'Klucz API blokuje logowanie: w Google Cloud → Credentials → klucz „Browser key” dodaj w HTTP referrers także https://project-ia5.firebaseapp.com/* (docs/SETUP.md, krok 5).'],
+  [/unauthorized-domain/, 'Domena strony nie jest dozwolona: Firebase → Authentication → Settings → Authorized domains → dodaj miszyszka.github.io.'],
+  [/operation-not-allowed/, 'Logowanie Google jest wyłączone: Firebase → Authentication → Sign-in method → Google → Enable.'],
+  [/popup-blocked/, 'Przeglądarka zablokowała okno logowania — zezwól na wyskakujące okna dla tej strony i kliknij jeszcze raz.'],
+  [/popup-closed-by-user|cancelled-popup-request/, 'Okno logowania zostało zamknięte przed końcem.'],
+  [/network-request-failed/, 'Brak połączenia z Google — sprawdź sieć, blokery reklam lub VPN.'],
+];
+
 export async function login() {
   const fb = await firebase();
-  if (!fb) throw new Error('Firebase niedostępne');
-  await fb.A.signInWithPopup(fb.auth, new fb.A.GoogleAuthProvider());
+  if (!fb) throw new Error('Firebase niedostępne — sprawdź połączenie lub bloker skryptów.');
+  try {
+    await fb.A.signInWithPopup(fb.auth, new fb.A.GoogleAuthProvider());
+  } catch (e) {
+    const text = `${e.code || ''} ${e.message || ''}`;
+    const hit = AUTH_ERRORS.find(([re]) => re.test(text));
+    console.warn('Logowanie:', e);
+    throw new Error(hit ? hit[1] : `Logowanie nie powiodło się (${e.code || e.message}).`);
+  }
 }
 
 export async function logout() {

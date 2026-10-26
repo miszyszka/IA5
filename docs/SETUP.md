@@ -4,7 +4,9 @@
 2. **Firestore:** Firebase Console → projekt `project-ia5` → Build → Firestore Database → Create database (tryb produkcyjny, region `eur3`).
 3. **Logowanie:** Build → Authentication → Sign-in method → **Google** → włącz. W Settings → Authorized domains dodaj `miszyszka.github.io`.
 4. **Klucz dla Maca:** Project settings → Service accounts → Generate new private key → zapisz jako `~/.ia5/service-account.json`. Nigdy do repo ani do czatu (S3).
-5. **Ograniczenie klucza API:** Google Cloud Console → APIs & Services → Credentials → klucz „Browser key" → HTTP referrers: `https://miszyszka.github.io/*`.
+5. **Ograniczenie klucza API:** Google Cloud Console → APIs & Services → Credentials → klucz „Browser key" → Application restrictions: **Websites** → dodaj **oba** adresy:
+   - `https://miszyszka.github.io/*` — strona,
+   - `https://project-ia5.firebaseapp.com/*` — okno logowania Google (bez tego logowanie nie działa).
 6. **Apps Script:** w arkuszu Google → Rozszerzenia → Apps Script. Kod wgram w E1 (przez `clasp`).
 7. **UID właściciela:** zaloguj się na stronie (prawy górny róg) → kliknij avatar → „Kopiuj mój UID”.
    - Firebase → Firestore → **Rules**: wklej aktualny [`firestore.rules`](../firestore.rules), zamień `<OWNER_UID>` na swój UID → **Publish**.
