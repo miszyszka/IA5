@@ -137,3 +137,31 @@ def test_get_retries_then_raises_and_404_is_empty(monkeypatch):
     import pytest
     with pytest.raises(RuntimeError, match="HTTP 500"):
         dukascopy._get("u", tries=2)
+
+
+def test_month_written_mid_month_is_refetched(tmp_path, monkeypatch):
+    """Miesiąc zapisany w trakcie (np. 15-go) nie może zostać „zamknięty" z luką do końca miesiąca."""
+    import os
+
+    from ia5 import dukascopy
+
+    monkeypatch.setattr(dukascopy, "START", date(2024, 1, 1))
+    folder = tmp_path / "m1" / "EURUSD"
+    folder.mkdir(parents=True)
+
+    def write(name, last_day, written):
+        ts = int(pd.Timestamp(last_day, tz="UTC").timestamp()) if last_day else 0
+        df = pd.DataFrame([[ts, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], columns=dukascopy.COLS) if last_day else \
+            pd.DataFrame(columns=dukascopy.COLS).astype("int64")
+        df.to_parquet(folder / name, index=False)
+        w = pd.Timestamp(written, tz="UTC").timestamp()
+        os.utime(folder / name, (w, w))
+
+    write("2024-01.parquet", None, "2024-01-20")               # pusty: Dukascopy nie ma tego miesiąca
+    write("2024-02.parquet", "2024-02-14", "2024-02-15")       # zapisany 15-go → niepełny
+    write("2024-03.parquet", "2024-03-29", "2024-03-30")       # 31.03 to niedziela, ostatni handlowy = pt 29
+    assert dukascopy.last_trading_day(2024, 3) == date(2024, 3, 29)
+    assert dukascopy.months_to_sync(tmp_path, "EURUSD", date(2024, 4, 9)) == [(2024, 2), (2024, 4)]
+    # niepełny, ale zapisany długo po końcu miesiąca (np. święto bez notowań) — nie pobieramy w kółko
+    write("2024-02.parquet", "2024-02-27", "2024-03-10")
+    assert dukascopy.months_to_sync(tmp_path, "EURUSD", date(2024, 4, 9)) == [(2024, 4)]

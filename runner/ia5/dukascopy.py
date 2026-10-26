@@ -11,6 +11,7 @@ import lzma
 import struct
 import threading
 import time
+from calendar import monthrange
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
@@ -103,12 +104,56 @@ def month_days(y: int, m: int, until: date) -> list[date]:
     return out
 
 
+def last_trading_day(y: int, m: int) -> date:
+    """Ostatni dzień miesiąca od poniedziałku do piątku (dane FX kończą tydzień w piątek)."""
+    d = date(y, m, monthrange(y, m)[1])
+    while d.isoweekday() > 5:
+        d -= timedelta(days=1)
+    return d
+
+
+def _max_ts(path: Path) -> int | None:
+    """Najnowsza minuta w pliku — ze statystyk Parquet, bez czytania danych."""
+    try:
+        import pyarrow.parquet as pq
+
+        meta = pq.ParquetFile(path).metadata
+        if meta.num_rows == 0:
+            return None
+        col = meta.schema.names.index("ts")
+        stats = [meta.row_group(i).column(col).statistics for i in range(meta.num_row_groups)]
+        if all(s is not None and s.has_min_max for s in stats):
+            return int(max(s.max for s in stats))
+    except Exception:  # noqa: BLE001 — niżej pełny odczyt kolumny
+        pass
+    ts = pd.read_parquet(path, columns=["ts"])["ts"]
+    return int(ts.max()) if len(ts) else None
+
+
+def month_complete(path: Path, y: int, m: int) -> bool:
+    """Czy zapisany miesiąc ma wszystkie dni.
+
+    Plik zapisany w trakcie miesiąca (np. 20-go) kończy się na dniu przed zapisem. Bez tej kontroli
+    po przejściu na nowy miesiąc zostałby „zamknięty" z trwałą luką do końca miesiąca.
+    Pełny = ma dane z ostatniego dnia handlowego albo został zapisany ≥ 2 dni po końcu miesiąca
+    (wtedy zawiera wszystko, co Dukascopy ma — np. gdy ostatni dzień był świętem bez notowań).
+    Pusty plik = Dukascopy nie ma tego miesiąca (np. przed startem notowań pary) — pełny.
+    """
+    if not path.exists():
+        return False
+    end = datetime(y, m, monthrange(y, m)[1], tzinfo=UTC) + timedelta(days=1)
+    if datetime.fromtimestamp(path.stat().st_mtime, UTC) >= end + timedelta(days=2):
+        return True
+    mx = _max_ts(path)
+    return mx is None or datetime.fromtimestamp(mx, UTC).date() >= last_trading_day(y, m)
+
+
 def months_to_sync(root: Path, pair: str, until: date) -> list[tuple[int, int]]:
-    """Miesiące do pobrania: brakujące pliki + bieżący miesiąc (zawsze odświeżany)."""
+    """Miesiące do pobrania: brakujące lub niepełne pliki + bieżący miesiąc (zawsze odświeżany)."""
     folder = root / "m1" / pair
     y, m, out = START.year, START.month, []
     while (y, m) <= (until.year, until.month):
-        if (y, m) == (until.year, until.month) or not (folder / f"{y}-{m:02d}.parquet").exists():
+        if (y, m) == (until.year, until.month) or not month_complete(folder / f"{y}-{m:02d}.parquet", y, m):
             out.append((y, m))
         m += 1
         if m == 13:
