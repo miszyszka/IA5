@@ -9,11 +9,10 @@ from __future__ import annotations
 
 import lzma
 import struct
+import threading
 import time
-import urllib.error
-import urllib.request
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
@@ -22,6 +21,8 @@ import pandas as pd
 BASE = "https://datafeed.dukascopy.com/datafeed"
 REC = struct.Struct(">5if")
 START = date(2003, 5, 1)
+WORKERS = 4      # jednoczesne dni na parę (każdy dzień = 2 pliki: BID i ASK)
+TRIES = 6        # próby na plik, przerwy 2, 4, 8, 16, 32 s
 COLS = ["ts", "bo", "bh", "bl", "bc", "bv", "ao", "ah", "al", "ac", "av"]
 
 
@@ -45,18 +46,36 @@ def decode_bi5(raw: bytes, day_start: int, pt: int) -> np.ndarray:
     return out
 
 
-def _get(url: str, tries: int = 4) -> bytes:
+_local = threading.local()
+
+
+def _session():
+    """Jedna sesja HTTP na wątek — połączenie utrzymywane między plikami (Dukascopy przycina nowe połączenia)."""
+    s = getattr(_local, "s", None)
+    if s is None:
+        import requests
+
+        s = requests.Session()
+        s.headers["User-Agent"] = "Mozilla/5.0 (Macintosh; IA5 data sync)"
+        _local.s = s
+    return s
+
+
+def _get(url: str, tries: int = TRIES) -> bytes:
+    """Plik bi5; 404 = brak danych tego dnia (b""). Po TRIES nieudanych próbach — RuntimeError."""
+    err: object = None
     for i in range(tries):
         try:
-            with urllib.request.urlopen(url, timeout=30) as r:
-                return r.read()
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
+            r = _session().get(url, timeout=(10, 45))
+            if r.status_code == 404:
                 return b""
-            err = e
+            if r.status_code == 200:
+                return r.content
+            err = f"HTTP {r.status_code}"
         except Exception as e:  # noqa: BLE001 — sieć: ponawiamy
             err = e
-        time.sleep(2 ** i)
+        if i < tries - 1:
+            time.sleep(min(60, 2 ** (i + 1)))
     raise RuntimeError(f"Dukascopy: {url}: {err}")
 
 
@@ -84,30 +103,56 @@ def month_days(y: int, m: int, until: date) -> list[date]:
     return out
 
 
-def sync_pair(pair: str, root: Path, log=print, workers: int = 8) -> int:
-    """Dociąga brakujące miesiące do root/m1/{PARA}/{RRRR-MM}.parquet. Zwraca liczbę nowych plików.
-
-    Zamknięty miesiąc zapisujemy raz i nie ruszamy (D4). Bieżący miesiąc nadpisujemy przy każdym sync.
-    """
+def months_to_sync(root: Path, pair: str, until: date) -> list[tuple[int, int]]:
+    """Miesiące do pobrania: brakujące pliki + bieżący miesiąc (zawsze odświeżany)."""
     folder = root / "m1" / pair
-    folder.mkdir(parents=True, exist_ok=True)
-    yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
-    y, m, written = START.year, START.month, 0
-    while (y, m) <= (yesterday.year, yesterday.month):
-        path = folder / f"{y}-{m:02d}.parquet"
-        current = (y, m) == (yesterday.year, yesterday.month)
-        if current or not path.exists():
-            days = month_days(y, m, yesterday)
-            with ThreadPoolExecutor(workers) as ex:
-                frames = [f for f in ex.map(lambda d: fetch_day(pair, d), days) if len(f)]
-            df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=COLS)
-            df.to_parquet(path, index=False)
-            written += 1
-            log(f"  {pair} {y}-{m:02d}: {len(df):,} minut")
+    y, m, out = START.year, START.month, []
+    while (y, m) <= (until.year, until.month):
+        if (y, m) == (until.year, until.month) or not (folder / f"{y}-{m:02d}.parquet").exists():
+            out.append((y, m))
         m += 1
         if m == 13:
             y, m = y + 1, 1
-    return written
+    return out
+
+
+def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress=None) -> dict:
+    """Dociąga brakujące miesiące do root/m1/{PARA}/{RRRR-MM}.parquet.
+
+    Zamknięty miesiąc zapisujemy raz i nie ruszamy (D4). Bieżący miesiąc nadpisujemy przy każdym sync.
+    Miesiąc, w którym choć jeden dzień się nie pobrał, NIE jest zapisywany — dociągnie się przy następnym
+    uruchomieniu (inaczej zostałaby trwała luka). Błąd sieci nigdy nie przerywa całej synchronizacji.
+    progress(i, n) — wołane po każdym miesiącu.
+    """
+    folder = root / "m1" / pair
+    folder.mkdir(parents=True, exist_ok=True)
+    yesterday = datetime.now(UTC).date() - timedelta(days=1)
+    todo = months_to_sync(root, pair, yesterday)
+    written, failed = 0, []
+
+    def safe_day(d):
+        try:
+            return fetch_day(pair, d)
+        except Exception as e:  # noqa: BLE001
+            return e
+
+    for k, (y, m) in enumerate(todo, 1):
+        days = month_days(y, m, yesterday)
+        with ThreadPoolExecutor(workers) as ex:
+            res = list(ex.map(safe_day, days))
+        errs = [r for r in res if isinstance(r, Exception)]
+        if errs:
+            failed.append(f"{y}-{m:02d}")
+            log(f"  {pair} {y}-{m:02d}: {len(errs)} dni nie pobrano ({str(errs[0])[-80:]}) — ponowię przy następnym uruchomieniu")
+        else:
+            frames = [f for f in res if len(f)]
+            df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=COLS)
+            df.to_parquet(folder / f"{y}-{m:02d}.parquet", index=False)
+            written += 1
+            log(f"  {pair} {y}-{m:02d}: {len(df):,} minut")
+        if progress:
+            progress(k, len(todo))
+    return {"written": written, "failed": failed, "todo": len(todo)}
 
 
 def load_m1(pair: str, root: Path) -> pd.DataFrame:

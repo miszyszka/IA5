@@ -90,3 +90,50 @@ def test_cross_and_compare():
     assert res["EURGBP"]["median"] < 1
     c = compare_sources(h1["EURUSD"], pd.DataFrame({"ts": ts, "close": [1.1002]}), "EURUSD")
     assert np.isclose(c["median"], 2.0)
+
+
+def test_sync_survives_network_errors(tmp_path, monkeypatch):
+    """Błąd jednego dnia: ten miesiąc nie jest zapisany (dociągnie się później), reszta tak, bez przerwania."""
+    from ia5 import dukascopy
+
+    monkeypatch.setattr(dukascopy, "START", date(2024, 1, 1))
+    bad_day = date(2024, 2, 7)
+
+    def fake_fetch(pair, d):
+        if d == bad_day:
+            raise RuntimeError("Dukascopy: timeout")
+        return pd.DataFrame([[int(pd.Timestamp(d).timestamp()), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], columns=dukascopy.COLS)
+
+    class Today(dukascopy.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return dukascopy.datetime(2024, 4, 10, tzinfo=tz)
+
+    monkeypatch.setattr(dukascopy, "fetch_day", fake_fetch)
+    monkeypatch.setattr(dukascopy, "datetime", Today)
+    calls = []
+    r = dukascopy.sync_pair("EURUSD", tmp_path, log=lambda m: None, progress=lambda i, n: calls.append((i, n)))
+    files = sorted(p.name for p in (tmp_path / "m1" / "EURUSD").glob("*.parquet"))
+    assert r["failed"] == ["2024-02"] and files == ["2024-01.parquet", "2024-03.parquet", "2024-04.parquet"]
+    assert calls[-1] == (4, 4)
+    # następne uruchomienie: do pobrania luty (brak pliku) i bieżący kwiecień
+    assert dukascopy.months_to_sync(tmp_path, "EURUSD", date(2024, 4, 9)) == [(2024, 2), (2024, 4)]
+
+
+def test_get_retries_then_raises_and_404_is_empty(monkeypatch):
+    from ia5 import dukascopy
+
+    class R:
+        def __init__(self, code):
+            self.status_code, self.content = code, b"x"
+
+    seq = iter([R(503), R(503), R(200)])
+    monkeypatch.setattr(dukascopy, "_session", lambda: type("S", (), {"get": lambda self, u, timeout: next(seq)})())
+    monkeypatch.setattr(dukascopy.time, "sleep", lambda s: None)
+    assert dukascopy._get("u", tries=3) == b"x"
+    monkeypatch.setattr(dukascopy, "_session", lambda: type("S", (), {"get": lambda self, u, timeout: R(404)})())
+    assert dukascopy._get("u") == b""
+    monkeypatch.setattr(dukascopy, "_session", lambda: type("S", (), {"get": lambda self, u, timeout: R(500)})())
+    import pytest
+    with pytest.raises(RuntimeError, match="HTTP 500"):
+        dukascopy._get("u", tries=2)

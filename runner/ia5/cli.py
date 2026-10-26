@@ -31,7 +31,8 @@ def keep_awake():
     return None
 
 
-def do_sync() -> None:
+def do_sync(progress=None) -> None:
+    """progress(nazwa, procent) — postęp dla heartbeatu (kafel Mac w dashboardzie)."""
     from . import cloud, dukascopy, publish, quality
     from .bars import m1_to_h1
 
@@ -40,10 +41,17 @@ def do_sync() -> None:
     log(f"  świece Yahoo w bazie: {st.get('totalBars', 0):,}")
 
     cloud.heartbeat("syncing")
-    log("Dukascopy M1 → lokalnie (pierwszy raz: kilka godzin, potem sekundy)…")
+    log("Dukascopy M1 → lokalnie (pierwszy raz: 1–3 godziny, potem sekundy)…")
     h1 = {}
-    for pair in PAIRS:
-        dukascopy.sync_pair(pair, DATA, log=lambda m: log(m))
+    failed = {}
+    pairs = list(PAIRS)
+    for pi, pair in enumerate(pairs):
+        def prog(i, n, pair=pair, pi=pi):
+            if progress:
+                progress(f"Pobieranie Dukascopy · {pair}", round(100 * (pi + i / max(n, 1)) / len(pairs)))
+        r = dukascopy.sync_pair(pair, DATA, log=lambda m: log(m), progress=prog)
+        if r["failed"]:
+            failed[pair] = r["failed"]
         h1[pair] = m1_to_h1(dukascopy.load_m1(pair, DATA))
         (DATA / "h1").mkdir(parents=True, exist_ok=True)
         h1[pair].to_parquet(DATA / "h1" / f"{pair}.parquet", index=False)
@@ -51,6 +59,11 @@ def do_sync() -> None:
         log(f"  {pair} H1: {len(h1[pair]):,} świec · luki {f['gaps']} · OHLC {f['ohlc']} · ts {f['ts']}")
         cloud.heartbeat("syncing")
 
+    if failed:
+        log(f"Uwaga: nie pobrano {sum(map(len, failed.values()))} miesięcy ({', '.join(f'{p} {len(v)}' for p, v in failed.items())}) "
+            "— dociągną się przy następnym `ia5 start`. Na razie są lukami w danych (widać je w kontroli jakości).")
+    if progress:
+        progress("Kontrola danych", 100)
     log("Yahoo z Firestore…")
     yahoo = cloud.sync_yahoo(DATA / "yahoo", log=lambda m: log(m))
 
@@ -100,7 +113,12 @@ def cmd_start(_args) -> int:
     signal.signal(signal.SIGTERM, bye)
 
     log(f"IA5 start · silnik {ENGINE_VERSION}")
-    do_sync()
+
+    def sync_progress(name, pct):
+        state["job"] = {"id": "sync", "name": name, "progress": pct}
+
+    do_sync(progress=sync_progress)
+    state["job"] = None
 
     owner = config().get("owner_uid")
     jobs: queue.Queue = queue.Queue()
@@ -130,7 +148,8 @@ def cmd_start(_args) -> int:
         except queue.Empty:
             if time.time() - last_sync > RESYNC_SECONDS:  # nowe świece → forward test zamrożonych (W4)
                 state["now"] = "syncing"
-                do_sync()
+                do_sync(progress=sync_progress)
+                state["job"] = None
                 last_sync = time.time()
                 state["now"] = "idle"
                 enqueue_frozen(jobs, owner)

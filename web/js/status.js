@@ -76,7 +76,7 @@ function render() {
   }
   const hb = heartbeatState();
   if (hb.online) {
-    const job = hb.job?.id ? `${esc(hb.job.name || hb.job.id)} · ${hb.job.progress ?? 0}%` : hb.state === 'syncing' ? 'synchronizacja danych' : 'czeka na strategie';
+    const job = hb.job?.name ? `${esc(hb.job.name)} · ${hb.job.progress ?? 0}%` : hb.state === 'syncing' ? 'synchronizacja danych' : 'czeka na strategie';
     set('mac', hb.state === 'computing' ? 'LICZY' : 'POŁĄCZONY', 'ok', job);
   } else {
     set('mac', 'ROZŁĄCZONY', 'mute', hb.seen ? `ostatnio ${ago(hb.seen)} · uruchom <code>ia5 start</code>` : 'uruchom <code>ia5 start</code> na Macu');
