@@ -4,11 +4,14 @@
  * Źródło prawdy tego pliku: repo miszyszka/IA5, katalog apps_script/.
  *
  * Budżet Firestore (Z4): ok. 8 zapisów świec + 1 zapis statusu na godzinę ≈ 220 zapisów/dobę, 0 odczytów.
+ * Dziennik świec (meta/status.daily, zakładka Stats): bez dodatkowych zapisów — jedzie w zapisie statusu;
+ * jednorazowo 16 odczytów (2 miesiące × 8 par) przy pierwszym uruchomieniu i przy rebuildDaily().
  */
 const PROJECT_ID = 'project-ia5';
 const DB = 'projects/' + PROJECT_ID + '/databases/(default)';
 const API = 'https://firestore.googleapis.com/v1/' + DB;
 const H = 3600;
+const DAILY_DAYS = 60; // tyle dni trzyma dziennik świec w meta/status
 
 const PAIRS = [
   { name: 'EURUSD', yahoo: 'EURUSD=X', pip: 0.0001 },
@@ -31,6 +34,16 @@ function setup() {
 function backfill() { withLock_(() => run_('backfill')); }
 
 function tick() { withLock_(() => run_('tick')); }
+
+/** Ręcznie: przelicza dziennik świec (meta/status.daily) z dokumentów candles/* w Firestore. */
+function rebuildDaily() {
+  withLock_(() => {
+    const state = loadState_();
+    delete state.daily;
+    saveState_(state);
+    run_('tick');
+  });
+}
 
 function installTrigger() {
   ScriptApp.getProjectTriggers()
@@ -72,6 +85,15 @@ function expectedTs(now) {
   return ts;
 }
 
+function dayKey(ts) { return new Date(ts * 1000).toISOString().slice(0, 10); }
+
+/** Zostawia w dzienniku tylko ostatnie DAILY_DAYS dni. */
+function pruneDaily_(daily, now) {
+  const from = dayKey(now - (DAILY_DAYS - 1) * 86400);
+  Object.keys(daily).forEach(d => { if (d < from) delete daily[d]; });
+  return daily;
+}
+
 function monthKey(ts) {
   const d = new Date(ts * 1000);
   return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0');
@@ -94,7 +116,8 @@ function run_(mode) {
   const exp = expectedTs(startedAt);
   const todo = PAIRS.filter(p => mode === 'backfill' ||
     !(state.pairs[p.name] && state.pairs[p.name].lastTs >= exp));
-  if (!todo.length) return; // nic nowego — zero zapytań i zapisów
+  if (!todo.length && state.daily) return; // nic nowego — zero zapytań i zapisów
+  if (!state.daily) state.daily = seedDaily_(startedAt); // jednorazowo: dziennik z tego, co już jest w bazie
 
   const updated = {};
   const errors = [];
@@ -128,6 +151,18 @@ function run_(mode) {
       const writtenAt = nowSec();
       const fresh = bars.filter(b => b.ts > ps.lastTs);
       const newest = bars[bars.length - 1];
+      // dziennik: liczba świec w bazie wg dnia świecy (UTC); backfill przelicza, tick dolicza nowe
+      const counted = mode === 'backfill' ? bars : fresh;
+      if (mode === 'backfill') {
+        const days = {};
+        bars.forEach(b => { days[dayKey(b.ts)] = true; });
+        Object.keys(days).forEach(d => { if (state.daily[d]) delete state.daily[d][p.name]; });
+      }
+      counted.forEach(b => {
+        const d = dayKey(b.ts);
+        const row = state.daily[d] = state.daily[d] || {};
+        row[p.name] = (row[p.name] || 0) + 1;
+      });
       const lat = fresh.length ? writtenAt - (newest.ts + H) : null;
 
       ps.count = mode === 'backfill' ? bars.length : ps.count + fresh.length;
@@ -151,6 +186,7 @@ function run_(mode) {
 
   const totalBars = PAIRS.reduce((s, p) => s + ((state.pairs[p.name] || {}).count || 0), 0);
   const status = {
+    daily: pruneDaily_(state.daily, startedAt),
     lastRun: { mode: mode, startedAt: startedAt, finishedAt: nowSec(), ok: !errors.length, error: errors.join('; ') || null },
     totalBars: totalBars,
     latency24h: state.latency24h,
@@ -158,6 +194,28 @@ function run_(mode) {
   };
   writeStatus_(status, updated);
   saveState_(state);
+}
+
+/** Dziennik z dokumentów candles/* (bieżący i poprzedni miesiąc): { 'RRRR-MM-DD': { PARA: liczba } }. */
+function seedDaily_(now) {
+  const daily = {};
+  const months = [monthKey(now), monthKey(now - 32 * 86400)];
+  PAIRS.forEach(p => months.forEach(m => {
+    const r = UrlFetchApp.fetch(API + '/documents/candles/' + p.name + '_' + m + '?mask.fieldPaths=bars', {
+      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'x-goog-user-project': PROJECT_ID },
+      muteHttpExceptions: true,
+    });
+    if (r.getResponseCode() === 404) return;
+    if (r.getResponseCode() !== 200) throw new Error('Firestore ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 200));
+    const doc = JSON.parse(r.getContentText());
+    const bars = (doc.fields && doc.fields.bars && doc.fields.bars.mapValue.fields) || {};
+    Object.keys(bars).forEach(ts => {
+      const d = dayKey(Number(ts));
+      const row = daily[d] = daily[d] || {};
+      row[p.name] = (row[p.name] || 0) + 1;
+    });
+  }));
+  return pruneDaily_(daily, now);
 }
 
 /** Test krzyżowy par na ostatniej wspólnej świecy (D5). Zwraca odchyłki w pipsach. */
