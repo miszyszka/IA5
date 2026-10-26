@@ -18,7 +18,19 @@ def _git(*args, check=True) -> str:
     return r.stdout.strip()
 
 
+def _identity() -> None:
+    """Commit wymaga tożsamości gita; gdy na komputerze jej nie ma, ustawiamy ją tylko dla klonu gałęzi data."""
+    if not _git("config", "user.email", check=False):
+        _git("config", "user.name", "IA5 (ia5 start)")
+        _git("config", "user.email", "ia5@localhost")
+
+
 def ensure_repo() -> None:
+    _ensure_repo()
+    _identity()
+
+
+def _ensure_repo() -> None:
     if (DATA_REPO / ".git").exists():
         _git("fetch", "-q", "origin", "data", check=False)
         if _git("rev-parse", "--verify", "-q", "origin/data", check=False):
