@@ -1,0 +1,45 @@
+# DECISIONS — dziennik decyzji IA5
+
+Każda decyzja architektoniczna: data, decyzja, powód, odrzucone alternatywy (zasada G5 w `CLAUDE.md`).
+Najnowsze na górze.
+
+---
+
+### D-008 · 2026-10-26 · Wielkość pozycji: % kapitału jako depozyt, domyślnie 5/10/15/20/30%
+- **Decyzja:** depozyt = X% kapitału, nominał = 5 × depozyt (dźwignia 1:5). Domyślnie liczymy X ∈ {5, 10, 15, 20, 30}%; strategia może podać własne (`SIZING`). Suma depozytów otwartych pozycji ≤ 100% kapitału; sygnał bez wolnego depozytu pomijany i liczony.
+- **Powód:** Michał: „zależy od strategii, domyślnie zawsze kilka opcji 5, 10, 15, 20, 30% kapitału". Limit depozytu utrzymuje łączną ekspozycję ≤ 1:5.
+- **Interpretacja do potwierdzenia:** „X% kapitału" rozumiane jako depozyt (nominał 5 × X%). Jeśli Michał miał na myśli nominał — zmienić B4 i 8.5.
+- **Odrzucone:** sloty po równo; pełna dźwignia na każdą pozycję (łamie 1:5 przy nakładaniu); stałe ryzyko na SL.
+- Wielkość pozycji to przełącznik w karcie, nie wariant w rankingu — nie mnoży liczby prób w DSR/PBO.
+
+### D-007 · 2026-10-26 · Dwa źródła danych o rozdzielonych rolach
+- **Decyzja:** Dukascopy M1 bid/ask = jedyne źródło do backtestów i forward testów (świece H1 budowane lokalnie z M1). Yahoo → Apps Script → Firestore = monitoring na żywo i niezależna kontrola danych.
+- **Powód:** Yahoo daje świece 1h tylko z ostatnich 730 dni i bez bid/ask. Dukascopy daje kilkanaście lat historii i M1, co pozwala rozstrzygnąć kolejność TP/SL wewnątrz świecy H1.
+- **Odrzucone:** tylko Yahoo (za krótka historia, brak rozstrzygania wewnątrz świecy); sklejanie obu źródeł w jedną serię (szew między różnymi feedami fałszuje wyniki).
+- **Otwarte (O6):** czy warunki Dukascopy pozwalają publikować zbudowane świece H1 na publicznej gałęzi `data`.
+
+### D-006 · 2026-10-26 · Wyniki i kod strategii publiczne
+- **Decyzja:** wyniki na publicznej gałęzi `data` repo IA5.
+- **Powód:** Michał: „publiczne są OK". Najprostsze, bez kosztów.
+- **Odrzucone:** wyniki w Firestore za logowaniem (koszt odczytów); Firebase Storage (wymaga planu Blaze).
+
+### D-005 · 2026-10-26 · Waluta konta USD
+- **Decyzja:** kapitał i wyniki w USD, start 10 000 USD.
+- **Powód:** wszystkie przeliczenia możliwe z naszych 8 par, bez dodatkowej serii.
+
+### D-004 · 2026-10-26 · Model wykonania
+- **Decyzja:** sygnał na zamknięciu świecy, wejście na open następnej; TP/SL w tej samej świecy rozstrzygane na M1, w tej samej minucie → SL; luki: SL po open, TP po poziomie; spread raz na transakcję.
+- **Powód:** brak look-ahead i konserwatywne założenia tam, gdzie dane nie rozstrzygają.
+
+### D-003 · 2026-10-26 · Dashboard czyta świece i wyniki z GitHub, nie z Firestore
+- **Decyzja:** gałąź `data` (Parquet, JSON, raport) czytana przez `raw.githubusercontent.com` z SHA w adresie. Z Firestore dashboard czyta tylko `meta/status`, `runner/heartbeat`, `strategies`.
+- **Powód:** darmowy plan Firebase (50 000 odczytów / 20 000 zapisów dziennie); pliki z wynikami przekraczają limit 1 MiB na dokument.
+
+### D-002 · 2026-10-26 · Świece w Firestore: 1 dokument = 1 para × 1 miesiąc
+- **Decyzja:** mapa `bars` kluczowana `ts`, zapis `PATCH` z `updateMask` (idempotentnie, bez odczytu), wyłączone indeksowanie `bars`.
+- **Powód:** backfill ok. 200 zapisów zamiast ok. 100 tys.; bieżąca praca ok. 200 zapisów dziennie.
+- **Odrzucone:** 1 świeca = 1 dokument (limit zapisów); tablice z `arrayUnion` (usuwa powtarzające się ceny).
+
+### D-001 · 2026-10-26 · Apps Script co 5 min zamiast co godzinę
+- **Decyzja:** wyzwalacz co 5 min; skrypt kończy bez zapytań, gdy oczekiwana świeca jest już zapisana.
+- **Powód:** wyzwalacz godzinowy odpala się w dowolnej minucie godziny, więc pomiar latencji w sekundach nie miałby sensu.

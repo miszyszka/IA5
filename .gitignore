@@ -1,0 +1,32 @@
+# Sekrety — nigdy w repo (zasada S3)
+*.pem
+*.key
+.env
+.env.*
+service-account*.json
+*-firebase-adminsdk-*.json
+.clasprc.json
+
+# Dane lokalne (trzymane w ~/.ia5/, nie w repo)
+data/
+*.parquet
+!tests/golden/**/*.parquet
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# Node / narzędzia
+node_modules/
+
+# System
+.DS_Store
+.idea/
+.vscode/
