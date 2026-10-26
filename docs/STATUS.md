@@ -12,6 +12,7 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 - E4: dashboard — status, lista (szukaj, sortuj, usuń), okno nowej strategii z kontrolą na żywo, karta strategii (werdykt, walidacja, filtry par/kierunku/próby/depozytu, ranking, heatmapa TP×SL, krzywa wyjść czasowych, kapitał + obsunięcie, świece z transakcjami, rozbicia, tabela + CSV, raport dla Claude, zamrażanie, ponowne liczenie). Przetestowany w headless Chromium (bez błędów konsoli), także na szerokości telefonu.
 - E5: walidacja — benchmark losowych wejść, DSR, PBO (CSCV), walk-forward, bootstrap, spread ×1,5/×2/faktyczny, kapitał 5–30%, werdykt.
 - Reguła „zrób mi strategię” (K1–K3, `docs/STRATEGIE.md`), `scripts/check_strategy.py`, `ia5 check`, 6 przykładów w `strategies/examples/`.
+- Sprawdzone na żywej stronie (przeglądarka w aplikacji Claude): status z Firestore (DZIAŁA, 97 808 świec, 0 flag), karta DEMO z gałęzi `data` (fragmenty Parquet zakresami HTTP), 0 błędów konsoli.
 - DEMO na gałęzi `data`: strategia z przykładu CLAUDE.md policzona na prawdziwym EUR/USD H1 2017–2018 (dane z backtesting.py) — do podglądu, usuwa się przyciskiem.
 
 **Następne (Michał)**
@@ -22,7 +23,7 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
 **Znane problemy / ryzyka**
 - Format plików Dukascopy sprawdzony tylko na danych syntetycznych (D-011) — potwierdzi pierwsze `ia5 start`.
-- Windows: `403 Missing or insufficient permissions` z Firestore przy kluczu service account — odłożone.
+- Windows: `403 Missing or insufficient permissions` ustąpiło po dodaniu roli w IAM (z opóźnieniem propagacji) — o 15:44 heartbeat z hosta `1h85476gv9` w stanie `syncing`, czyli `ia5 start` przeszedł przez Firestore i zaczął pobierać Dukascopy. Do potwierdzenia pełnym przebiegiem.
 - Yahoo bez oficjalnego API (tylko monitoring). Święta poza kalendarzem sesji (D-009).
 - `clasp` nieustawiony — kod Apps Script wklejany z repo.
 - O5 (swapy) otwarte.
