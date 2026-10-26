@@ -19,14 +19,35 @@ function expectedTs(now) {
   for (let i = 0; i < 80 && !isExpectedBar(ts); i++) ts -= H;
   return ts;
 }
+// najbliższe zamknięcie świecy w godzinach rynku (po nim Apps Script zapisuje ją w ciągu kilku minut)
+function nextClose(now) {
+  let open = Math.floor(now / H) * H;
+  for (let i = 0; i < 80 && !isExpectedBar(open); i++) open += H;
+  return open + H;
+}
+const hm = (ts) => new Date(ts * 1000).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+function dayWord(ts) {
+  const d = new Date(ts * 1000), t = new Date(), y = new Date(Date.now() - 864e5);
+  const same = (a, b) => a.toDateString() === b.toDateString();
+  return same(d, t) ? 'dziś' : same(d, y) ? 'wczoraj' : d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
+}
+// „ostatnia świeca dziś 16:00–17:00” — czas lokalny przeglądarki, zakres = otwarcie–zamknięcie
+const barLabel = (ts) => `ostatnia świeca ${dayWord(ts)} ${hm(ts)}–${hm(ts + H)}`;
+function countdown() {
+  const el = $('#k-data .cd');
+  if (!el) return;
+  const left = Math.max(0, Math.round(nextClose(Date.now() / 1000) - Date.now() / 1000));
+  const hh = Math.floor(left / 3600), mm = Math.floor((left % 3600) / 60), ss = left % 60;
+  el.textContent = `następna za ${hh ? hh + ' h ' : ''}${hh ? String(mm).padStart(2, '0') : mm}:${String(ss).padStart(2, '0')}`;
+}
 const median = (a) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 
 let status = null, beat = null, err = null;
 
-function set(id, text, color, sub) {
+function set(id, text, color, sub, html = false) {
   const tile = $(`#k-${id}`);
   tile.dataset.state = color;
-  $('.v', tile).textContent = text;
+  $('.v', tile)[html ? 'innerHTML' : 'textContent'] = text;
   if (sub !== undefined) $('.s', tile).innerHTML = sub;
 }
 
@@ -53,9 +74,10 @@ function render() {
     const lastTs = Math.min(...Object.keys(PAIRS).map((p) => pairs[p]?.lastTs || 0));
     const closed = !isExpectedBar(lastClosedTs(now) + H) && !isExpectedBar(lastClosedTs(now));
     const missing = lastTs >= exp ? 0 : now - (exp + H);
-    const sub = `ostatnia świeca ${dateUTC(lastTs, true)} UTC`;
-    if (missing <= 0) set('data', closed ? 'RYNEK ZAMKNIĘTY' : 'DZIAŁA', closed ? 'mute' : 'ok', sub);
-    else if (missing < 20 * 60) set('data', 'DZIAŁA', 'ok', sub);
+    const sub = `<span title="${dateUTC(lastTs, true)} UTC">${barLabel(lastTs)}</span><span class="cd"></span>`;
+    const dot = '<i class="dot" role="img" aria-label="działa" title="działa"></i>';
+    if (missing <= 0 && closed) set('data', 'RYNEK ZAMKNIĘTY', 'mute', sub);
+    else if (missing < 20 * 60) set('data', dot, 'ok', sub, true);
     else if (missing < 75 * 60) set('data', 'OPÓŹNIENIE', 'warn', `brak świecy od ${Math.round(missing / 60)} min`);
     else set('data', 'STOI', 'bad', `brak świecy od ${Math.round(missing / 60)} min`);
 
@@ -74,6 +96,7 @@ function render() {
         <td class="num" title="${esc(fl.join('\n'))}">${fl.length ? '⚠ ' + fl.length : '0'}</td></tr>`;
     }).join('');
   }
+  countdown();
   const hb = heartbeatState();
   if (hb.online) {
     const job = hb.job?.name ? `${esc(hb.job.name)} · ${hb.job.progress ?? 0}%` : hb.state === 'syncing' ? 'synchronizacja danych' : 'czeka na strategie';
@@ -89,5 +112,6 @@ export function initStatus() {
   watchDoc('meta/status', (d) => { status = d; err = null; render(); }, (e) => { err = e.code || String(e); render(); });
   watchDoc('runner/heartbeat', (d) => { beat = d; store.set('beat', d); render(); }, () => render());
   setInterval(render, 15000);
+  setInterval(countdown, 1000);
   render();
 }

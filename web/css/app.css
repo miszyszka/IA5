@@ -225,3 +225,7 @@ textarea.code { flex: 1; font: 13px/1.55 var(--mono); tab-size: 4; resize: none;
   .srow-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .toolbar .row { flex-wrap: wrap; }
 }
+
+/* kafel danych: zielona kropka zamiast słowa, odliczanie do kolejnej świecy */
+.kpi-tile .v .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 10px var(--ok); display: inline-block; margin: 6px 0; }
+.kpi-tile .s .cd { font-family: var(--mono); font-variant-numeric: tabular-nums; flex-basis: 100%; }
