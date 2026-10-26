@@ -5,6 +5,12 @@ Najnowsze na górze.
 
 ---
 
+### D-012 · 2026-10-26 · E3: silnik — szczegóły modelu wykonania i bez numba
+- **Decyzja:** silnik w jednym module `runner/ia5/engine.py`, obliczenia wektorowe numpy (okna cen od świecy wejścia) zamiast numba.
+- **Doprecyzowania modelu (uzupełniają B1–B8):** wyjście czasowe po N świecach = zamknięcie świecy e+N−1; wyjścia wskaźnikowe (RSI do 50, cena przez SMA20, sygnał przeciwny) — warunek na zamknięciu świecy, wykonanie na open następnej; „przecięcie SMA" z 8.2 = zamknięcie po złej stronie SMA20; nowe wejście w tej samej parze tylko na świecy późniejszej niż świeca wyjścia; transakcje bez danych do wyjścia odrzucane i liczone.
+- **Powód:** numpy wystarcza (setki wariantów × tysiące wejść liczą się w sekundach), jedna zależność mniej. Doprecyzowania usuwają niejednoznaczności spisane w 8.2.
+- **Weryfikacja:** wskaźniki = TA-Lib (1e-9); listy transakcji = backtesting.py (wyjście czasowe oraz TP/SL z ATR, identyczne co do świecy i ceny); 16 złotych scenariuszy.
+
 ### D-011 · 2026-10-26 · E2: zależności i układ plików M1
 - **Decyzja:** runner używa `numpy`, `pandas`, `pyarrow`, `firebase-admin`; pobieranie Dukascopy własnym czytnikiem plików `bi5` (stdlib: `urllib`, `lzma`, `struct`), bez `dukascopy-node`. M1 zapisywane per miesiąc (`{RRRR-MM}.parquet`), żeby pierwsze pobieranie dało się przerwać i wznowić.
 - **Powód:** mniej zależności (bez Node), wznawialność kilkugodzinnego pierwszego pobrania.

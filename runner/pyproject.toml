@@ -5,7 +5,7 @@ requires-python = ">=3.12"
 dependencies = ["numpy>=1.26", "pandas>=2.2", "pyarrow>=15", "firebase-admin>=6.5"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["pytest>=8", "ruff>=0.6", "TA-Lib>=0.6", "backtesting>=0.6"]
 
 [project.scripts]
 ia5 = "ia5.cli:main"

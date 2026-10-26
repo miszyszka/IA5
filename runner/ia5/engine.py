@@ -1,0 +1,355 @@
+"""Silnik backtestu (CLAUDE.md sekcja 8, zasady B1–B8).
+
+Model wykonania:
+- B1: sygnał na zamknięciu świecy t → wejście na open świecy t+1.
+- TP/SL sprawdzane wewnątrz świecy (high/low); TP i SL w tej samej świecy → resolver M1, inaczej SL + ambiguous (B5).
+- B6: open za SL → wyjście po open; open za TP → wyjście po poziomie TP.
+- Wyjście czasowe po N świecach: zamknięcie świecy e+N-1.
+- Wyjścia wskaźnikowe (RSI 50, SMA, sygnał przeciwny): warunek na zamknięciu świecy j → wyjście na open j+1.
+- B8: jedna pozycja na parę na wariant; nowe wejście tylko na świecy późniejszej niż świeca wyjścia.
+- Transakcje, którym zabrakło danych do wyjścia, są odrzucane i liczone.
+
+Obliczenia są wektorowe (numpy) po wszystkich wejściach naraz, osobno dla każdego wariantu wyjścia.
+"""
+from __future__ import annotations
+
+import itertools
+from dataclasses import asdict, dataclass
+
+import numpy as np
+import pandas as pd
+
+from . import indicators as ind
+from .config import PAIRS
+
+W = 120  # najdłuższe trzymanie pozycji w świecach
+H = 3600
+
+
+@dataclass(frozen=True)
+class Exit:
+    kind: str          # time | atr | rsi50 | sma | opposite
+    n: int = 14        # time: N świec; atr: okres ATR
+    tp: float = 0.0    # × ATR (tylko atr)
+    sl: float = 0.0    # × ATR(n) dla atr, × ATR(14) dla wskaźnikowych; 0 = bez SL
+    cap: int = W       # limit czasu w świecach (B7)
+
+    @property
+    def family(self) -> str:
+        return {"time": "czas", "atr": "ATR"}.get(self.kind, "wskaźnik")
+
+    def label(self) -> str:
+        if self.kind == "time":
+            return f"po {self.n} świecach"
+        if self.kind == "atr":
+            return f"ATR{self.n} TP {self.tp:g}× SL {self.sl:g}× max {self.cap}"
+        name = {"rsi50": "RSI do 50", "sma": "cena przez SMA20", "opposite": "sygnał przeciwny"}[self.kind]
+        return f"{name}, SL {self.sl:g}×ATR14, max {self.cap}"
+
+
+def default_exits() -> list[Exit]:
+    """Domyślna siatka wyjść (CLAUDE.md 8.2): 14 czasowych + 210 ATR + 9 wskaźnikowych = 233."""
+    ex = [Exit("time", n=N, cap=N) for N in (1, 2, 3, 4, 6, 8, 12, 16, 24, 36, 48, 72, 96, 120)]
+    for n, tp, sl, cap in itertools.product((5, 14), (0.5, 0.75, 1, 1.5, 2, 3, 4), (0.5, 1, 1.5, 2, 3), (24, 72, 120)):
+        ex.append(Exit("atr", n=n, tp=tp, sl=sl, cap=cap))
+    for kind, sl in itertools.product(("rsi50", "sma", "opposite"), (1, 2, 3)):
+        ex.append(Exit(kind, n=14, sl=sl, cap=W))
+    return ex
+
+
+# ---------- przygotowanie danych pary ----------
+
+def prepare(df: pd.DataFrame) -> dict:
+    """Tablice pary + wskaźniki potrzebne wyjściom (liczone raz)."""
+    df = df.reset_index(drop=True)
+    return {
+        "ts": df["ts"].to_numpy(np.int64),
+        "o": df["open"].to_numpy(float), "h": df["high"].to_numpy(float),
+        "l": df["low"].to_numpy(float), "c": df["close"].to_numpy(float),
+        "atr5": ind.atr(df, 5).to_numpy(), "atr14": ind.atr(df, 14).to_numpy(),
+        "rsi14": ind.rsi(df["close"], 14).to_numpy(),
+        "sma20": ind.sma(df["close"], 20).to_numpy(),
+    }
+
+
+def find_entries(P: dict, sig: np.ndarray) -> pd.DataFrame:
+    """B1: sygnał w świecy i → wejście na open świecy i+1."""
+    s = np.nan_to_num(np.asarray(sig, float)).astype(int)
+    i = np.flatnonzero(s != 0)
+    i = i[i + 1 < len(P["o"])]
+    e = i + 1
+    return pd.DataFrame({
+        "signal_i": i, "entry_i": e, "dir": s[i].astype(np.int8),
+        "signal_ts": P["ts"][i], "entry_ts": P["ts"][e], "entry_px": P["o"][e],
+        "atr5": P["atr5"][i], "atr14": P["atr14"][i],
+    })
+
+
+def _windows(P: dict, e: np.ndarray, d: np.ndarray, width: int) -> dict:
+    """Okna cen od świecy wejścia, w przestrzeni „long" (dla short ceny odwrócone znakiem)."""
+    n = len(P["o"])
+    idx = e[:, None] + np.arange(width)[None, :]
+    ok = idx < n
+    idx = np.where(ok, idx, n - 1)
+    sgn = d[:, None].astype(float)
+
+    def take(a):
+        w = a[idx]
+        return np.where(ok, w, np.nan)
+
+    o, h, lo, c = take(P["o"]), take(P["h"]), take(P["l"]), take(P["c"])
+    long_ = sgn > 0
+    return {
+        "idx": idx, "ok": ok,
+        "O": o * sgn, "C": c * sgn,
+        "H": np.where(long_, h, -lo), "L": np.where(long_, lo, -h),
+        "rsi": take(P["rsi14"]), "sma": take(P["sma20"]) * sgn, "c_raw": c,
+    }
+
+
+def _first(mask: np.ndarray) -> np.ndarray:
+    """Indeks pierwszego True w wierszu; brak = szerokość."""
+    has = mask.any(axis=1)
+    return np.where(has, mask.argmax(axis=1), mask.shape[1])
+
+
+def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | None = None,
+             resolver=None) -> pd.DataFrame:
+    """Wynik każdego wejścia dla jednego wariantu wyjścia (bez filtra B8)."""
+    m = len(ent)
+    cols = ["exit_i", "exit_ts", "exit_px", "reason", "pips_gross", "r", "mae", "mfe", "bars", "ambiguous"]
+    if m == 0:
+        return pd.DataFrame(columns=cols)
+    pip = PAIRS[pair].pip
+    e = ent["entry_i"].to_numpy()
+    d = ent["dir"].to_numpy().astype(int)
+    cap = ex.cap
+    w = _windows(P, e, d, cap + 1)
+    En = ent["entry_px"].to_numpy() * d
+    atr = ent[f"atr{ex.n}" if ex.kind == "atr" else "atr14"].to_numpy()
+
+    tp = En + ex.tp * atr if ex.kind == "atr" else np.full(m, np.inf)
+    sl = En - ex.sl * atr if ex.sl > 0 else np.full(m, -np.inf)
+    Hw, Lw, Ow = w["H"][:, :cap], w["L"][:, :cap], w["O"][:, :cap]
+    hit_sl = Lw <= sl[:, None]
+    hit_tp = Hw >= tp[:, None]
+    gap_sl = Ow <= sl[:, None]
+    gap_tp = Ow >= tp[:, None]
+    gap_sl[:, 0] = gap_tp[:, 0] = False
+
+    # warunek wyjścia wskaźnikowego na zamknięciu świecy j → wyjście na open j+1
+    xs = np.zeros((m, cap), bool)
+    if ex.kind == "rsi50":
+        r = w["rsi"][:, :cap]
+        xs = np.where(d[:, None] > 0, r >= 50, r <= 50)
+    elif ex.kind == "sma":
+        xs = w["C"][:, :cap] < w["sma"][:, :cap]
+    elif ex.kind == "opposite" and opp is not None:
+        o_sig = np.nan_to_num(opp[w["idx"][:, :cap]]).astype(int)
+        xs = (o_sig == -d[:, None]) & w["ok"][:, :cap]
+    if cap > 0:
+        xs[:, cap - 1] = False  # na ostatniej świecy i tak kończy limit czasu
+
+    f_hit = _first(hit_sl | hit_tp)
+    f_x = _first(xs)
+    out = {k: np.full(m, np.nan) for k in ("exit_i", "exit_ts", "exit_px", "pips_gross", "r", "mae", "mfe", "bars")}
+    reason = np.full(m, "", dtype=object)
+    amb = np.zeros(m, bool)
+    rows = np.arange(m)
+    exit_n = np.full(m, np.nan)
+    exit_j = np.full(m, -1)
+    exit_at_open = np.zeros(m, bool)
+
+    # 1) zdarzenie TP/SL wewnątrz świecy
+    stop = (f_hit < cap) & (f_hit <= f_x)
+    j = np.minimum(f_hit, cap - 1)
+    gs, gt = gap_sl[rows, j], gap_tp[rows, j]
+    hs, ht = hit_sl[rows, j], hit_tp[rows, j]
+    both = stop & ~gs & ~gt & hs & ht
+    for k in np.flatnonzero(both):
+        res = None
+        if resolver is not None:
+            bar_ts = int(P["ts"][w["idx"][k, j[k]]])
+            res = resolver(pair, bar_ts, int(d[k]), float(tp[k] * d[k]), float(sl[k] * d[k]))
+        if res == "tp":
+            hs[k] = False
+        else:
+            ht[k] = False
+            amb[k] = res is None
+    is_sl = stop & (gs | (hs & ~gt))
+    is_tp = stop & ~is_sl
+    exit_n = np.where(is_sl, np.where(gs, Ow[rows, j], sl), exit_n)
+    exit_n = np.where(is_tp, tp, exit_n)
+    reason[is_sl] = "SL"
+    reason[is_tp] = "TP"
+    exit_j = np.where(stop, j, exit_j)
+
+    # 2) wyjście wskaźnikowe na open następnej świecy
+    xw = ~stop & (f_x < cap - 1)
+    jx = np.minimum(f_x + 1, cap)
+    exit_n = np.where(xw, w["O"][rows, jx], exit_n)
+    exit_j = np.where(xw, jx, exit_j)
+    exit_at_open |= xw
+    reason[xw] = {"rsi50": "RSI50", "sma": "SMA", "opposite": "przeciwny"}.get(ex.kind, "")
+
+    # 3) limit czasu: zamknięcie świecy cap-1
+    tw = ~stop & ~xw
+    exit_n = np.where(tw, w["C"][:, cap - 1], exit_n)
+    exit_j = np.where(tw, cap - 1, exit_j)
+    reason[tw] = "czas"
+
+    done = ~np.isnan(exit_n)
+    # MAE/MFE: świece przed świecą wyjścia + cena wyjścia
+    cmaxH = np.fmax.accumulate(np.where(np.isnan(w["H"]), -np.inf, w["H"]), axis=1)
+    cminL = np.fmin.accumulate(np.where(np.isnan(w["L"]), np.inf, w["L"]), axis=1)
+    jj = np.clip(exit_j - 1, 0, None)
+    prev_max = np.where(exit_j > 0, cmaxH[rows, jj], -np.inf)
+    prev_min = np.where(exit_j > 0, cminL[rows, jj], np.inf)
+    # świeca wyjścia wewnątrz-świecowego/czasowego sama też należy do przebiegu pozycji
+    in_bar = ~exit_at_open
+    jb = np.clip(exit_j, 0, cap)
+    bar_max = np.where(in_bar & (reason == "czas"), w["H"][rows, jb], -np.inf)
+    bar_min = np.where(in_bar & (reason == "czas"), w["L"][rows, jb], np.inf)
+    mfe = np.maximum.reduce([prev_max, bar_max, exit_n, En]) - En
+    mae = En - np.minimum.reduce([prev_min, bar_min, exit_n, En])
+
+    gross = exit_n - En
+    risk = np.where(ex.sl > 0, ex.sl * atr, ent["atr14"].to_numpy())
+    bar_idx = w["idx"][rows, np.clip(exit_j, 0, cap)]
+    out["exit_i"] = np.where(done, bar_idx, np.nan)
+    out["exit_ts"] = np.where(done, P["ts"][bar_idx] + np.where(exit_at_open, 0, H), np.nan)
+    out["exit_px"] = exit_n * d
+    out["pips_gross"] = gross / pip
+    out["r"] = gross / risk
+    out["mae"] = mae / pip
+    out["mfe"] = mfe / pip
+    out["bars"] = np.where(done, exit_j + np.where(exit_at_open, 0, 1), np.nan)
+    df = pd.DataFrame(out)
+    df["reason"] = reason
+    df["ambiguous"] = amb
+    df.loc[~done, "reason"] = "brak danych"
+    return df[cols]
+
+
+def no_overlap(entry_i: np.ndarray, exit_i: np.ndarray) -> np.ndarray:
+    """B8: maska wejść wykonanych przy jednej pozycji naraz (kolejność rosnąca entry_i)."""
+    keep = np.zeros(len(entry_i), bool)
+    last = -1
+    for k in range(len(entry_i)):
+        if np.isnan(exit_i[k]):
+            continue
+        if entry_i[k] > last:
+            keep[k] = True
+            last = exit_i[k]
+    return keep
+
+
+# ---------- uruchomienie dla strategii ----------
+
+def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray], params: list[dict],
+        exits: list[Exit] | None = None, resolver=None, oos_frac: float = 0.25) -> dict:
+    """Pełny przebieg: wszystkie warianty wejścia (params) × wszystkie wyjścia × wszystkie pary.
+
+    signals[(param_id, pair)] = tablica sygnałów (+1/-1/0) na świecach h1[pair].
+    Zwraca tabele entries, outcomes, variants i liczniki.
+    """
+    exits = exits or default_exits()
+    preps = {p: prepare(df) for p, df in h1.items()}
+    t0 = min(int(df["ts"].iloc[0]) for df in h1.values())
+    t1 = max(int(df["ts"].iloc[-1]) for df in h1.values())
+    cutoff = t0 + (1 - oos_frac) * (t1 - t0)
+
+    ent_frames, out_frames = [], []
+    skipped = {"B8": 0, "brak_danych": 0}
+    eid = 0
+    for (pid, pair), sig in signals.items():
+        P = preps[pair]
+        ent = find_entries(P, sig)
+        if ent.empty:
+            continue
+        ent.insert(0, "entry_id", np.arange(eid, eid + len(ent)))
+        ent.insert(1, "param_id", pid)
+        ent.insert(2, "pair", pair)
+        ent["sample"] = np.where(ent["entry_ts"] < cutoff, "IS", "OOS")
+        eid += len(ent)
+        ent_frames.append(ent)
+        for xid, ex in enumerate(exits):
+            res = simulate(P, ent, ex, pair, opp=np.asarray(sig), resolver=resolver)
+            missing = res["exit_i"].isna().to_numpy()
+            keep = no_overlap(ent["entry_i"].to_numpy(), res["exit_i"].to_numpy(float))
+            skipped["brak_danych"] += int(missing.sum())
+            skipped["B8"] += int((~keep & ~missing).sum())
+            res = res[keep].copy()
+            res.insert(0, "variant_id", pid * len(exits) + xid)
+            res.insert(1, "entry_id", ent["entry_id"].to_numpy()[keep])
+            out_frames.append(res)
+
+    entries = pd.concat(ent_frames, ignore_index=True) if ent_frames else pd.DataFrame()
+    outcomes = pd.concat(out_frames, ignore_index=True) if out_frames else pd.DataFrame()
+    if not outcomes.empty:
+        meta = entries.set_index("entry_id")[["pair", "sample"]]
+        outcomes = outcomes.join(meta, on="entry_id")
+        spread = outcomes["pair"].map({p: c.spread_pips for p, c in PAIRS.items()})
+        outcomes["pips_net"] = outcomes["pips_gross"] - spread  # B3: spread jednorazowo
+        outcomes["r_net"] = outcomes["r"] * outcomes["pips_net"] / outcomes["pips_gross"].where(
+            outcomes["pips_gross"] != 0, np.nan)
+    variants = pd.DataFrame([
+        {"variant_id": pid * len(exits) + xid, "param_id": pid, "params": params[pid],
+         "family": ex.family, "exit": ex.label(), **{f"x_{k}": v for k, v in asdict(ex).items()}}
+        for pid in range(len(params)) for xid, ex in enumerate(exits)
+    ])
+    return {"entries": entries, "outcomes": outcomes, "variants": variants,
+            "skipped": skipped, "cutoff": cutoff, "n_variants": len(variants)}
+
+
+def summarize(outcomes: pd.DataFrame, by=("variant_id",)) -> pd.DataFrame:
+    """Podstawowe metryki przewagi transakcji (bez symulacji kapitału — 8.5)."""
+    if outcomes.empty:
+        return pd.DataFrame()
+
+    def agg(g):
+        p = g["pips_net"]
+        wins, losses = p[p > 0].sum(), -p[p < 0].sum()
+        n = len(p)
+        sd = p.std(ddof=1) if n > 1 else np.nan
+        return pd.Series({
+            "trades": n,
+            "win_rate": (p > 0).mean(),
+            "exp_pips": p.mean(),
+            "exp_r": g["r_net"].mean(),
+            "profit_factor": wins / losses if losses > 0 else np.inf,
+            "sum_pips": p.sum(),
+            "t_stat": p.mean() / (sd / np.sqrt(n)) if n > 1 and sd > 0 else np.nan,
+            "ambiguous_pct": g["ambiguous"].mean(),
+            "avg_bars": g["bars"].mean(),
+        })
+
+    return outcomes.groupby(list(by)).apply(agg, include_groups=False).reset_index()
+
+
+def m1_resolver(m1: dict[str, pd.DataFrame]):
+    """B5: kolejność TP/SL w świecy H1 rozstrzygana na M1 (ceny mid). Ta sama minuta → None (SL + ambiguous)."""
+    cache = {}
+    for pair, df in m1.items():
+        ts = df["ts"].to_numpy(np.int64)
+        hi = ((df["bh"] + df["ah"]) / 2).to_numpy()
+        lo = ((df["bl"] + df["al"]) / 2).to_numpy()
+        cache[pair] = (ts, hi, lo)
+
+    def resolve(pair, bar_ts, d, tp, sl):
+        if pair not in cache:
+            return None
+        ts, hi, lo = cache[pair]
+        a, b = np.searchsorted(ts, [bar_ts, bar_ts + H])
+        for k in range(a, b):
+            up_tp = hi[k] >= tp if d > 0 else lo[k] <= tp
+            dn_sl = lo[k] <= sl if d > 0 else hi[k] >= sl
+            if up_tp and dn_sl:
+                return None
+            if dn_sl:
+                return "sl"
+            if up_tp:
+                return "tp"
+        return None
+
+    return resolve
