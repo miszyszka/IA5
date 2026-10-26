@@ -7,3 +7,20 @@
 5. **Ograniczenie klucza API:** Google Cloud Console → APIs & Services → Credentials → klucz „Browser key" → HTTP referrers: `https://miszyszka.github.io/*`.
 6. **Apps Script:** w arkuszu Google → Rozszerzenia → Apps Script. Kod wgram w E1 (przez `clasp`).
 7. Po pierwszym logowaniu na stronie podam Ci, jak odczytać swój UID — wpiszemy go do `firestore.rules` i wdrożymy reguły.
+
+## E2 — program na Macu
+
+```bash
+# raz: narzędzia (Homebrew: https://brew.sh)
+brew install uv git
+git clone https://github.com/miszyszka/IA5.git ~/IA5
+cd ~/IA5 && uv tool install -e runner        # komenda `ia5` w terminalu
+
+# klucz z kroku 4 musi leżeć w ~/.ia5/service-account.json
+ia5 status                                   # sprawdzenie instalacji
+ia5 start                                    # pierwszy raz: pobieranie Dukascopy trwa kilka godzin
+```
+
+- Aktualizacja programu: `cd ~/IA5 && git pull`.
+- Pierwsze `ia5 start` można przerwać (Ctrl+C) i wznowić — gotowe miesiące się nie powtarzają.
+- Push na gałąź `data` używa Twoich danych logowania do GitHub (np. `gh auth login`).

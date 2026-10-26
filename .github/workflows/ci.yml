@@ -8,5 +8,5 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install -e "runner[dev]"
-      - run: ruff check runner tests
+      - run: ruff check --config runner/pyproject.toml runner tests
       - run: cd runner && pytest -q

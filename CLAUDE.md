@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.2 · 2026-10-26 · Status: zatwierdzone decyzje O1–O4 (sekcja 14)
+Wersja 0.3 · 2026-10-26 · Status: zatwierdzone decyzje O1–O4, O6 (sekcja 14)
 
 ---
 
@@ -187,7 +187,7 @@ Apps Script i Mac działają na uprawnieniach administracyjnych (OAuth właścic
 ### GitHub, gałąź `data` (osobna, bez historii kodu)
 
 ```
-candles/{PARA}/{RRRR}.parquet        # H1 z Dukascopy: ts, open, high, low, close (mid), spread_avg; zmienia się tylko bieżący rok
+candles/{PARA}/{RRRR}.parquet        # H1 z Yahoo (D-010): ts, open, high, low, close; zmienia się tylko bieżący rok
 candles/manifest.json                # hash, liczba świec, zakres per para
 results/{strategyId}/{runId}/
   manifest.json     # hash danych, hash kodu, ENGINE_VERSION, siatka, czasy
@@ -205,12 +205,14 @@ Wejścia są wspólne dla wszystkich wariantów wyjścia, więc trzymamy je raz 
 ```
 ~/.ia5/
   service-account.json                     # klucz Firebase (S3)
-  data/dukascopy/m1/{PARA}/{RRRR}.parquet  # M1 bid i ask — surowe, niezmienne (D4), nie trafiają na GitHub
-  data/h1/{PARA}/{RRRR}.parquet            # H1 zbudowane z M1 (to samo, co idzie na gałąź data)
+  config.json                              # {"owner_uid": "..."} — kto może zlecać liczenie (S1)
+  data/m1/{PARA}/{RRRR-MM}.parquet         # M1 bid i ask z Dukascopy — surowe, niezmienne (D4), nigdy na GitHub (D-010)
+  data/h1/{PARA}.parquet                   # H1 zbudowane z M1 — do silnika
+  data-repo/                               # lokalny klon gałęzi data
   data/yahoo/{PARA}.parquet                # kopia świec z Firestore
 ```
 
-Dane M1 są za duże na GitHub i potrzebne tylko silnikowi (B5). Na gałąź `data` idą wyłącznie świece H1.
+Dane Dukascopy (M1 i zbudowane z nich H1) zostają na Macu: są za duże na GitHub, a warunki Dukascopy wskazują użytek osobisty (D-010). Na gałąź `data` idą świece H1 z Yahoo; wyniki dostaną tylko wycinki świec wokół transakcji.
 
 ---
 
@@ -236,7 +238,7 @@ Dane M1 są za duże na GitHub i potrzebne tylko silnikowi (B5). Na gałąź `da
   1. Sprawdza połączenie i stan bazy (`meta/status`).
   2. Dociąga z Dukascopy brakujące dni M1 (bid i ask; za pierwszym razem całą historię, od ok. 2003) i składa z nich świece H1.
   3. Synchronizuje świece Yahoo z Firestore, robi kontrolę jakości (D5) i porównuje Yahoo z Dukascopy na wspólnym okresie; pokazuje różnice.
-  4. Pushuje świece H1 na gałąź `data` (jeśli coś się zmieniło).
+  4. Pushuje świece H1 z Yahoo na gałąź `data` (jeśli coś się zmieniło).
   5. Heartbeat co 30 s do `runner/heartbeat`; uruchamia `caffeinate -i`, żeby Mac nie usnął w trakcie liczenia.
   6. Nasłuchuje `strategies` ze statusem `do_policzenia`; kolejka FIFO, jedna strategia na raz.
   7. `Ctrl+C` → heartbeat `offline`, czyste wyjście.
@@ -429,10 +431,10 @@ Każdy etap: testy zielone → push → `STATUS.md` zaktualizowany → działa n
 | O2 | Wielkość pozycji przy kilku pozycjach naraz | **Zależy od strategii** (`SIZING`); domyślnie zawsze **5, 10, 15, 20, 30%** kapitału jako depozyt (B4, 8.5) |
 | O3 | Repo publiczne → wyniki i kod strategii widzi każdy | **Publiczne są OK** |
 | O4 | Drugie, surowsze źródło historii | **Dukascopy M1 bid/ask** do backtestów; Yahoo do monitoringu (D7) |
+| O6 | Publikacja danych Dukascopy na publicznej gałęzi `data` | **Nie** — dane Dukascopy tylko lokalnie; na GitHub świece z Yahoo i wycinki wokół transakcji (D-010) |
 
 Otwarte:
 
 | Nr | Pytanie | Domyślnie, do czasu decyzji |
 |---|---|---|
 | O5 | Swapy | 0, pokazywana skala pominięcia |
-| O6 | Czy warunki Dukascopy pozwalają publikować zbudowane z ich danych świece H1 na publicznej gałęzi `data`? | Do sprawdzenia w E2. Jeśli nie — na GitHub tylko wycinki świec wokół transakcji albo świece z Yahoo do wykresów |

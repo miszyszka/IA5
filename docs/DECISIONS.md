@@ -5,6 +5,16 @@ Najnowsze na górze.
 
 ---
 
+### D-011 · 2026-10-26 · E2: zależności i układ plików M1
+- **Decyzja:** runner używa `numpy`, `pandas`, `pyarrow`, `firebase-admin`; pobieranie Dukascopy własnym czytnikiem plików `bi5` (stdlib: `urllib`, `lzma`, `struct`), bez `dukascopy-node`. M1 zapisywane per miesiąc (`{RRRR-MM}.parquet`), żeby pierwsze pobieranie dało się przerwać i wznowić.
+- **Powód:** mniej zależności (bez Node), wznawialność kilkugodzinnego pierwszego pobrania.
+- **Do potwierdzenia na Macu:** kolejność pól w rekordzie (open, close, low, high) i punkt (1000 dla JPY, 100 000 dla reszty) — sprawdzone tylko na danych syntetycznych, bo serwer Dukascopy jest niedostępny z sesji Claude.
+
+### D-010 · 2026-10-26 · O6: dane Dukascopy nie trafiają na publiczny GitHub
+- **Decyzja:** M1 i H1 z Dukascopy zostają na Macu. Gałąź `data` dostaje świece H1 z Yahoo; wyniki strategii — tylko wycinki świec wokół transakcji.
+- **Powód:** okno pobierania danych Dukascopy określa je jako użytek osobisty; publiczne repo to redystrybucja.
+- **Odrzucone:** publikacja pełnej historii H1 z Dukascopy.
+
 ### D-009 · 2026-10-26 · Apps Script: zapis przez `documents:commit`, nie `PATCH`
 - **Decyzja:** świece i status zapisywane przez endpoint `commit` z `updateMask` w treści żądania, nagłówek `x-goog-user-project: project-ia5`.
 - **Powód:** `PATCH` wymaga listy pól w adresie URL — przy ~740 świecach w miesiącu adres przekracza limit długości UrlFetch. Nagłówek kieruje limity na projekt Firebase, a nie domyślny projekt skryptu.
