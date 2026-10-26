@@ -5,6 +5,13 @@ Najnowsze na górze.
 
 ---
 
+### D-013 · 2026-10-26 · E3: R po kosztach, rozgrzewka, granice sandboxa
+- **R po kosztach** = pipsy netto ÷ ryzyko w pipsach (SL w pipsach albo 1×ATR14 dla wyjść bez SL). Wcześniejsze przeskalowanie przez netto/brutto wybuchało przy transakcjach bliskich zeru — wykryte testem w realnej skali.
+- **Rozgrzewka:** wejścia, dla których ATR5 lub ATR14 jeszcze nie istnieje, są pomijane i liczone w raporcie.
+- **Sandbox:** kod strategii działa w osobnym procesie (`python -I`, czyste środowisko bez kluczy, limit czasu 30 min, limit pamięci na Linuksie). Lista dozwolonych importów (`numpy`, `pandas`, `math`) chroni przed pomyłką, nie przed celowym atakiem — granicą bezpieczeństwa pozostaje S1 (logowanie + reguły + kontrola właściciela).
+- **Ranking:** wariant musi mieć ≥ 30 transakcji IS, żeby trafić na szczyt; sortowanie po średnim R netto w IS (W1).
+- **Wydajność:** 8 par × 140 tys. świec × 466 wariantów ≈ 1 min.
+
 ### D-012 · 2026-10-26 · E3: silnik — szczegóły modelu wykonania i bez numba
 - **Decyzja:** silnik w jednym module `runner/ia5/engine.py`, obliczenia wektorowe numpy (okna cen od świecy wejścia) zamiast numba.
 - **Doprecyzowania modelu (uzupełniają B1–B8):** wyjście czasowe po N świecach = zamknięcie świecy e+N−1; wyjścia wskaźnikowe (RSI do 50, cena przez SMA20, sygnał przeciwny) — warunek na zamknięciu świecy, wykonanie na open następnej; „przecięcie SMA" z 8.2 = zamknięcie po złej stronie SMA20; nowe wejście w tej samej parze tylko na świecy późniejszej niż świeca wyjścia; transakcje bez danych do wyjścia odrzucane i liczone.

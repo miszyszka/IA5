@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.3 · 2026-10-26 · Status: zatwierdzone decyzje O1–O4, O6 (sekcja 14)
+Wersja 0.4 · 2026-10-26 · Status: zatwierdzone decyzje O1–O4, O6 (sekcja 14)
 
 ---
 
@@ -242,7 +242,7 @@ Dane Dukascopy (M1 i zbudowane z nich H1) zostają na Macu: są za duże na GitH
   5. Heartbeat co 30 s do `runner/heartbeat`; uruchamia `caffeinate -i`, żeby Mac nie usnął w trakcie liczenia.
   6. Nasłuchuje `strategies` ze statusem `do_policzenia`; kolejka FIFO, jedna strategia na raz.
   7. `Ctrl+C` → heartbeat `offline`, czyste wyjście.
-- Pozostałe komendy: `ia5 status`, `ia5 sync`, `ia5 run <plik.py>` (liczenie lokalne, bez dashboardu), `ia5 test`.
+- Pozostałe komendy: `ia5 status`, `ia5 sync`, `ia5 run <plik.py>` (liczenie lokalne, bez dashboardu; wyniki w `~/.ia5/results/{nazwa}/{run}/`).
 - Dashboard pokazuje „połączony", gdy `teraz − lastSeen < 90 s`.
 
 ---
@@ -393,8 +393,10 @@ IA5/
 ├─ apps_script/              # Code.gs + appsscript.json (clasp)
 ├─ runner/                   # program na Maca
 │  ├─ pyproject.toml
-│  └─ ia5/  cli.py  sync.py  quality.py  indicators.py
-│           engine/ (entries, exits, portfolio)  validate.py  report.py  sandbox.py
+│  └─ ia5/  cli.py  config.py  session.py  store.py
+│           dukascopy.py  bars.py  quality.py  cloud.py  publish.py      # dane (E2)
+│           indicators.py  engine.py  sandbox.py  backtest.py  report.py # silnik (E3)
+│           validate.py  portfolio.py                                     # walidacja, kapitał (E5)
 ├─ tests/                    # golden/, test_indicators, test_engine, test_lookahead, test_reconcile
 ├─ strategies/examples/
 ├─ firestore.rules

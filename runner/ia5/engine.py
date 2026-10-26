@@ -117,7 +117,7 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
              resolver=None) -> pd.DataFrame:
     """Wynik każdego wejścia dla jednego wariantu wyjścia (bez filtra B8)."""
     m = len(ent)
-    cols = ["exit_i", "exit_ts", "exit_px", "reason", "pips_gross", "r", "mae", "mfe", "bars", "ambiguous"]
+    cols = ["exit_i", "exit_ts", "exit_px", "reason", "pips_gross", "r", "risk_pips", "mae", "mfe", "bars", "ambiguous"]
     if m == 0:
         return pd.DataFrame(columns=cols)
     pip = PAIRS[pair].pip
@@ -152,7 +152,8 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
 
     f_hit = _first(hit_sl | hit_tp)
     f_x = _first(xs)
-    out = {k: np.full(m, np.nan) for k in ("exit_i", "exit_ts", "exit_px", "pips_gross", "r", "mae", "mfe", "bars")}
+    out = {k: np.full(m, np.nan) for k in ("exit_i", "exit_ts", "exit_px", "pips_gross", "r", "risk_pips", "mae", "mfe",
+                                           "bars")}
     reason = np.full(m, "", dtype=object)
     amb = np.zeros(m, bool)
     rows = np.arange(m)
@@ -221,6 +222,7 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     out["exit_px"] = exit_n * d
     out["pips_gross"] = gross / pip
     out["r"] = gross / risk
+    out["risk_pips"] = risk / pip
     out["mae"] = mae / pip
     out["mfe"] = mfe / pip
     out["bars"] = np.where(done, exit_j + np.where(exit_at_open, 0, 1), np.nan)
@@ -260,11 +262,14 @@ def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray],
     cutoff = t0 + (1 - oos_frac) * (t1 - t0)
 
     ent_frames, out_frames = [], []
-    skipped = {"B8": 0, "brak_danych": 0}
+    skipped = {"B8": 0, "brak_danych": 0, "rozgrzewka": 0}
     eid = 0
     for (pid, pair), sig in signals.items():
         P = preps[pair]
         ent = find_entries(P, sig)
+        warm = ent["atr14"].isna() | ent["atr5"].isna()  # bez ATR nie ma poziomów TP/SL ani R
+        skipped["rozgrzewka"] += int(warm.sum())
+        ent = ent[~warm].reset_index(drop=True)
         if ent.empty:
             continue
         ent.insert(0, "entry_id", np.arange(eid, eid + len(ent)))
@@ -291,8 +296,7 @@ def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray],
         outcomes = outcomes.join(meta, on="entry_id")
         spread = outcomes["pair"].map({p: c.spread_pips for p, c in PAIRS.items()})
         outcomes["pips_net"] = outcomes["pips_gross"] - spread  # B3: spread jednorazowo
-        outcomes["r_net"] = outcomes["r"] * outcomes["pips_net"] / outcomes["pips_gross"].where(
-            outcomes["pips_gross"] != 0, np.nan)
+        outcomes["r_net"] = outcomes["pips_net"] / outcomes["risk_pips"]  # R po spreadzie
     variants = pd.DataFrame([
         {"variant_id": pid * len(exits) + xid, "param_id": pid, "params": params[pid],
          "family": ex.family, "exit": ex.label(), **{f"x_{k}": v for k, v in asdict(ex).items()}}
@@ -327,29 +331,52 @@ def summarize(outcomes: pd.DataFrame, by=("variant_id",)) -> pd.DataFrame:
     return outcomes.groupby(list(by)).apply(agg, include_groups=False).reset_index()
 
 
+def _m1_arrays(df: pd.DataFrame):
+    return (df["ts"].to_numpy(np.int64), ((df["bh"] + df["ah"]) / 2).to_numpy(), ((df["bl"] + df["al"]) / 2).to_numpy())
+
+
+def _resolve(arrays, bar_ts, d, tp, sl):
+    """Pierwsza minuta świecy, w której pada TP albo SL (ceny mid). Obie w tej samej minucie → None."""
+    ts, hi, lo = arrays
+    a, b = np.searchsorted(ts, [bar_ts, bar_ts + H])
+    for k in range(a, b):
+        hit_tp = hi[k] >= tp if d > 0 else lo[k] <= tp
+        hit_sl = lo[k] <= sl if d > 0 else hi[k] >= sl
+        if hit_tp and hit_sl:
+            return None
+        if hit_sl:
+            return "sl"
+        if hit_tp:
+            return "tp"
+    return None
+
+
 def m1_resolver(m1: dict[str, pd.DataFrame]):
     """B5: kolejność TP/SL w świecy H1 rozstrzygana na M1 (ceny mid). Ta sama minuta → None (SL + ambiguous)."""
-    cache = {}
-    for pair, df in m1.items():
-        ts = df["ts"].to_numpy(np.int64)
-        hi = ((df["bh"] + df["ah"]) / 2).to_numpy()
-        lo = ((df["bl"] + df["al"]) / 2).to_numpy()
-        cache[pair] = (ts, hi, lo)
+    cache = {pair: _m1_arrays(df) for pair, df in m1.items()}
 
     def resolve(pair, bar_ts, d, tp, sl):
-        if pair not in cache:
-            return None
-        ts, hi, lo = cache[pair]
-        a, b = np.searchsorted(ts, [bar_ts, bar_ts + H])
-        for k in range(a, b):
-            up_tp = hi[k] >= tp if d > 0 else lo[k] <= tp
-            dn_sl = lo[k] <= sl if d > 0 else hi[k] >= sl
-            if up_tp and dn_sl:
-                return None
-            if dn_sl:
-                return "sl"
-            if up_tp:
-                return "tp"
-        return None
+        return _resolve(cache[pair], bar_ts, d, tp, sl) if pair in cache else None
+
+    return resolve
+
+
+def m1_resolver_lazy(m1_dir):
+    """Jak m1_resolver, ale czyta miesięczne pliki M1 (data/m1/{PARA}/{RRRR-MM}.parquet) dopiero, gdy są potrzebne."""
+    from collections import OrderedDict
+    from datetime import UTC, datetime
+    from pathlib import Path
+
+    cache: OrderedDict = OrderedDict()
+
+    def resolve(pair, bar_ts, d, tp, sl):
+        ym = datetime.fromtimestamp(bar_ts, UTC).strftime("%Y-%m")
+        key = (pair, ym)
+        if key not in cache:
+            f = Path(m1_dir) / pair / f"{ym}.parquet"
+            cache[key] = _m1_arrays(pd.read_parquet(f)) if f.exists() else None
+            if len(cache) > 48:
+                cache.popitem(last=False)
+        return _resolve(cache[key], bar_ts, d, tp, sl) if cache[key] is not None else None
 
     return resolve

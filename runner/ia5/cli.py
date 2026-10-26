@@ -129,6 +129,27 @@ def cmd_sync(_args) -> int:
     return 0
 
 
+def cmd_run(args) -> int:
+    """Liczenie strategii z pliku, lokalnie, bez dashboardu."""
+    from pathlib import Path
+
+    from .backtest import run_file
+    from .sandbox import StrategyError
+
+    path = Path(args.file)
+    h1_dir = Path(args.h1) if args.h1 else DATA / "h1"
+    if not any(h1_dir.glob("*.parquet")):
+        print(f"Brak świec H1 w {h1_dir} — najpierw `ia5 sync`.")
+        return 1
+    try:
+        run_file(path.read_text(encoding="utf-8"), args.name or path.stem, h1_dir, HOME / "results",
+                 m1_dir=DATA / "m1", log=log)
+    except StrategyError as e:
+        print(f"Błąd strategii: {e}")
+        return 1
+    return 0
+
+
 def cmd_status(_args) -> int:
     print(f"IA5 runner · silnik {ENGINE_VERSION}")
     print("Pary:", ", ".join(PAIRS))
@@ -141,6 +162,11 @@ def main(argv=None) -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("start", help="sync + heartbeat + kolejka strategii").set_defaults(func=cmd_start)
     sub.add_parser("sync", help="tylko synchronizacja danych").set_defaults(func=cmd_sync)
+    p_run = sub.add_parser("run", help="policz strategię z pliku .py lokalnie")
+    p_run.add_argument("file")
+    p_run.add_argument("--name")
+    p_run.add_argument("--h1", help="katalog ze świecami H1 (domyślnie ~/.ia5/data/h1)")
+    p_run.set_defaults(func=cmd_run)
     sub.add_parser("status").set_defaults(func=cmd_status)
     args = parser.parse_args(argv)
     return args.func(args)

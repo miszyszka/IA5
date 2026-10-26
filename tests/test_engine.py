@@ -54,7 +54,7 @@ def test_atr_take_profit_and_r():
     P = prepare(bars([FLAT, (1.1000, 1.1012, 1.0995, 1.1008), FLAT]))
     r = simulate(P, entries(P, [1, 0, 0]), Exit("atr", n=14, tp=1, sl=1, cap=24), "EURUSD").iloc[0]
     assert r.reason == "TP" and r.exit_px == pytest.approx(1.1010)
-    assert r.pips_gross == pytest.approx(10) and r.r == pytest.approx(1)
+    assert r.pips_gross == pytest.approx(10) and r.r == pytest.approx(1) and r.risk_pips == pytest.approx(10)
     assert not r.ambiguous
 
 
@@ -124,15 +124,16 @@ def test_one_position_per_pair_b8():
 
 
 def test_run_spread_net_and_oos_split():
-    rows = [FLAT] * 10 + [(1.1000, 1.1030, 1.0999, 1.1020)] * 10
+    rows = [FLAT] * 20 + [(1.1000, 1.1030, 1.0999, 1.1020)] * 20
     df = bars(rows)
-    sig = np.zeros(20)
-    sig[[1, 14]] = 1
+    sig = np.zeros(40)
+    sig[[2, 15, 35]] = 1  # świeca 2: rozgrzewka ATR → pominięta
     res = run({"EURUSD": df}, {(0, "EURUSD"): sig}, [{}], exits=[Exit("time", n=1, cap=1)])
     o = res["outcomes"]
     assert (o["pips_net"] == o["pips_gross"] - 0.9).all()  # B3
+    assert np.allclose(o["r_net"], o["pips_net"] / o["risk_pips"])
     assert res["entries"]["sample"].tolist() == ["IS", "OOS"]
-    assert res["n_variants"] == 1
+    assert res["n_variants"] == 1 and res["skipped"]["rozgrzewka"] == 1
 
 
 def test_m1_resolver_orders_minutes():
