@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IA5</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0A0E13; --panel:#11161D; --line:#1C232D; --accent:#FF7A1A; --ok:#3DDC84; --warn:#F5A524; --bad:#FF4D4F; --mute:#7A8594; --text:#E6EAF0; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px Inter, sans-serif; }
+  header { display:flex; align-items:center; gap:24px; padding:14px 16px; border-bottom:1px solid var(--line); }
+  .logo { font-weight:600; color:var(--accent); text-shadow:0 0 12px rgba(255,122,26,.6); }
+  nav button { background:none; border:0; color:var(--mute); font:inherit; padding:6px 10px; cursor:pointer; }
+  nav button.on { color:var(--text); border-bottom:2px solid var(--accent); }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; padding:16px; }
+  .kpi { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  .kpi small { color:var(--mute); display:block; margin-bottom:6px; }
+  .kpi b { font:600 22px "JetBrains Mono", monospace; font-variant-numeric:tabular-nums; }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--mute); margin-right:8px; }
+  main { padding:0 16px 32px; color:var(--mute); }
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">IA5</span>
+  <nav><button class="on">Strategie</button><button>Inwestorzy</button></nav>
+</header>
+<section class="kpis">
+  <div class="kpi"><small>Dane</small><b><span class="dot" id="dataDot"></span><span id="dataState">—</span></b></div>
+  <div class="kpi"><small>Latencja ostatniej świecy</small><b id="latency">— s</b></div>
+  <div class="kpi"><small>Świece w bazie</small><b id="bars">—</b></div>
+  <div class="kpi"><small>Mac</small><b><span class="dot" id="macDot"></span><span id="macState">—</span></b></div>
+</section>
+<main>Szkielet E0. Status podłączę do Firestore w E1, strategie w E4.</main>
+</body>
+</html>
