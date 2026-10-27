@@ -1,0 +1,93 @@
+{
+ "id": "Yf99XxcCNef88FlxJzgR",
+ "name": "Strategia 4",
+ "run_id": "20261027-183217",
+ "engine_version": "0.7.0",
+ "code_hash": "72c5bb26bb5578fd",
+ "data_hash": "f8d8bc72a0207c72",
+ "data_source": "dukascopy",
+ "m1_resolver": true,
+ "candles": "wycinki ±24 świec wokół transakcji 10 najlepszych wariantów",
+ "pairs": [
+  "EURUSD"
+ ],
+ "params": [
+  {
+   "kanal": 120,
+   "filtr_d1": false,
+   "sesja": "wszystkie"
+  },
+  {
+   "kanal": 120,
+   "filtr_d1": false,
+   "sesja": "7-20 UTC"
+  },
+  {
+   "kanal": 120,
+   "filtr_d1": true,
+   "sesja": "wszystkie"
+  },
+  {
+   "kanal": 120,
+   "filtr_d1": true,
+   "sesja": "7-20 UTC"
+  },
+  {
+   "kanal": 240,
+   "filtr_d1": false,
+   "sesja": "wszystkie"
+  },
+  {
+   "kanal": 240,
+   "filtr_d1": false,
+   "sesja": "7-20 UTC"
+  },
+  {
+   "kanal": 240,
+   "filtr_d1": true,
+   "sesja": "wszystkie"
+  },
+  {
+   "kanal": 240,
+   "filtr_d1": true,
+   "sesja": "7-20 UTC"
+  }
+ ],
+ "n_variants": 96,
+ "n_exits": 12,
+ "oos_cutoff": 1607812200,
+ "sizing": [
+  5.0,
+  10.0,
+  15.0,
+  20.0,
+  30.0
+ ],
+ "pyramid": 1,
+ "hours": "bez okna",
+ "data_from": 1052082000,
+ "data_to": 1793055600,
+ "data_clean": {
+  "EURUSD": {
+   "version": "2",
+   "filled": 9,
+   "gaps": 3,
+   "gap_hours": 93,
+   "months": 282,
+   "months_total": 282
+  }
+ },
+ "skipped": {
+  "B8": 115843,
+  "brak_danych": 66,
+  "rozgrzewka": 0,
+  "poza_godzinami": 0,
+  "luka_danych": 269,
+  "swieca_uzupelniona": 0
+ },
+ "hypothesis": "Kursy walut mają trendy trwające tygodnie (przepływy kapitału, polityka banków centralnych zmienia się\npowoli), a rynek reaguje na nie z opóźnieniem. Wybicie ceny z kanału kilku dni w kierunku trendu dziennego\nłapie początek takiego ruchu. Przegrywamy często, ale mało (stop w ATR), wygrywamy rzadko, ale dużo —\nprzewaga jest w asymetrii, nie w trafności.",
+ "trades_rows": 117102,
+ "created": 1793125937,
+ "seconds": 39.2,
+ "verdict": "red"
+}
