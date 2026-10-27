@@ -9,6 +9,7 @@ OOS_FRACTION = 0.25  # W1
 TRADING_TZ = "Europe/Warsaw"   # B11, D-028: handel tylko 07:00–17:00 czasu polskiego (najniższe spready)
 TRADING_HOURS = (7, 17)        # wejście na open świecy otwartej o 07:00 … 16:00 czasu polskiego
 CLOSE_BY_HOUR = 23             # B11, D-030: pozycja zamknięta najpóźniej o 23:00 czasu polskiego
+COMPUTE_PAIRS = ("EURUSD",)    # D-031: na razie strategie liczymy tylko na EUR/USD; ta para jest też pobierana pierwsza
 
 
 @dataclass(frozen=True)

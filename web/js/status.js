@@ -2,10 +2,13 @@
 // Nasłuch 2 dokumentów — meta/status i runner/heartbeat (Z2). Szczegóły: zakładka Stats (stats.js).
 import { HEARTBEAT_OK_S } from './config.js';
 import { watchDoc } from './fb.js';
+import { fetchState, fetchText, pairLabel } from './downloader.js';
 import { healthView, problemWord } from './health.js';
 import { PAIRS } from './metrics.js';
 import { expectedTs, H, isExpectedBar, lastClosedTs, nextClose } from './session.js';
-import { $, ago, dateUTC, esc, store } from './util.js';
+import { $, ago, dateUTC, esc, num, store } from './util.js';
+
+export { fetchState };
 
 const hm = (ts) => new Date(ts * 1000).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
 function dayWord(ts) {
@@ -67,11 +70,20 @@ function renderMac() {
   const hb = heartbeatState();
   if (hb.online) {
     const what = hb.state === 'computing' ? `liczy${hb.job?.name ? ` · ${esc(hb.job.name)}` : ''} · <span class="mono">${hb.job?.progress ?? 0}%</span>`
-      : hb.state === 'syncing' ? 'synchronizuje dane' : 'połączony';
-    setInd('mac', 'ok', what, `Mac (ia5 start): połączony\n${beat?.host ? 'host ' + beat.host : ''}`);
+      : hb.state === 'syncing' ? 'przygotowuje dane' : 'połączony · liczy na pobranych';
+    setInd('mac', 'ok', what, `Mac (ia5 start — liczenie strategii): połączony\n${beat?.host ? 'host ' + beat.host : ''}`);
   } else {
     setInd('mac', 'mute', `rozłączony${hb.seen ? ' · ' + ago(hb.seen) : ''}`, 'Mac rozłączony — uruchom „ia5 start” w terminalu');
   }
+}
+
+function renderFetch() {
+  const f = fetchState(beat);
+  const t = fetchText(f);
+  const per = Object.entries(f.pairs).map(([p, v]) => `${pairLabel(p)} ${num(v, 1)}%`).join('\n');
+  setInd('fetch', t.state, t.sub, f.online
+    ? `Pobieranie Dukascopy (ia5 fetch): para po parze do końca\n${per || ''}\nliczenie bierze tylko zatwierdzone miesiące`
+    : 'Pobieracz wyłączony — uruchom „ia5 fetch” w osobnym terminalu');
 }
 
 function renderFlags() {
@@ -97,6 +109,7 @@ function renderPairs() {
 function render() {
   renderData();
   renderMac();
+  renderFetch();
   renderFlags();
 }
 

@@ -31,104 +31,69 @@ def keep_awake():
     return None
 
 
-def do_sync(progress=None, live: dict | None = None, beat=None) -> None:
-    """progress(nazwa, procent) — postęp dla heartbeatu (kafel Mac w dashboardzie).
-    live — słownik uzupełniany statusami miesięcy na bieżąco (heartbeat.sync → mapa pokrycia na żywo).
-    beat() — natychmiastowy heartbeat (domyślnie sam stan „syncing”)."""
+def load_frames(folder) -> dict:
+    import pandas as pd
+
+    out = {}
+    for p in PAIRS:
+        f = folder / f"{p}.parquet"
+        out[p] = pd.read_parquet(f) if f.exists() else pd.DataFrame(columns=["ts", "open", "high", "low", "close", "minutes"])
+    return out
+
+
+def raw_signature() -> str:
+    """Podpis surowych H1 (pisze je `ia5 fetch`) — zmiana = nowe dane do przeliczenia mapy, kontroli i forward testu."""
+    parts = []
+    for f in sorted((DATA / "h1").glob("*.parquet")):
+        st = f.stat()
+        parts.append(f"{f.name}:{st.st_size}:{st.st_mtime_ns}")
+    return "|".join(parts)
+
+
+def do_prepare(progress=None) -> dict:
+    """`ia5 start` bez pobierania (D-031): świece do liczenia z zatwierdzonych miesięcy, Yahoo, kontrole, mapa, publikacja.
+    Dukascopy pobiera osobny proces `ia5 fetch`; tutaj tylko czytamy to, co już jest na dysku."""
     from datetime import UTC, datetime, timedelta
 
-    from . import cloud, coverage, dukascopy, publish, quality
-    from .bars import m1_to_h1
+    from . import cloud, coverage, quality, ready
+    from .config import COMPUTE_PAIRS
+    from .store import READY
 
-    beat = beat or (lambda: cloud.heartbeat("syncing"))
     log("Stan bazy (Firestore)…")
     st = cloud.read_status()
     log(f"  świece Yahoo w bazie: {st.get('totalBars', 0):,}")
-
-    pairs = list(PAIRS)
     until = datetime.now(UTC).date() - timedelta(days=1)
-    start = dukascopy.START
-    if live is not None:  # pełny obraz od razu: co już jest na dysku, co zostało
-        live.update({"start": f"{start.year}-{start.month:02d}",
-                     "pairs": {p: coverage.live_states(DATA, p, until) for p in pairs}})
-    beat()
-    log("Dukascopy M1 → lokalnie (pierwszy raz kilka godzin — tempo dyktuje serwer Dukascopy; potem sekundy)…")
-    h1 = {}
-    failed = {}
-
-    def build_h1(pair):
-        h1[pair] = m1_to_h1(dukascopy.load_m1(pair, DATA))
-        (DATA / "h1").mkdir(parents=True, exist_ok=True)
-        h1[pair].to_parquet(DATA / "h1" / f"{pair}.parquet", index=False)
-
-    def on_month_for(pair):
-        def on_month(y, m, code):
-            if live is None:
-                return
-            i = (y - start.year) * 12 + m - start.month
-            s = list(live["pairs"][pair])
-            if 0 <= i < len(s):
-                s[i] = code
-                live["pairs"][pair] = "".join(s)
-        return on_month
-
-    # D-029: przebieg 1 — wszystkie pary szybko (odrzucone dni na listę), przebieg 2 — naprawa brakujących dni
-    for pi, pair in enumerate(pairs):
-        def prog(i, n, pair=pair, pi=pi):
-            if progress:
-                progress(f"Pobieranie Dukascopy · {pair}", round(100 * (pi + i / max(n, 1)) / len(pairs)))
-
-        t0 = time.time()
-        r1 = dukascopy.sync_pair(pair, DATA, log=lambda m: log(m), progress=prog, on_month=on_month_for(pair))
-        # miesiące, z których nic nie zeszło (brak pliku) — naprawa ich nie dotyka, pobierze je następne uruchomienie
-        nothing = [k for k in r1["failed"] if not (DATA / "m1" / pair / f"{k}.parquet").exists()]
-        if nothing:
-            failed[pair] = nothing
-        build_h1(pair)
-        f = quality.bar_flags(h1[pair])
-        log(f"  {pair} H1: {len(h1[pair]):,} świec · luki {f['gaps']} · OHLC {f['ohlc']} · ts {f['ts']}")
-        if time.time() - t0 > 120 and pi < len(pairs) - 1:  # długie pobieranie: mapa w Stats aktualna po każdej parze (D-025)
-            publish_partial_coverage(h1, until)
-        beat()
-
-    log("Przebieg naprawczy: dni odrzucone przez serwer…")
-    for pair in pairs:
-        if progress:
-            progress(f"Naprawa brakujących dni · {pair}", 100)
-        r = dukascopy.sync_pair(pair, DATA, log=lambda m: log(m), on_month=on_month_for(pair), repair=True)
-        if r["todo"]:
-            build_h1(pair)
-        if r["failed"] or failed.get(pair):
-            failed[pair] = sorted(set(failed.get(pair, [])) | set(r["failed"]))
-        beat()
-
-    if failed:
-        log(f"Uwaga: niepełne {sum(map(len, failed.values()))} miesięcy ({', '.join(f'{p} {len(v)}' for p, v in failed.items())}) "
-            "— pobrane dni są już zapisane, brakujące dociągną się przy następnym `ia5 start` (mapa w Stats pokazuje je osobno).")
     if progress:
-        progress("Kontrola danych", 100)
+        progress("Przygotowanie danych do liczenia", 10)
+    log(f"Dane do liczenia (tylko zatwierdzone miesiące, D-031): {', '.join(COMPUTE_PAIRS)}…")
+    rdy = ready.build(DATA, READY, until=until, log=log)
+    h1 = load_frames(DATA / "h1")
+    for pair, df in h1.items():
+        if len(df):
+            f = quality.bar_flags(df)
+            log(f"  {pair} H1 (wszystko na dysku): {len(df):,} świec · luki {f['gaps']} · OHLC {f['ohlc']} · ts {f['ts']}")
+        else:
+            log(f"  {pair} H1: jeszcze brak — pobierze `ia5 fetch`")
+    if progress:
+        progress("Kontrola danych", 50)
     log("Yahoo z Firestore…")
     yahoo = cloud.sync_yahoo(DATA / "yahoo", log=lambda m: log(m))
-
+    full = {p: df for p, df in h1.items() if len(df)}
     log("Kontrola: trójkąty (Dukascopy)")
-    for k, v in quality.cross_check(h1).items():
+    for k, v in quality.cross_check(full).items():
         log(f"  {k}: mediana {v['median']:.2f} pips, p99 {v['p99']:.2f} pips ({v['n']:,} świec)")
     log("Kontrola: Dukascopy vs Yahoo (zamknięcia)")
-    for pair in PAIRS:
-        c = quality.compare_sources(h1[pair], yahoo[pair], pair)
+    for pair in full:
+        c = quality.compare_sources(full[pair], yahoo[pair], pair)
         if c and c.get("n"):
             log(f"  {pair}: mediana {c['median']:.2f} pips, p99 {c['p99']:.2f} pips ({c['n']:,} wspólnych)")
-
     log("Mapa pokrycia (luki wobec kalendarza sesji)…")
-    cov = coverage.build(DATA, h1, yahoo, failed=failed, until=until)
-    for pair, d in cov["sources"]["dukascopy"]["pairs"].items():
-        holes = sum(m[3] for m in d["m"])
-        left = sum(1 for m in d["m"] if m[0] in (coverage.NONE, coverage.FAILED))
-        log(f"  {pair}: dziury {holes} h · brakujące miesiące {left}")
-
+    cov = coverage.build(DATA, h1, yahoo, until=until)
     log("Publikacja na gałąź data…")
     publish_error = None
     try:
+        from . import publish
+
         sha = publish.publish_candles(yahoo, source="yahoo", log=lambda m: log(m))
         sha = publish.publish_coverage(cov, log=lambda m: log(m)) or sha
         if sha:
@@ -137,29 +102,47 @@ def do_sync(progress=None, live: dict | None = None, beat=None) -> None:
         publish_error = str(e)[:300]
         log(f"  publikacja nie powiodła się: {publish_error}")
     until_ts = int(datetime(until.year, until.month, until.day, tzinfo=UTC).timestamp()) + 86400
-    return {"h1": h1, "yahoo": yahoo, "cov": cov, "until_ts": until_ts, "publish_error": publish_error}
+    return {"h1": h1, "yahoo": yahoo, "cov": cov, "until_ts": until_ts, "publish_error": publish_error,
+            "ready": rdy, "raw_sig": raw_signature()}
 
 
-def publish_partial_coverage(h1: dict, until) -> None:
-    """Mapa pokrycia w trakcie pierwszego, wielogodzinnego pobierania: pary już przeliczone + reszta z dysku."""
-    import pandas as pd
+def cmd_fetch(_args) -> int:
+    """Pobieracz Dukascopy (D-031): osobny terminal, działa bez końca; para po parze do końca, potem nowe dni co godzinę."""
+    from . import cloud, fetch
 
-    from . import cloud, coverage, publish
+    HOME.mkdir(parents=True, exist_ok=True)
+    caff = keep_awake()
+    stop = threading.Event()
+    state: dict = {"state": "pobiera"}
+    live: dict = {}
 
-    try:
-        frames = dict(h1)
-        for p in PAIRS:
-            f = DATA / "h1" / f"{p}.parquet"
-            if p not in frames and f.exists():
-                frames[p] = pd.read_parquet(f)
-        yahoo = {p: pd.read_parquet(DATA / "yahoo" / f"{p}.parquet") for p in PAIRS if (DATA / "yahoo" / f"{p}.parquet").exists()}
-        for p in PAIRS:
-            frames.setdefault(p, pd.DataFrame(columns=["ts", "minutes"]))
-        sha = publish.publish_coverage(coverage.build(DATA, frames, yahoo, until=until), log=lambda m: log(m))
-        if sha:
-            cloud.set_data_sha(sha)
-    except Exception as e:  # noqa: BLE001 — mapa pośrednia jest tylko podglądem
-        log(f"  mapa pokrycia (w trakcie): {e}")
+    def beat_now():
+        cloud.fetch_heartbeat({k: v for k, v in {**state, "sync": live or None}.items() if v is not None})
+
+    def beat():
+        while not stop.wait(30):
+            try:
+                beat_now()
+            except Exception as e:  # noqa: BLE001
+                log(f"heartbeat: {e}")
+
+    threading.Thread(target=beat, daemon=True).start()
+
+    def bye(*_):
+        stop.set()
+        try:
+            cloud.fetch_heartbeat(None)
+        finally:
+            if caff:
+                caff.terminate()
+            log("Pobieranie zatrzymane.")
+            os._exit(0)
+
+    signal.signal(signal.SIGINT, bye)
+    signal.signal(signal.SIGTERM, bye)
+    log(f"IA5 fetch · kolejność: {', '.join(fetch.order())} · każda para do końca, zanim ruszy następna")
+    fetch.run_forever(DATA, log=log, state=state, live=live)
+    return 0
 
 
 def do_health(ctx: dict, beat_state: str | None = None, write: bool = True) -> dict:
@@ -171,7 +154,8 @@ def do_health(ctx: dict, beat_state: str | None = None, write: bool = True) -> d
     except Exception:  # noqa: BLE001
         docs = None
     h = health.run(cloud.read_status(), ctx["h1"], ctx["yahoo"], ctx["cov"], ctx["until_ts"], docs=docs,
-                   beat_state=beat_state, publish_error=ctx.get("publish_error"), home=HOME)
+                   beat_state=beat_state, publish_error=ctx.get("publish_error"), home=HOME,
+                   ready=ctx.get("ready"))
     if write:
         cloud.write_health(h)
     bad = [c for c in h["checks"] if c["state"] != "ok"]
@@ -212,15 +196,13 @@ def cmd_start(_args) -> int:
     signal.signal(signal.SIGINT, bye)
     signal.signal(signal.SIGTERM, bye)
 
-    log(f"IA5 start · silnik {ENGINE_VERSION}")
+    log(f"IA5 start · silnik {ENGINE_VERSION} · liczenie na danych już pobranych (pobieranie: `ia5 fetch` w osobnym terminalu)")
 
     def sync_progress(name, pct):
         state["job"] = {"id": "sync", "name": name, "progress": pct}
 
-    state["sync"] = {}
-    ctx = do_sync(progress=sync_progress, live=state["sync"], beat=beat_now)
+    ctx = do_prepare(progress=sync_progress)
     state["job"] = None
-    state["sync"] = None
     safe_health(ctx, "idle")
 
     owner = config().get("owner_uid")
@@ -244,7 +226,7 @@ def cmd_start(_args) -> int:
     cloud.heartbeat("idle")
     enqueue_frozen(jobs, owner)
     log("Połączony. Czekam na strategie (Ctrl+C kończy).")
-    last_sync = last_health = time.time()
+    last_sync = last_health = last_check = time.time()
     while True:
         try:
             sid, data = jobs.get(timeout=60)
@@ -252,12 +234,15 @@ def cmd_start(_args) -> int:
             if time.time() - last_health > HEALTH_SECONDS:
                 safe_health(ctx, state["now"])
                 last_health = time.time()
-            if time.time() - last_sync > RESYNC_SECONDS:  # nowe świece → forward test zamrożonych (W4)
+            # nowe dane od `ia5 fetch` (co 30 min) albo co 6 h (Yahoo) → przygotowanie, mapa, forward test zamrożonych (W4)
+            due = time.time() - last_sync > RESYNC_SECONDS
+            if not due and time.time() - last_check > CHECK_SECONDS:
+                last_check = time.time()
+                due = raw_signature() != ctx.get("raw_sig")
+            if due:
                 state["now"] = "syncing"
-                state["sync"] = {}
-                ctx = do_sync(progress=sync_progress, live=state["sync"], beat=beat_now)
+                ctx = do_prepare(progress=sync_progress)
                 state["job"] = None
-                state["sync"] = None
                 safe_health(ctx, "idle")
                 last_health = time.time()
                 last_sync = time.time()
@@ -273,6 +258,7 @@ def cmd_start(_args) -> int:
 
 
 RESYNC_SECONDS = 6 * 3600
+CHECK_SECONDS = 1800   # co tyle sprawdzamy, czy `ia5 fetch` dopisał dane
 HEALTH_SECONDS = 3600
 
 
@@ -315,7 +301,9 @@ def handle_job(sid: str, data: dict, state: dict) -> None:
                 cloud.heartbeat("computing", state["job"])
 
     try:
-        out = run_file(data.get("code", ""), name, DATA / "h1", HOME / "results", m1_dir=DATA / "m1",
+        from .store import READY
+
+        out = run_file(data.get("code", ""), name, READY, HOME / "results", m1_dir=DATA / "m1",
                        log=step, source="dukascopy", strategy_id=sid)
         sha = publish.publish_result(out, log=log)
         v = json.loads((out / "validation.json").read_text(encoding="utf-8"))
@@ -345,9 +333,11 @@ def handle_delete(sid: str) -> None:
 
 
 def cmd_sync(_args) -> int:
-    from . import cloud
+    """Jednorazowo: jeden obieg pobierania (po 2 rundy na parę), potem przygotowanie danych i przegląd zdrowia."""
+    from . import cloud, fetch
 
-    safe_health(do_sync(), None)
+    fetch.run_forever(DATA, log=log, once=True)
+    safe_health(do_prepare(), None)
     cloud.heartbeat("offline")
     return 0
 
@@ -361,10 +351,14 @@ def cmd_health(_args) -> int:
     from . import coverage, health
 
     load = lambda d: {p: pd.read_parquet(d / f"{p}.parquet") for p in PAIRS if (d / f"{p}.parquet").exists()}  # noqa: E731
+    from . import ready
+    from .store import READY
+
+    rdy = ready.build(DATA, READY, log=log)
     h1, yahoo = load(DATA / "h1"), load(DATA / "yahoo")
     until = datetime.now(UTC).date() - timedelta(days=1)
     ctx = {"h1": h1, "yahoo": yahoo, "cov": coverage.build(DATA, h1, yahoo, until=until) if h1 else None,
-           "until_ts": int(datetime(until.year, until.month, until.day, tzinfo=UTC).timestamp()) + 86400}
+           "until_ts": int(datetime(until.year, until.month, until.day, tzinfo=UTC).timestamp()) + 86400, "ready": rdy}
     h = do_health(ctx)
     print(health.report(h))
     return 0 if h["state"] != "bad" else 1
@@ -378,9 +372,11 @@ def cmd_run(args) -> int:
     from .sandbox import StrategyError
 
     path = Path(args.file)
-    h1_dir = Path(args.h1) if args.h1 else DATA / "h1"
+    from .store import READY
+
+    h1_dir = Path(args.h1) if args.h1 else READY
     if not any(h1_dir.glob("*.parquet")):
-        print(f"Brak świec H1 w {h1_dir} — najpierw `ia5 sync`.")
+        print(f"Brak świec do liczenia w {h1_dir} — najpierw `ia5 fetch` (pobieranie), potem `ia5 start` albo `ia5 health`.")
         return 1
     try:
         run_file(path.read_text(encoding="utf-8"), args.name or path.stem, h1_dir, HOME / "results",
@@ -396,10 +392,11 @@ def cmd_check(args) -> int:
     from pathlib import Path
 
     from .check import check_code_on, format_result
+    from .store import READY
 
-    h1_dir = Path(args.h1) if args.h1 else DATA / "h1"
+    h1_dir = Path(args.h1) if args.h1 else READY
     if not any(h1_dir.glob("*.parquet")):
-        print(f"Brak świec H1 w {h1_dir} — najpierw `ia5 sync`.")
+        print(f"Brak świec do liczenia w {h1_dir} — najpierw `ia5 fetch`, potem `ia5 start`.")
         return 1
     res = check_code_on(Path(args.file).read_text(encoding="utf-8"), h1_dir)
     print(format_result(res, str(h1_dir)))
@@ -419,8 +416,9 @@ def main(argv=None) -> int:
     os.environ.setdefault("GLOG_minloglevel", "2")
     parser = argparse.ArgumentParser(prog="ia5")
     sub = parser.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("start", help="sync + heartbeat + kolejka strategii").set_defaults(func=cmd_start)
-    sub.add_parser("sync", help="tylko synchronizacja danych").set_defaults(func=cmd_sync)
+    sub.add_parser("start", help="liczenie strategii na pobranych danych + heartbeat + kolejka").set_defaults(func=cmd_start)
+    sub.add_parser("fetch", help="pobieranie Dukascopy, para po parze do końca (osobny terminal)").set_defaults(func=cmd_fetch)
+    sub.add_parser("sync", help="jeden obieg pobierania + przygotowanie danych").set_defaults(func=cmd_sync)
     p_run = sub.add_parser("run", help="policz strategię z pliku .py lokalnie")
     p_run.add_argument("file")
     p_run.add_argument("--name")

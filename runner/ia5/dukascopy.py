@@ -32,6 +32,11 @@ TRIES = 3        # próby na plik, przerwy 2, 4 s — dzień, który się nie po
 COLS = ["ts", "bo", "bh", "bl", "bc", "bv", "ao", "ah", "al", "ac", "av"]
 
 
+def yesterday() -> date:
+    """Ostatni dzień, który Dukascopy już opublikował (UTC)."""
+    return datetime.now(UTC).date() - timedelta(days=1)
+
+
 def point(pair: str) -> int:
     return 1000 if "JPY" in pair else 100000
 
@@ -144,11 +149,38 @@ def missing_path(path: Path) -> Path:
     return path.with_name(path.stem + ".missing.json")
 
 
-def read_missing(path: Path) -> list[str]:
+GIVE_UP = 6       # D-031: dzień odrzucony w tylu kolejnych przebiegach (i starszy niż tydzień) zostaje uznany za
+GIVE_UP_AGE = 7   # niedostępny — miesiąc jest zatwierdzony, a brakujące godziny backtest zna jako lukę
+
+
+def read_sidecar(path: Path) -> dict:
+    """Plik brakujących dni: {"missing": {dzień: liczba prób}, "given_up": [dni]}. Stary format: lista dni."""
     try:
-        return sorted(json.loads(missing_path(path).read_text()))
+        raw = json.loads(missing_path(path).read_text())
     except (FileNotFoundError, ValueError):
-        return []
+        return {"missing": {}, "given_up": []}
+    if isinstance(raw, list):
+        return {"missing": {d: 1 for d in raw}, "given_up": []}
+    return {"missing": dict(raw.get("missing") or {}), "given_up": sorted(raw.get("given_up") or [])}
+
+
+def write_sidecar(path: Path, side: dict) -> None:
+    mp = missing_path(path)
+    if not side["missing"] and not side["given_up"]:
+        mp.unlink(missing_ok=True)
+        return
+    tmp = mp.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"missing": dict(sorted(side["missing"].items())), "given_up": sorted(side["given_up"])}))
+    tmp.replace(mp)
+
+
+def read_missing(path: Path) -> list[str]:
+    """Dni wciąż do dociągnięcia (bez uznanych za niedostępne)."""
+    return sorted(read_sidecar(path)["missing"])
+
+
+def read_given_up(path: Path) -> list[str]:
+    return read_sidecar(path)["given_up"]
 
 
 def days_to_fetch(path: Path, y: int, m: int, until: date) -> list[date]:
@@ -157,10 +189,11 @@ def days_to_fetch(path: Path, y: int, m: int, until: date) -> list[date]:
     if not path.exists():
         return days
     missing = set(read_missing(path))
+    gone = set(read_given_up(path))
     mx = _max_ts(path)
     last = datetime.fromtimestamp(mx, UTC).date() if mx is not None else None
-    return [d for d in days if d.isoformat() in missing or (last is not None and d > last)
-            or (last is None and not missing)]
+    return [d for d in days if d.isoformat() not in gone and (d.isoformat() in missing or (last is not None and d > last)
+            or (last is None and not missing))]
 
 
 def month_complete(path: Path, y: int, m: int) -> bool:
@@ -172,7 +205,7 @@ def month_complete(path: Path, y: int, m: int) -> bool:
     (wtedy zawiera wszystko, co Dukascopy ma — np. gdy ostatni dzień był świętem bez notowań).
     Pusty plik = Dukascopy nie ma tego miesiąca (np. przed startem notowań pary) — pełny.
     """
-    if not path.exists() or missing_path(path).exists():
+    if not path.exists() or read_missing(path):
         return False
     end = datetime(y, m, monthrange(y, m)[1], tzinfo=UTC) + timedelta(days=1)
     if datetime.fromtimestamp(path.stat().st_mtime, UTC) >= end + timedelta(days=2):
@@ -194,7 +227,8 @@ def months_to_sync(root: Path, pair: str, until: date) -> list[tuple[int, int]]:
     return out
 
 
-def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress=None, on_month=None, repair: bool = False) -> dict:
+def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress=None, on_month=None, repair: bool = False,
+              gentle: bool = False, today: date | None = None) -> dict:
     """Dociąga brakujące dane do root/m1/{PARA}/{RRRR-MM}.parquet (D-025).
 
     Pobierane są tylko brakujące dni: cały miesiąc, gdy pliku nie ma; inaczej dni z listy brakujących
@@ -208,15 +242,18 @@ def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress
     D-029: przebieg główny (repair=False) robi jedną krótką próbę na plik i nie czeka — dzień odrzucony przez serwer
     od razu trafia na listę brakujących. Przebieg naprawczy (repair=True) wraca tylko do miesięcy z brakującymi
     dniami, wolniej i z dwiema próbami. Dawniej jeden zawieszony plik kosztował do 3 min (3 próby × 55 s).
+    gentle=True — wszystkie niepełne miesiące, ale tempem przebiegu naprawczego (kolejne rundy `ia5 fetch`, D-031).
+    Każda nieudana próba dnia jest liczona; po GIVE_UP próbach dzień starszy niż GIVE_UP_AGE dni uznajemy za niedostępny.
     """
     folder = root / "m1" / pair
     folder.mkdir(parents=True, exist_ok=True)
-    yesterday = datetime.now(UTC).date() - timedelta(days=1)
+    today = today or datetime.now(UTC).date()
+    yesterday = today - timedelta(days=1)
     todo = months_to_sync(root, pair, yesterday)
     if repair:
-        todo = [(y, m) for y, m in todo if missing_path(folder / f"{y}-{m:02d}.parquet").exists()]
-    written, failed = 0, []
-    opts = REPAIR if repair else FAST
+        todo = [(y, m) for y, m in todo if read_missing(folder / f"{y}-{m:02d}.parquet")]
+    written, failed, got, gave_up = 0, [], 0, 0
+    opts = REPAIR if (repair or gentle) else FAST
     t0 = time.time()
 
     def safe_day(d):
@@ -225,7 +262,7 @@ def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress
         except Exception as e:  # noqa: BLE001
             return e
 
-    pace = 2 if repair else workers
+    pace = 2 if (repair or gentle) else workers
     blocked = 0
 
     def fetch(days, n):
@@ -258,7 +295,20 @@ def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress
             pace += 1  # czysty miesiąc — przyspieszamy
         bad = [d for d, r in zip(days, res) if isinstance(r, Exception)]
         frames = [r for r in res if not isinstance(r, Exception) and len(r)]
-        missing = sorted((set(read_missing(path)) - {d.isoformat() for d in days}) | {d.isoformat() for d in bad})
+        got += len(days) - len(bad)
+        side = read_sidecar(path)
+        tries_before = dict(side["missing"])
+        for d in days:
+            side["missing"].pop(d.isoformat(), None)
+        for d in bad:  # D-031: licznik prób; dzień starszy niż tydzień po GIVE_UP próbach — niedostępny
+            k_ = d.isoformat()
+            n_ = tries_before.get(k_, 0) + 1
+            if n_ >= GIVE_UP and (today - d).days > GIVE_UP_AGE:
+                side["given_up"] = sorted(set(side["given_up"]) | {k_})
+                gave_up += 1
+            else:
+                side["missing"][k_] = n_
+        missing = sorted(side["missing"])
         if len(bad) == len(days) and days and not path.exists():
             failed.append(f"{y}-{m:02d}")
             log(f"  {pair} {y}-{m:02d}: nic nie pobrano ({str(res[0])[-80:]}) — ponowię przy następnym uruchomieniu")
@@ -269,17 +319,18 @@ def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress
             df = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=COLS)
             if len(df):
                 df = df.drop_duplicates("ts", keep="first").sort_values("ts").reset_index(drop=True)  # D4: stare minuty zostają
-            df.to_parquet(path, index=False)
-            mp = missing_path(path)
+            tmp = path.with_suffix(".tmp")
+            df.to_parquet(tmp, index=False)
+            tmp.replace(path)  # zapis atomowy — `ia5 start` czyta te pliki równolegle (D-031)
+            write_sidecar(path, side)
             if missing:
-                mp.write_text(json.dumps(missing))
                 failed.append(f"{y}-{m:02d}")
                 log(f"  {pair} {y}-{m:02d}: {len(df):,} minut, brakuje {len(missing)} dni ({', '.join(x[8:] for x in missing[:6])}"
                     f"{'…' if len(missing) > 6 else ''}) — {'na następne uruchomienie' if repair else 'wrócę w naprawie'}")
                 code = "!"
             else:
-                mp.unlink(missing_ok=True)
-                log(f"  {pair} {y}-{m:02d}: {len(df):,} minut")
+                gone = f" · {len(side['given_up'])} dni niedostępnych (uznane za lukę)" if side["given_up"] else ""
+                log(f"  {pair} {y}-{m:02d}: {len(df):,} minut{gone}")
                 code = "-" if not len(df) else "~" if (y, m) == (yesterday.year, yesterday.month) else "o"
             written += 1
         if on_month:
@@ -289,11 +340,50 @@ def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress
             log(f"  {pair}: {k}/{len(todo)} mies.{' (naprawa)' if repair else ''} · zostało ok. {left / 60:.0f} min")
         if progress:
             progress(k, len(todo))
-    return {"written": written, "failed": failed, "todo": len(todo)}
+    return {"written": written, "failed": failed, "todo": len(todo), "got": got, "gave_up": gave_up}
 
 
-def load_m1(pair: str, root: Path) -> pd.DataFrame:
+def month_ready(path: Path, y: int, m: int, until: date) -> bool:
+    """D-031: miesiąc zatwierdzony do backtestu — plik jest, nie ma dni do dociągnięcia (dni uznane za niedostępne
+    są dozwolone — backtest zna je jako luki) i miesiąc jest kompletny (bieżący: do wczoraj)."""
+    if not path.exists() or read_missing(path):
+        return False
+    if (y, m) == (until.year, until.month):
+        mx = _max_ts(path)
+        return mx is None or datetime.fromtimestamp(mx, UTC).date() >= until - timedelta(days=3)
+    return month_complete(path, y, m)
+
+
+def pair_status(root: Path, pair: str, until: date | None = None) -> dict:
+    """Stan pary dla pobieracza i liczenia: ile miesięcy zatwierdzonych, ile dni do dociągnięcia, ile niedostępnych."""
+    until = until or yesterday()
+    folder = root / "m1" / pair
+    y, m = START.year, START.month
+    st = {"months": 0, "ready": [], "no_file": 0, "missing_days": 0, "given_up": 0}
+    while (y, m) <= (until.year, until.month):
+        path = folder / f"{y}-{m:02d}.parquet"
+        st["months"] += 1
+        if month_ready(path, y, m, until):
+            st["ready"].append(f"{y}-{m:02d}")
+        elif not path.exists():
+            st["no_file"] += 1
+        side = read_sidecar(path)
+        st["missing_days"] += len(side["missing"])
+        st["given_up"] += len(side["given_up"])
+        m += 1
+        if m == 13:
+            y, m = y + 1, 1
+    st["complete"] = len(st["ready"]) == st["months"]
+    st["pct"] = round(100 * len(st["ready"]) / max(st["months"], 1), 1)
+    return st
+
+
+def load_m1(pair: str, root: Path, months: list[str] | None = None) -> pd.DataFrame:
+    """Wszystkie miesiące M1 pary albo tylko wybrane (`months`: ['2003-05', …] — dane zatwierdzone, D-031)."""
     files = sorted((root / "m1" / pair).glob("????-??.parquet"))
+    if months is not None:
+        keep = set(months)
+        files = [f for f in files if f.stem in keep]
     if not files:
         return pd.DataFrame(columns=COLS)
     return pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)

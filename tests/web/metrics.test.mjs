@@ -134,3 +134,15 @@ test('mapa: wypełnienie = ile pobrano, kolor = dziury; audyt: brak we wszystkic
   assert.deepEqual(r.pairs.A.slice(0, 3), ['ok', 'allgap', 'ok']);
   assert.equal(r.pairs.B[0], 'missing');
 });
+
+test('pobieracz ia5 fetch: stan i tekst wskaźnika (D-031)', async () => {
+  const { fetchState, fetchText } = await import('../../web/js/downloader.js');
+  const now = 1e9;
+  const on = (f) => fetchState({ fetch: { lastSeen: { seconds: now - 10 }, ...f } }, now);
+  assert.equal(fetchText(on({ state: 'naprawia', pair: 'EURUSD', progress: 99.6 }), now).sub, 'EUR/USD <span class="mono">99,6%</span> · dociąga braki');
+  assert.deepEqual(fetchText(on({ state: 'czeka', pair: 'USDJPY', progress: 20, until: now + 600 }), now),
+    { state: 'warn', sub: 'USD/JPY <span class="mono">20%</span> · przerwa 10 min' });
+  assert.equal(fetchText(on({ state: 'komplet' }), now).state, 'ok');
+  assert.equal(fetchState({ fetch: { lastSeen: { seconds: now - 200 }, state: 'pobiera' } }, now).online, false);
+  assert.equal(fetchText(fetchState({}, now), now).state, 'mute');
+});

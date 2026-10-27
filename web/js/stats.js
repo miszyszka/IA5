@@ -5,7 +5,7 @@ import { getJSON, refreshData } from './data.js';
 import { healthView, problemWord, sortChecks } from './health.js';
 import { PAIRS } from './metrics.js';
 import { dailyRows, recentCells } from './session.js';
-import { heartbeatState } from './status.js';
+import { fetchState, heartbeatState } from './status.js';
 import { $, dateUTC, esc, h, local, num, store } from './util.js';
 
 const DAYS = 30;
@@ -142,8 +142,10 @@ function currentSource() {
   const pairs = Object.keys(PAIRS);
   const src = cov?.sources?.[covSrc];
   const beat = store.state.beat;
-  const syncing = covSrc === 'dukascopy' && heartbeatState(beat).online && beat?.state === 'syncing' && beat?.sync?.pairs;
-  const merged = mergeLive(src, syncing ? beat.sync : null, pairs);
+  // D-031: statusy na żywo wysyła pobieracz `ia5 fetch` (runner/heartbeat.fetch.sync)
+  const f = fetchState(beat);
+  const live = covSrc === 'dukascopy' && f.online && f.sync?.pairs ? f.sync : null;
+  const merged = mergeLive(src, live, pairs);
   return merged && { ...merged, meta: src || {} };
 }
 
@@ -155,7 +157,7 @@ function cellTitle(pair, key, r) {
     if (r[3]) parts.push(`dziury ${hours(r[3])}`);
     if (r[4]) parts.push(`wspólne luki ${hours(r[4])}`);
     if (r[5]) parts.push(`cienkie ${num(r[5], 0)}`);
-  } else if (r[0] === FULL || r[0] === PARTIAL) parts.push('luki policzone po synchronizacji');
+  } else if (r[0] === FULL || r[0] === PARTIAL) parts.push('luki policzy ia5 start (do 30 min)');
   return parts.join(' · ');
 }
 
@@ -217,7 +219,7 @@ function covDetail(data) {
     else if (row[0] === FAILED) note = 'Pobieranie nie powiodło się (sieć albo serwer Dukascopy). Ponowi się przy następnym ia5 start.';
     else if (row[0] === INCOMPLETE) note = `Pobrany częściowo: brakuje ${hours(row[6] || 0)} sesji w dniach, których nie udało się pobrać. Pobrane dni są już zapisane i używane; resztę dociągnie ia5 start.`;
     else if (row[0] === EMPTY) note = 'Dukascopy nie ma notowań tej pary w tym miesiącu — to nie jest luka do uzupełnienia.';
-    else if (row[3] == null) note = 'Pobrany przed chwilą — luki policzy Mac po zakończeniu synchronizacji.';
+    else if (row[3] == null) note = 'Pobrany przed chwilą — luki policzy ia5 start przy najbliższym sprawdzeniu (do 30 min).';
     else if (!gaps.length) note = 'Wszystkie godziny sesji są na miejscu.';
     const facts = row[3] != null && row[0] !== EMPTY
       ? `${STATUS_LABEL[row[0]]} · ${num(row[2], 0)} z ${num(row[1], 0)} godzin sesji · dziury ${hours(row[3])} · wspólne ${hours(row[4])}${data.meta.thin ? ` · cienkie ${num(row[5], 0)}` : ''}`
@@ -289,7 +291,7 @@ function renderCoverage() {
     renderCoverage();
   } });
   const legend = h('div', { class: 'covlegend' },
-    ...[['f-ok', 'bez dziur'], ['f-h1', 'dziury 1–5 h'], ['f-h2', '6–47 h'], ['f-h3', '≥ 48 h'], ...(data.live ? [['f-fresh', 'pobrany, luki po synchronizacji']] : []),
+    ...[['f-ok', 'bez dziur'], ['f-h1', 'dziury 1–5 h'], ['f-h2', '6–47 h'], ['f-h3', '≥ 48 h'], ...(data.live ? [['f-fresh', 'pobrany, luki wkrótce']] : []),
       ['o-incomplete', 'pobrany częściowo (wysokość = ile)'], ['o-partial', 'bieżący miesiąc'], ['o-none', 'nie pobrany'], ['o-failed', 'błąd'],
       ['o-empty', 'Dukascopy nie ma']]
       .map(([k, l]) => h('span', {}, h('i', { class: `sw ${k}` }), l)));
@@ -424,7 +426,7 @@ export function initStats() {
   store.on('beat', (b) => {
     if (prev === 'syncing' && b?.state !== 'syncing') { refreshData(); cov = undefined; if (onStats()) loadCoverage(); }
     prev = b?.state;
-    if (onStats() && (b?.sync || b?.state === 'syncing')) renderCoverage();
+    if (onStats() && b?.fetch?.sync) renderCoverage();
   });
   // audyt Yahoo: co minutę świeca „w drodze” może stać się „brak”
   setInterval(() => { if (onStats() && covSrc === 'yahoo') renderCoverage(); }, 60000);

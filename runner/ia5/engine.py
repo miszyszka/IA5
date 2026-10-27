@@ -70,7 +70,23 @@ def prepare(df: pd.DataFrame) -> dict:
         "atr5": ind.atr(df, 5).to_numpy(), "atr14": ind.atr(df, 14).to_numpy(),
         "rsi14": ind.rsi(df["close"], 14).to_numpy(),
         "sma20": ind.sma(df["close"], 20).to_numpy(),
+        # D-031: warstwa czyszczenia (clean.py) — świece uzupełnione i długie luki; brak kolumn = dane bez luk
+        "filled": df["filled"].to_numpy(bool) if "filled" in df else np.zeros(len(df), bool),
+        "gapcum": np.concatenate([[0], np.cumsum(df["gap_before"].to_numpy(np.int64) > 0)])
+        if "gap_before" in df else np.zeros(len(df) + 1, np.int64),
     }
+
+
+def data_cancel(P: dict, signal_i: np.ndarray, entry_i: np.ndarray, exit_i: np.ndarray) -> np.ndarray:
+    """D-031: transakcje do anulowania — nachodzą na długą lukę w danych (od świecy wejścia do wyjścia włącznie,
+    także luka między sygnałem a wejściem) albo jej świeca sygnału, wejścia lub wyjścia jest uzupełniona."""
+    xi = np.asarray(exit_i, float)
+    ok = ~np.isnan(xi)
+    e = np.asarray(entry_i, np.int64)
+    x = np.where(ok, xi, e).astype(np.int64)
+    gc, f = P["gapcum"], P["filled"]
+    gap = gc[x + 1] - gc[e] > 0
+    return ok & (gap | f[np.asarray(signal_i, np.int64)] | f[e] | f[x])
 
 
 def find_entries(P: dict, sig: np.ndarray) -> pd.DataFrame:
@@ -290,7 +306,7 @@ def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray],
     cutoff = t0 + (1 - oos_frac) * (t1 - t0)
 
     ent_frames, out_frames = [], []
-    skipped = {"B8": 0, "brak_danych": 0, "rozgrzewka": 0, "poza_godzinami": 0}
+    skipped = {"B8": 0, "brak_danych": 0, "rozgrzewka": 0, "poza_godzinami": 0, "luka_danych": 0}
     eid = 0
     for (pid, pair), sig in signals.items():
         P = preps[pair]
@@ -313,9 +329,14 @@ def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray],
         for xid, ex in enumerate(exits):
             res = simulate(P, ent, ex, pair, opp=np.asarray(sig), resolver=resolver)
             missing = res["exit_i"].isna().to_numpy()
-            keep = no_overlap(ent["entry_i"].to_numpy(), res["exit_i"].to_numpy(float))
+            # D-031: transakcja nachodząca na długą lukę albo na świecę uzupełnioną — anulowana, jakby jej nie było
+            cancel = data_cancel(P, ent["signal_i"].to_numpy(), ent["entry_i"].to_numpy(), res["exit_i"].to_numpy(float))
+            xi = res["exit_i"].to_numpy(float).copy()
+            xi[cancel] = np.nan
+            keep = no_overlap(ent["entry_i"].to_numpy(), xi)
             skipped["brak_danych"] += int(missing.sum())
-            skipped["B8"] += int((~keep & ~missing).sum())
+            skipped["luka_danych"] += int(cancel.sum())
+            skipped["B8"] += int((~keep & ~missing & ~cancel).sum())
             res = res[keep].copy()
             res.insert(0, "variant_id", pid * len(exits) + xid)
             res.insert(1, "entry_id", ent["entry_id"].to_numpy()[keep])

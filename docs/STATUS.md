@@ -22,12 +22,16 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
 - **B11 (D-030):** zamknięcie najpóźniej 23:00 czasu polskiego, `ENGINE_VERSION` 0.3.0; Dukascopy czeka przy pełnej blokadzie serwera (503).
 
+- **D-031: dwa procesy.** `ia5 fetch` pobiera Dukascopy para po parze do końca (EUR/USD najpierw), dni odrzucane długo → niedostępne; `ia5 start` liczy tylko na zatwierdzonych miesiącach EUR/USD (`data/h1_ready/`). Luki ≤ 3 h uzupełnione i oznaczone, dłuższe anulują transakcje (B12, D8), także w benchmarku. `ENGINE_VERSION` 0.4.0. Nagłówek dashboardu: nowy wskaźnik „Pobieranie”; mapa na żywo z pobieracza. 101 testów + Node zielone.
+
 **Następne (Michał)**
-0. Wkleić nowy `apps_script/Code.gs` do Apps Script — audyt świec i dziennik.
-1. Na Macu `git pull` i `ia5 start` (przerwij działające Ctrl+C) — mapa i przegląd zdrowia pojawią się w Stats po synchronizacji (przy pierwszym pobieraniu od razu, na żywo).
-2. Jeśli jeszcze nie: nowy `apps_script/Code.gs` do Apps Script (dziennik dzień po dniu).
+0. Wkleić nowy `apps_script/Code.gs` do Apps Script — audyt świec i dziennik (jeśli jeszcze nie).
+1. Na Macu: przerwij działające `ia5 start` (Ctrl+C), `git pull`. Potem **dwa terminale**: w pierwszym `ia5 fetch` (pobiera, działa bez końca), w drugim `ia5 start` (liczy).
+2. Strategie policzone przed 0.4.0 dashboard oznaczy jako nieaktualne — „Policz ponownie”.
 
 **Znane problemy**
+- `ia5 start` ładuje całe M1 EUR/USD do pamięci przy przebudowie danych do liczenia (kilkaset MB, raz po zmianie plików).
+- Miesiąc, z którego nic nie zeszło (pełna blokada), nie jest nigdy uznawany za niedostępny — pobieracz wraca do niego co obieg; do tego czasu jest długą luką.
 - Próg „wspólnej” luki (≥ połowa par) i „bez ruchu” (≤ 3 h, < 1 pips) to założenia; do kalibracji na prawdziwych danych Dukascopy.
 
 ## 2026-10-26 — sesja 2

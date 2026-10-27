@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 from .config import PAIRS
-from .engine import Exit, deadline_bars, simulate
+from .engine import Exit, data_cancel, deadline_bars, simulate
 from .session import in_trading_hours
 
 N01 = NormalDist()
@@ -55,7 +55,9 @@ def random_benchmark(preps: dict, trades: pd.DataFrame, ex: Exit, signals: dict 
                                 "max_bars": deadline_bars(P, e, hours)})  # B11: te same reguły co strategia
             opp = signals.get(pair) if signals else None
             res = simulate(P, ent, ex, pair, opp=opp)
-            net = (res["pips_gross"] - spread).to_numpy().reshape(s1 - s0, k)
+            net = np.array(res["pips_gross"] - spread, dtype=float)
+            net[data_cancel(P, i, e, res["exit_i"].to_numpy(float))] = np.nan  # D-031: te same luki co strategia
+            net = net.reshape(s1 - s0, k)
             valid = ~np.isnan(net)
             total[s0:s1] += np.where(valid, net, 0).sum(axis=1)
             count[s0:s1] += valid.sum(axis=1)

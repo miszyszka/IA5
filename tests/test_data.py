@@ -95,7 +95,6 @@ def test_cross_and_compare():
 def test_sync_saves_partial_month_and_fetches_only_missing_days(tmp_path, monkeypatch):
     """D-025: błąd jednego dnia nie wyrzuca miesiąca — pobrane dni są zapisane, brakujący dzień trafia na listę
     i przy następnym uruchomieniu pobierany jest tylko on. Błąd sieci nie przerywa synchronizacji."""
-    import json
 
     from ia5 import dukascopy
 
@@ -123,7 +122,7 @@ def test_sync_saves_partial_month_and_fetches_only_missing_days(tmp_path, monkey
     folder = tmp_path / "m1" / "EURUSD"
     assert r["failed"] == ["2024-02"] and codes == ["o", "!", "o", "~"]
     assert sorted(p.name for p in folder.glob("*.parquet")) == ["2024-01.parquet", "2024-02.parquet", "2024-03.parquet", "2024-04.parquet"]
-    assert json.loads((folder / "2024-02.missing.json").read_text()) == ["2024-02-07"]
+    assert dukascopy.read_sidecar(folder / "2024-02.parquet") == {"missing": {"2024-02-07": 1}, "given_up": []}
     assert len(pd.read_parquet(folder / "2024-02.parquet")) == len(dukascopy.month_days(2024, 2, date(2024, 4, 9))) - 1
     # następne uruchomienie: tylko brakujący dzień lutego + dni kwietnia po ostatnim zapisanym (9-ty już jest)
     bad_day.clear()

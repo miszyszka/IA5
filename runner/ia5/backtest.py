@@ -51,6 +51,25 @@ def data_hash(h1_dir: Path) -> str:
     return h.hexdigest()[:16]
 
 
+def data_clean_info(h1_dir: Path, h1: dict) -> dict:
+    """D-031: opis warstwy czyszczenia per para (plik {PARA}.json obok świec, z prepare_ready w cli)."""
+    out = {}
+    for pair, df in h1.items():
+        f = h1_dir / f"{pair}.json"
+        info = {}
+        if f.exists():
+            try:
+                info = json.loads(f.read_text())
+            except ValueError:
+                info = {}
+        filled = int(df["filled"].sum()) if "filled" in df else 0
+        gaps = int((df["gap_before"] > 0).sum()) if "gap_before" in df else 0
+        out[pair] = {"version": info.get("version"), "filled": filled, "gaps": gaps,
+                     "gap_hours": int(df["gap_before"].sum()) if "gap_before" in df else 0,
+                     "months": info.get("months"), "months_total": info.get("months_total")}
+    return out
+
+
 def exits_from(meta_exits) -> list[Exit]:
     if not meta_exits:
         return default_exits()
@@ -219,6 +238,7 @@ def run_file(code: str, name: str, h1_dir: Path, out_root: Path, m1_dir: Path | 
         "pairs": sorted(h1), "params": meta["params"], "n_variants": res["n_variants"], "n_exits": len(exits),
         "oos_cutoff": int(res["cutoff"]), "sizing": sizing,
         "data_from": int(min(df.ts.iloc[0] for df in h1.values())), "data_to": int(max(df.ts.iloc[-1] for df in h1.values())),
+        "data_clean": data_clean_info(h1_dir, h1),
         "skipped": res["skipped"], "hypothesis": meta.get("hypothesis"), "trades_rows": int(len(trades)),
         "created": int(time.time()), "seconds": round(time.time() - t_start, 1),
         "verdict": validation.get("verdict", {}).get("color"),

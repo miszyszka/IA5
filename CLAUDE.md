@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.12 · 2026-10-27 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
+Wersja 0.13 · 2026-10-27 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
 
 ---
 
@@ -27,6 +27,7 @@ Zakładka **Inwestorzy** istnieje, ale jest pusta („wkrótce"). Nie budujemy j
 - **D5.** Każda świeca przechodzi kontrolę jakości (kalendarz sesji bez weekendów i świąt 24/25.12 i 31.12/1.01 — D-028): `high ≥ max(open, close)`, `low ≤ min(open, close)`, ceny > 0, `ts % 3600 == 0`, brak luk w sesji (tydzień FX: niedziela ~21/22:00 → piątek ~21/22:00 UTC, zależnie od czasu letniego w USA), test krzyżowy par (EUR/JPY ≈ EUR/USD × USD/JPY; EUR/GBP ≈ EUR/USD ÷ GBP/USD). Naruszenie = flaga w statusie, **nigdy cicha naprawa**.
 - **D6.** Każdy wynik backtestu zapisuje hash danych, hash kodu strategii i `ENGINE_VERSION`. Wynik bez tych trzech pól nie istnieje.
 - **D7.** Dwa źródła, dwie role, bez sklejania. **Dukascopy M1 bid/ask** = jedyne źródło danych do backtestów i forward testów. **Yahoo → Firestore** = bieżący monitoring (status, latencja) i niezależna kontrola danych. Nigdy nie łączymy dwóch źródeł w jednej serii cen.
+- **D8.** Backtest liczy wyłącznie na **zatwierdzonych** miesiącach (plik jest, żaden dzień nie czeka na dociągnięcie; dzień odrzucany przez 6 rund i starszy niż tydzień jest uznany za niedostępny) i tylko na parach z `COMPUTE_PAIRS` (teraz **EUR/USD**). Warstwa czyszczenia (`ia5/clean.py`, D-031): luka w sesji **≤ 3 świece** → uzupełniona liniowo od zamknięcia przed luką do otwarcia po niej, każda taka świeca ma znacznik `filled`; dłuższa luka zostaje dziurą (`gap_before`). Uzupełnianie dzieje się tylko w kopii do liczenia (`data/h1_ready/`), nigdy w danych surowych, i jest podane w raporcie.
 
 ### Backtest (model wykonania)
 - **B1.** Sygnał liczony na zamknięciu świecy `t`, wejście na **open świecy `t+1`**. Nigdy po cenie, której w danej chwili nie dało się znać.
@@ -40,6 +41,7 @@ Zakładka **Inwestorzy** istnieje, ale jest pusta („wkrótce"). Nie budujemy j
 - **B9.** Wskaźniki tylko z modułu `ia5.indicators`, zweryfikowanego testami zgodności z TA-Lib. Strategie nie piszą własnych RSI/ATR.
 - **B10.** Zmiana logiki silnika = podbicie `ENGINE_VERSION`. Wyniki starszej wersji dashboard oznacza jako nieaktualne.
 - **B11.** Handlujemy tylko **07:00–17:00 czasu polskiego** (`Europe/Warsaw`, z czasem letnim; zimą 06–16 UTC, latem 05–15 UTC) — wtedy spready są najniższe (D-028). Wejście wyłącznie na open świecy otwartej o 07:00…16:00 czasu polskiego; sygnały poza oknem są pomijane i liczone w raporcie. **Każda pozycja jest zamykana najpóźniej o 23:00 czasu polskiego** (zamknięcie świecy 22:00; powód wyjścia `23:00`) — limit działa na wszystkie warianty wyjścia (D-030). Benchmark losowych wejść (W3) losuje w tym samym oknie i z tym samym limitem.
+- **B12.** Transakcja nachodząca na **długą lukę w danych** (od świecy wejścia do świecy wyjścia, także luka między sygnałem a wejściem) albo mająca świecę sygnału, wejścia lub wyjścia **uzupełnioną** jest **anulowana** — jakby jej nie było; liczba anulowanych w raporcie. Benchmark losowy anuluje tak samo (D-031).
 
 ### Walidacja (bez niej wynik to anegdota)
 - **W1.** Ostatnie **25%** historii to out-of-sample (OOS). Ranking i wybór wariantów tylko na in-sample (IS). OOS pokazujemy obok, nigdy nie służy do wyboru.
@@ -124,7 +126,7 @@ flowchart LR
 
 1. **Apps Script — co 5 minut, nie co godzinę.** Najpierw sprawdza w Script Properties, czy oczekiwana nowa świeca jest już zapisana. Jeśli tak — kończy bez żadnego zapytania. Jeśli nie — pyta Yahoo o ostatnie dni (interwał 1h), zapisuje zamknięte świece (upsert), aktualizuje `meta/status`.
    *Dlaczego:* wyzwalacz godzinowy Apps Script odpala się w dowolnej minucie godziny, więc pomiar „ile sekund zajęło pobranie świecy" byłby szumem rzędu 0–60 min.
-2. **Mac — `ia5 start`.** Dociąga brakujące dni M1 z Dukascopy i składa z nich świece H1 (mid, bid, ask) → synchronizuje świece Yahoo z Firestore → kontrola jakości, w tym porównanie Yahoo z Dukascopy na wspólnym okresie → Parquet lokalnie → jeśli dane się zmieniły, push świec H1 na gałąź `data` i zapis jej SHA w `meta/status.dataSha`.
+2. **Mac — dwa procesy (D-031).** `ia5 fetch` (osobny terminal) dociąga M1 z Dukascopy para po parze do końca (najpierw EUR/USD) i składa świece H1. `ia5 start` nic nie pobiera: z zatwierdzonych miesięcy buduje świece do liczenia (`data/h1_ready/`) → synchronizuje świece Yahoo z Firestore → kontrola jakości, w tym porównanie Yahoo z Dukascopy na wspólnym okresie → Parquet lokalnie → jeśli dane się zmieniły, push świec H1 na gałąź `data` i zapis jej SHA w `meta/status.dataSha`.
 3. **Dashboard.** Status z `meta/status` i `runner/heartbeat`. Świece i wyniki z gałęzi `data` przez `raw.githubusercontent.com/miszyszka/IA5/<SHA>/...` — adres z konkretnym SHA, więc bez problemu z cache.
 4. **Nowa strategia.** Dashboard zapisuje `strategies/{id}` ze statusem `do_policzenia` → Mac dostaje to przez nasłuch → `liczy_sie` + postęp → wyniki na gałąź `data` → `policzona` + SHA commita.
 
@@ -200,7 +202,8 @@ Wejścia są wspólne dla wszystkich wariantów wyjścia, więc trzymamy je raz 
   config.json                              # {"owner_uid": "..."} — kto może zlecać liczenie (S1)
   data/m1/{PARA}/{RRRR-MM}.parquet         # M1 bid i ask z Dukascopy — surowe, niezmienne (D4), nigdy na GitHub (D-010)
   data/m1/{PARA}/{RRRR-MM}.missing.json    # dni, których jeszcze nie udało się pobrać — dociągane w kolejnym przebiegu (D-025)
-  data/h1/{PARA}.parquet                   # H1 zbudowane z M1 — do silnika
+  data/h1/{PARA}.parquet                   # H1 zbudowane z całego M1 na dysku (pisze ia5 fetch) — mapa pokrycia, kontrole
+  data/h1_ready/{PARA}.parquet + .json     # H1 tylko z zatwierdzonych miesięcy, po czyszczeniu (filled, gap_before) — jedyne wejście silnika (D-031)
   data-repo/                               # lokalny klon gałęzi data
   data/yahoo/{PARA}.parquet                # kopia świec z Firestore
 ```
@@ -227,16 +230,17 @@ Dane Dukascopy (M1 i zbudowane z nich H1) zostają na Macu: są za duże na GitH
 ## 6. Program na Macu (`ia5`)
 
 - Python 3.12, menedżer `uv`. Instalacja: `uv tool install -e runner` → w terminalu działa komenda `ia5`.
-- `ia5 start`:
+- `ia5 fetch` — **pobieranie, osobny terminal, działa bez końca** (D-031): para po parze do końca (`COMPUTE_PAIRS` najpierw), runda szybka, potem rundy naprawcze z rosnącą przerwą; dzień odrzucany 6 rund (i starszy niż tydzień) → niedostępny; para bez postępu przez 8 rund → następna, powrót w kolejnym obiegu; po wszystkim nowe dni co godzinę. Zapisy plików atomowe; heartbeat w `runner/heartbeat.fetch` (stan, para, %, mapa na żywo). Nic nie publikuje na gałąź `data`.
+- `ia5 start` — **liczenie na tym, co już pobrane**:
   1. Sprawdza połączenie i stan bazy (`meta/status`).
-  2. Dociąga z Dukascopy brakujące dni M1 (bid i ask; za pierwszym razem całą historię, od ok. 2003) i składa z nich świece H1. Pobrane dni zapisuje od razu, nieudane dni zapisuje jako brakujące i ponawia przy następnym uruchomieniu (D-025).
+  2. Buduje świece do liczenia z zatwierdzonych miesięcy (`data/h1_ready/`, warstwa czyszczenia D8) — tylko gdy zmieniły się pliki; co 30 min sprawdza, czy `ia5 fetch` dopisał dane.
   3. Synchronizuje świece Yahoo z Firestore, robi kontrolę jakości (D5) i porównuje Yahoo z Dukascopy na wspólnym okresie; pokazuje różnice.
   4. Liczy mapę pokrycia (luki wobec kalendarza sesji, D-022) i pushuje na gałąź `data` świece H1 z Yahoo oraz `coverage/coverage.json` (każde tylko, jeśli coś się zmieniło).
   5. Przegląd zdrowia (D-023) po każdej synchronizacji i co godzinę → `meta/status.health`.
   6. Heartbeat co 30 s do `runner/heartbeat`; uruchamia `caffeinate -i`, żeby Mac nie usnął w trakcie liczenia.
   7. Nasłuchuje `strategies` ze statusem `do_policzenia`; kolejka FIFO, jedna strategia na raz.
   8. `Ctrl+C` → heartbeat `offline`, czyste wyjście.
-- Pozostałe komendy: `ia5 health` (opisowy raport zdrowia w terminalu + zapis na dashboard), `ia5 status`, `ia5 sync`, `ia5 run <plik.py>` (liczenie lokalne, bez dashboardu; wyniki w `~/.ia5/results/{nazwa}/{run}/`).
+- Pozostałe komendy: `ia5 health` (opisowy raport zdrowia w terminalu + zapis na dashboard), `ia5 status`, `ia5 sync` (jeden obieg pobierania + przygotowanie), `ia5 run <plik.py>` (liczenie lokalne, bez dashboardu; wyniki w `~/.ia5/results/{nazwa}/{run}/`).
 - Dashboard pokazuje „połączony", gdy `teraz − lastSeen < 90 s`.
 - Co 6 h działający `ia5 start` dociąga nowe dane i przelicza strategie zamrożone (forward test, W4).
 
@@ -329,7 +333,8 @@ Rozbicia: para, rok, kierunek, sesja (Azja 00–07, Europa 07–13, USA 13–21 
 ### 10.1 Stan systemu (zawsze widoczny, w nagłówku obok zakładek)
 - **Dane** i **Mac** — dwa wskaźniki tuż obok siebie, każdy z kropką stanu (jedyne świecące elementy strony; przy działającym systemie kropka lekko „oddycha”).
   - Dane: działa / opóźnienie / stoi / rynek zamknięty (weekend to nie awaria); obok ostatnia świeca i odliczanie do następnej. Progi w godzinach rynku: OPÓŹNIENIE gdy świecy brak > 20 min po zamknięciu, STOI gdy > 75 min.
-  - Mac: połączony / synchronizuje / liczy (nazwa, postęp %) / rozłączony (od kiedy).
+  - Mac: połączony / przygotowuje dane / liczy (nazwa, postęp %) / rozłączony (od kiedy).
+  - Pobieranie (`ia5 fetch`, D-031): para i % zatwierdzonych miesięcy / dociąga braki / przerwa (ile minut) / komplet / wyłączone.
 - **Problemy** — liczba kontroli przeglądu zdrowia, które nie są OK (bursztyn: uwagi, czerwień: błąd); pojawia się tylko, gdy są (klik → Stats).
 - **Pary** — jeden symboliczny kafelek („8 par” + kody walut), bez danych i bez rozwijania.
 - Bez kafli KPI. Liczby (świece w bazie, latencja, flagi, pary) są w zakładce **Stats**.

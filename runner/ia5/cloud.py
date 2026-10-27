@@ -81,9 +81,18 @@ def heartbeat(state: str, job: dict | None = None, sync: dict | None = None) -> 
         "version": ENGINE_VERSION,
         "host": socket.gethostname(),
     }
-    if sync:
-        doc["sync"] = sync
-    db().collection("runner").document("heartbeat").set(doc)
+    doc["sync"] = sync or firestore.DELETE_FIELD
+    # merge po polach: pole `fetch` pisze osobny proces `ia5 fetch` (D-031) — nie może go nadpisać
+    db().collection("runner").document("heartbeat").set(doc, merge=list(doc))
+
+
+def fetch_heartbeat(info: dict | None) -> None:
+    """runner/heartbeat.fetch — stan pobieracza `ia5 fetch` (D-031): {state, pair, progress, name, pairs, sync, lastSeen}.
+    Z4: co 30 s ≈ 2 880 zapisów/dobę, gdy pobieracz działa (razem z heartbeatem `ia5 start` ≈ 5 760 z 20 000)."""
+    from firebase_admin import firestore
+
+    doc = {**(info or {"state": "offline"}), "lastSeen": firestore.SERVER_TIMESTAMP, "host": socket.gethostname()}
+    db().collection("runner").document("heartbeat").set({"fetch": doc}, merge=["fetch"])
 
 
 def list_strategies() -> list[dict]:

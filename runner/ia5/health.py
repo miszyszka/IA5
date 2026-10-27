@@ -139,7 +139,7 @@ def duka_fresh(h1: dict, until_ts: int) -> dict:
             "Aktualność Dukascopy",
             "bad",
             "Brak świec Dukascopy na Macu.",
-            fix="ia5 start pobierze historię (pierwszy raz 1–3 godziny).",
+            fix="Uruchom `ia5 fetch` w osobnym terminalu — pobiera historię para po parze (D-031).",
         )
     late = []
     for p, df in h1.items():
@@ -154,7 +154,8 @@ def duka_fresh(h1: dict, until_ts: int) -> dict:
             "warn",
             f"{len(late)} par z danymi starszymi niż doba sesji.",
             late,
-            "Uruchom ia5 start; jeśli nie pomaga — Dukascopy mogło jeszcze nie opublikować dnia.",
+            "Sprawdź, czy działa `ia5 fetch` (pobiera parami: najpierw EUR/USD, potem kolejne); "
+            "świeży dzień Dukascopy publikuje z opóźnieniem.",
         )
     return check("duka_fresh", "Aktualność Dukascopy", "ok", f"Wszystkie pary mają dane do {utc(until_ts - H)}.")
 
@@ -383,7 +384,8 @@ def disk(path: Path) -> dict:
 # ---------- opis stanu bazy i projektu ----------
 
 
-def facts(status: dict, h1: dict, yahoo: dict, cov: dict | None, docs: list[dict] | None) -> list[str]:
+def facts(status: dict, h1: dict, yahoo: dict, cov: dict | None, docs: list[dict] | None,
+          ready: dict | None = None) -> list[str]:
     out = []
     yb = status.get("totalBars") or sum(len(d) for d in yahoo.values() if d is not None)
     yfirst = min((int(d["ts"].min()) for d in yahoo.values() if d is not None and len(d)), default=None)
@@ -401,6 +403,13 @@ def facts(status: dict, h1: dict, yahoo: dict, cov: dict | None, docs: list[dict
         out.append(f"Dukascopy (backtesty): {fmt(db)} świec H1 na Macu, {utc(first)[:10]} → {utc(last)[:10]}.")
     else:
         out.append("Dukascopy (backtesty): jeszcze brak danych na Macu.")
+    for pair, r in (ready or {}).items():  # D-031: na czym liczy silnik
+        if not r.get("months"):
+            out.append(f"Do liczenia {label(pair)}: jeszcze brak zatwierdzonych miesięcy (pobiera `ia5 fetch`).")
+            continue
+        out.append(f"Do liczenia {label(pair)}: {fmt(r.get('bars', 0))} świec z {r['months']}/{r.get('months_total')} "
+                   f"zatwierdzonych miesięcy; uzupełnione {fmt(r.get('filled', 0))} świec (luki ≤ 3 h), "
+                   f"{fmt(r.get('gaps_n', 0))} długich luk ({fmt(r.get('gap_hours', 0))} h) — transakcje na nich są anulowane.")
     if docs is not None:
         done = sum(1 for d in docs if d.get("status") == "policzona")
         frozen_n = sum(1 for d in docs if d.get("frozenAt"))
@@ -421,6 +430,7 @@ def run(
     publish_error: str | None = None,
     home: Path | None = None,
     now: int | None = None,
+    ready: dict | None = None,
 ) -> dict:
     now = now or int(time.time())
     checks = [
@@ -446,7 +456,7 @@ def run(
         else f"{len(problems)} {pl(len(problems), 'problem', 'problemy', 'problemów')}: "
         + "; ".join(f"{c['name']} — {c['text'].rstrip('.')}" for c in sorted(problems, key=lambda c: -RANK[c["state"]])[:3])
     )
-    return {"at": now, "state": worst, "summary": summary, "facts": facts(status, h1, yahoo, cov, docs), "checks": checks}
+    return {"at": now, "state": worst, "summary": summary, "facts": facts(status, h1, yahoo, cov, docs, ready), "checks": checks}
 
 
 def report(h: dict) -> str:

@@ -5,6 +5,7 @@ from pathlib import Path
 
 HOME = Path(os.environ.get("IA5_HOME", Path.home() / ".ia5"))
 DATA = HOME / "data"
+READY = DATA / "h1_ready"   # D-031: H1 tylko z zatwierdzonych miesięcy, po warstwie czyszczenia — jedyne wejście silnika
 SERVICE_ACCOUNT = HOME / "service-account.json"
 CONFIG = HOME / "config.json"
 DATA_REPO = HOME / "data-repo"
