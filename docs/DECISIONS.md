@@ -5,6 +5,13 @@ Najnowsze na górze.
 
 ---
 
+### D-028 · 2026-10-27 · Handel 07:00–17:00 czasu polskiego (B11), święta w kalendarzu, dziury tylko tam, gdzie rynek się ruszał
+- **Decyzja (Michał):** „trading robimy w godzinach 7:00–17:00 czasu polskiego — wtedy są najniższe spready”. Nowa żelazna zasada **B11**: wejście tylko na open świecy otwartej o 07:00…16:00 `Europe/Warsaw` (z czasem letnim). Sygnały poza oknem pomijane i liczone (`poza_godzinami` w raporcie). Benchmark losowych wejść losuje w tym samym oknie — inaczej porównanie byłoby nieuczciwe (W3). `ENGINE_VERSION` 0.2.0. Wyjścia na razie o dowolnej porze — **do decyzji Michała**: czy zamykać pozycje o 17:00.
+- **Święta:** kalendarz sesji (Python, wektorowy w mapie pokrycia, Apps Script, dashboard) nie oczekuje świec 24.12 od 21:00 do 25.12 22:00 UTC i 31.12 od 21:00 do 1.01 22:00 UTC. Rozwiązuje znany problem z D-009.
+- **Dziury tylko tam, gdzie mogły być ruchy:** dziurą jest godzina, w której rynek działał (≥ połowa par ma notowania) i cena się ruszała. Nie są dziurami: luka wspólna dla ≥ połowy par (rynek nieczynny, święto spoza listy, przerwa źródła) i luka „bez ruchu” — do 3 h, po której cena jest ta sama co przed (< 1 pips). W audycie Yahoo godzina brakująca w ≥ 75% par to „brak we wszystkich parach”, nie brak konkretnej pary.
+- **Mapa Dukascopy:** kafelek wypełnia się od dołu proporcjonalnie do tego, ile miesiąca pobrano; kolor mówi, jak duże są dziury (zielony bez dziur, bursztyn 1–5 h i 6–47 h, czerwony ≥ 48 h). W audycie Yahoo świeca, która dotarła, jest zielona (szare kafelki się myliły).
+- **Odrzucone:** okno godzin jako filtr w strategii (każdy musiałby pamiętać; B11 trzyma to w silniku); stała lista wszystkich świąt bankowych (FX handluje w większość z nich — wystarcza 25.12 i 1.01 plus wykrywanie luk wspólnych z danych).
+
 ### D-027 · 2026-10-27 · Stats: audyt Yahoo świeca po świecy, pełny kafelek przeglądu, bez listy flag
 - **Decyzja (Michał):** w widoku Yahoo mapy jeden kafelek = jedna świeca H1, ostatnie 3 tygodnie, na bieżąco. Apps Script prowadzi `meta/status.recent` (504 znaki na parę: `1` jest, `l` spóźniona > 20 min po zamknięciu, `f` z flagą jakości, `.` brak); dashboard dokłada kalendarz sesji i czas: brak = świeca w godzinach rynku, która nie dotarła 20 min po zamknięciu; „w drodze” = jeszcze w tym oknie. Ponowny zapis świecy nie kasuje oznaczeń „spóźniona” ani „flaga”.
 - **Kafelek „Przegląd zdrowia”** pokazuje każdy problem (nazwa + jedno zdanie), nie samą liczbę. **Flagi:** usunięty kafelek i lista flag (mało czytelne tokeny `luka@…`, `revised@…`); te same informacje są teraz w audycie (kafelki „z flagą”, braki) i w kontroli „Jakość świec Yahoo” przeglądu zdrowia. Apps Script nadal je liczy.

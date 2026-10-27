@@ -21,6 +21,7 @@ import pandas as pd
 
 from . import indicators as ind
 from .config import PAIRS
+from .session import in_trading_hours
 
 W = 120  # najdłuższe trzymanie pozycji w świecach
 H = 3600
@@ -249,7 +250,7 @@ def no_overlap(entry_i: np.ndarray, exit_i: np.ndarray) -> np.ndarray:
 # ---------- uruchomienie dla strategii ----------
 
 def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray], params: list[dict],
-        exits: list[Exit] | None = None, resolver=None, oos_frac: float = 0.25) -> dict:
+        exits: list[Exit] | None = None, resolver=None, oos_frac: float = 0.25, hours=None) -> dict:
     """Pełny przebieg: wszystkie warianty wejścia (params) × wszystkie wyjścia × wszystkie pary.
 
     signals[(param_id, pair)] = tablica sygnałów (+1/-1/0) na świecach h1[pair].
@@ -262,14 +263,17 @@ def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray],
     cutoff = t0 + (1 - oos_frac) * (t1 - t0)
 
     ent_frames, out_frames = [], []
-    skipped = {"B8": 0, "brak_danych": 0, "rozgrzewka": 0}
+    skipped = {"B8": 0, "brak_danych": 0, "rozgrzewka": 0, "poza_godzinami": 0}
     eid = 0
     for (pid, pair), sig in signals.items():
         P = preps[pair]
         ent = find_entries(P, sig)
         warm = ent["atr14"].isna() | ent["atr5"].isna()  # bez ATR nie ma poziomów TP/SL ani R
         skipped["rozgrzewka"] += int(warm.sum())
-        ent = ent[~warm].reset_index(drop=True)
+        # B11: wejście tylko w oknie handlu 07:00–17:00 czasu polskiego (D-028); wyjścia bez ograniczeń
+        outside = ~in_trading_hours(ent["entry_ts"].to_numpy(), hours) & ~warm.to_numpy()
+        skipped["poza_godzinami"] += int(outside.sum())
+        ent = ent[~warm.to_numpy() & ~outside].reset_index(drop=True)
         if ent.empty:
             continue
         ent.insert(0, "entry_id", np.arange(eid, eid + len(ent)))

@@ -120,3 +120,17 @@ test('audyt Yahoo świeca po świecy (D-027)', async () => {
   assert.equal(pend.pairs.EURUSD[2], 'missing');
   assert.equal(recentCells({ start: start - 3600, pairs: { EURUSD: '11.' } }, start + 2 * 3600 + 600).pairs.EURUSD[2], 'pending');
 });
+
+test('mapa: wypełnienie = ile pobrano, kolor = dziury; audyt: brak we wszystkich parach to nie brak pary (D-028)', async () => {
+  const c = await import('../../web/js/coverage.js');
+  assert.deepEqual(c.cellView([1, 500, 500, 0, 0, 0, 0]), { fill: 1, color: 'ok', outline: '' });
+  assert.equal(c.cellView([1, 500, 450, 50, 0, 0, 0]).color, 'h3');
+  const inc = c.cellView([5, 300, 300, 2, 0, 0, 100]);
+  assert.equal(inc.outline, 'incomplete'); assert.equal(inc.fill, 0.75); assert.equal(inc.color, 'h1');
+  assert.equal(c.cellView([0, 500, 0, 0, 0, 0, 0]).fill, 0);
+  const { recentCells } = await import('../../web/js/session.js');
+  const start = Date.UTC(2026, 9, 21, 10) / 1000; // śr 10:00
+  const r = recentCells({ start, pairs: { A: '1.1', B: '..1', C: '1.1', D: '1.1' } }, start + 3 * 3600 + 3600);
+  assert.deepEqual(r.pairs.A.slice(0, 3), ['ok', 'allgap', 'ok']);
+  assert.equal(r.pairs.B[0], 'missing');
+});

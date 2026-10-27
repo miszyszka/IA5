@@ -16,13 +16,16 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
 - Stats: audyt Yahoo świeca po świecy (3 tygodnie, D-027), kafelek przeglądu z listą problemów, usunięte flagi jako osobna lista; tempo pobierania Dukascopy dobierane do dławienia (D-026).
 
+- **B11 (D-028):** handel tylko 07:00–17:00 czasu polskiego (silnik + benchmark), `ENGINE_VERSION` 0.2.0; święta 25.12 i 1.01 w kalendarzu; dziury tylko tam, gdzie rynek działał i cena się ruszała; mapa Dukascopy: wysokość = ile pobrano, kolor = wielkość dziur.
+
 **Następne (Michał)**
+0. Decyzja: zamykać pozycje o 17:00 czasu polskiego czy wyjścia o dowolnej porze?
 0. Wkleić nowy `apps_script/Code.gs` do Apps Script — audyt świec i dziennik.
 1. Na Macu `git pull` i `ia5 start` (przerwij działające Ctrl+C) — mapa i przegląd zdrowia pojawią się w Stats po synchronizacji (przy pierwszym pobieraniu od razu, na żywo).
 2. Jeśli jeszcze nie: nowy `apps_script/Code.gs` do Apps Script (dziennik dzień po dniu).
 
 **Znane problemy**
-- Próg „wspólnej” luki (≥ połowa par) to założenie; do kalibracji na prawdziwych danych Dukascopy (np. Boże Narodzenie w parach z JPY).
+- Próg „wspólnej” luki (≥ połowa par) i „bez ruchu” (≤ 3 h, < 1 pips) to założenia; do kalibracji na prawdziwych danych Dukascopy.
 
 ## 2026-10-26 — sesja 2
 

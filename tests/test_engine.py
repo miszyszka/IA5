@@ -128,7 +128,7 @@ def test_run_spread_net_and_oos_split():
     df = bars(rows)
     sig = np.zeros(40)
     sig[[2, 15, 35]] = 1  # świeca 2: rozgrzewka ATR → pominięta
-    res = run({"EURUSD": df}, {(0, "EURUSD"): sig}, [{}], exits=[Exit("time", n=1, cap=1)])
+    res = run({"EURUSD": df}, {(0, "EURUSD"): sig}, [{}], exits=[Exit("time", n=1, cap=1)], hours=False)  # bez okna B11
     o = res["outcomes"]
     assert (o["pips_net"] == o["pips_gross"] - 0.9).all()  # B3
     assert np.allclose(o["r_net"], o["pips_net"] / o["risk_pips"])
@@ -144,3 +144,17 @@ def test_m1_resolver_orders_minutes():
     assert res("EURUSD", T0 + 3600, 1, 1.1010, 1.0990) == "tp"
     # short: SL 1.1010 pada w 2. minucie, zanim TP 1.0990 w 3. minucie
     assert res("EURUSD", T0 + 3600, -1, 1.0990, 1.1010) == "sl"
+
+
+def test_trading_window_polish_time_with_dst():
+    """B11 (D-028): wejścia tylko 07:00–17:00 czasu polskiego — zimą 06–16 UTC, latem 05–15 UTC."""
+    from datetime import UTC, datetime
+
+    from ia5.session import in_trading_hours
+
+    t = lambda *a: int(datetime(*a, tzinfo=UTC).timestamp())  # noqa: E731
+    winter = [t(2024, 1, 10, h) for h in (5, 6, 15, 16)]
+    summer = [t(2024, 7, 10, h) for h in (4, 5, 14, 15)]
+    assert list(in_trading_hours(winter)) == [False, True, True, False]
+    assert list(in_trading_hours(summer)) == [False, True, True, False]
+    assert in_trading_hours(winter, hours=False).all()

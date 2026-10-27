@@ -78,6 +78,10 @@ function isExpectedBar(ts) {
   if (day === 6) return false;              // sobota
   if (day === 5 && hr >= 21) return false;  // piątek wieczór
   if (day === 0 && hr < 22) return false;   // niedziela przed otwarciem
+  // święta FX: 24.12 od 21:00 do 25.12 22:00 UTC i 31.12 od 21:00 do 1.01 22:00 UTC — rynek nieczynny (D-028)
+  const mo = d.getUTCMonth() + 1, dom = d.getUTCDate();
+  if (((mo === 12 && dom === 24) || (mo === 12 && dom === 31)) && hr >= 21) return false;
+  if (((mo === 12 && dom === 25) || (mo === 1 && dom === 1)) && hr < 22) return false;
   return true;
 }
 

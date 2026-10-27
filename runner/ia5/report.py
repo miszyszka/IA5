@@ -63,7 +63,8 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
         "## Dane i model wykonania",
         f"- Pary: {', '.join(m['pairs'])}; świece H1 od {_d(m['data_from'])} do {_d(m['data_to'])}; źródło: {m['data_source']}.",
         f"- In-sample do {_d(m['oos_cutoff'])}, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS.",
-        "- Wejście na open świecy po sygnale. TP i SL w tej samej świecy: "
+        "- Wejście na open świecy po sygnale, tylko w oknie handlu 07:00–17:00 czasu polskiego (B11 — najniższe spready); "
+        "wyjścia o dowolnej porze. TP i SL w tej samej świecy: "
         + ("rozstrzygane na M1, w tej samej minucie — SL." if m["m1_resolver"] else "przyjęty SL (brak danych M1)."),
         f"- Spread raz na transakcję (pips): {spreads}. Swapy pominięte.",
         f"- Kapitał {START_CAPITAL:,.0f} USD, dźwignia {LEVERAGE}:1, depozyt na pozycję: "
@@ -71,7 +72,8 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
         "## Skala przeszukiwania",
         f"- **Przetestowane warianty: {n_var}** ({len(m['params'])} wejścia × {m['n_exits']} wyjść).",
         f"- Pominięte sygnały, średnio na wariant: {sk['B8'] / n_var:,.0f} (otwarta pozycja w parze), "
-        f"{sk['brak_danych'] / n_var:,.1f} (brak danych do wyjścia); {sk.get('rozgrzewka', 0)} wejść w rozgrzewce ATR.",
+        f"{sk['brak_danych'] / n_var:,.1f} (brak danych do wyjścia); {sk.get('rozgrzewka', 0)} wejść w rozgrzewce ATR, "
+        f"{sk.get('poza_godzinami', 0)} sygnałów poza oknem 07:00–17:00 czasu polskiego (B11).",
         "## Top 10 wariantów (ranking po IS, min. 30 transakcji IS)",
         _table(top) if len(top) else "_Żaden wariant nie ma 30 transakcji w IS._",
     ]

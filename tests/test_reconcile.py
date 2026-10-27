@@ -29,7 +29,7 @@ def data():
 
 
 def ours(df, sig):
-    res = run({"EURUSD": df}, {(0, "EURUSD"): sig}, [{}], exits=[Exit("time", n=N, cap=N)])
+    res = run({"EURUSD": df}, {(0, "EURUSD"): sig}, [{}], exits=[Exit("time", n=N, cap=N)], hours=False)  # bez okna B11
     t = res["outcomes"].merge(res["entries"][["entry_id", "entry_i", "entry_px"]], on="entry_id")
     return [(int(a), round(b, 10), int(c) + 1, round(d, 10))
             for a, b, c, d in zip(t.entry_i, t.entry_px, t.exit_i, t.exit_px)]
@@ -70,7 +70,7 @@ def test_same_trades_with_atr_tp_sl(data):
     """TP 1,5×ATR14, SL 1×ATR14, limit 24 świec. Poziomy liczone od ceny wejścia (= close świecy sygnału)."""
     df, sig = data
     tp_k, sl_k, cap = 1.5, 1.0, 24
-    res = run({"EURUSD": df}, {(0, "EURUSD"): sig}, [{}], exits=[Exit("atr", n=14, tp=tp_k, sl=sl_k, cap=cap)])
+    res = run({"EURUSD": df}, {(0, "EURUSD"): sig}, [{}], exits=[Exit("atr", n=14, tp=tp_k, sl=sl_k, cap=cap)], hours=False)  # bez okna B11
     t = res["outcomes"].merge(res["entries"][["entry_id", "entry_i", "entry_px"]], on="entry_id")
     # ExitBar w backtesting.py: świeca, w której padł TP/SL; dla limitu czasu — następna świeca (open)
     a = [(int(e), round(p, 10), int(x) + (1 if r == "czas" else 0), round(xp, 10), r)

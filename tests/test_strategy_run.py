@@ -26,7 +26,7 @@ def signals(df, p, ind):
 '''
 
 
-def make_h1(n=3000, seed=1, start=1.1):
+def make_h1(n=8000, seed=1, start=1.1):  # dość świec, żeby po oknie B11 zostało ≥ 30 transakcji IS
     rng = np.random.default_rng(seed)
     c = start + np.cumsum(rng.normal(0, 0.0008, n))
     o = np.r_[c[0], c[:-1]]

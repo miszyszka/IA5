@@ -17,6 +17,7 @@ import pandas as pd
 
 from .config import PAIRS
 from .engine import Exit, simulate
+from .session import in_trading_hours
 
 N01 = NormalDist()
 EULER = 0.5772156649
@@ -26,7 +27,7 @@ MIN_TRADES = 30
 # ---------- benchmark losowych wejść (W3) ----------
 
 def random_benchmark(preps: dict, trades: pd.DataFrame, ex: Exit, signals: dict | None = None,
-                     sims: int = 1000, seed: int = 7, max_rows: int = 200_000) -> dict:
+                     sims: int = 1000, seed: int = 7, max_rows: int = 200_000, hours=None) -> dict:
     """Rozkład średnich pipsów netto z losowych wejść; percentyl faktycznego wyniku w tym rozkładzie."""
     rng = np.random.default_rng(seed)
     actual = float(trades["pips_net"].mean())
@@ -35,7 +36,8 @@ def random_benchmark(preps: dict, trades: pd.DataFrame, ex: Exit, signals: dict 
     for pair, g in trades.groupby("pair"):
         P = preps[pair]
         n = len(P["o"])
-        ok = np.flatnonzero(~np.isnan(P["atr14"][:-1]) & ~np.isnan(P["atr5"][:-1]))  # świeca sygnału
+        ok = np.flatnonzero(~np.isnan(P["atr14"][:-1]) & ~np.isnan(P["atr5"][:-1])  # świeca sygnału
+                            & in_trading_hours(P["ts"][1:], hours))  # W3: losowe wejścia w tym samym oknie godzin (B11)
         if len(ok) == 0:
             continue
         k = len(g)

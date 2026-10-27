@@ -68,6 +68,24 @@ export function cellKind(row) {
   return st === PARTIAL ? 'partial' : 'full';
 }
 
+/**
+ * Wygląd komórki mapy (D-028): wysokość wypełnienia = ile miesiąca jest pobrane, kolor = jak duże dziury.
+ * { fill: 0…1, color: ok | h1 (1–5 h) | h2 (6–47 h) | h3 (≥ 48 h) | fresh (pobrany, luki jeszcze niepoliczone),
+ *   outline: '' | none (nie pobrany) | failed | incomplete (brakujące dni) | partial (bieżący miesiąc) | empty (brak u Dukascopy) }
+ */
+export function cellView(row) {
+  const [st, exp, , holes, , , skipped] = row;
+  if (st === NONE) return { fill: 0, color: 'ok', outline: 'none' };
+  if (st === FAILED) return { fill: 0, color: 'ok', outline: 'failed' };
+  if (st === EMPTY) return { fill: 0, color: 'ok', outline: 'empty' };
+  const color = holes == null ? 'fresh' : holes >= 48 ? 'h3' : holes >= 6 ? 'h2' : holes > 0 ? 'h1' : 'ok';
+  if (st === INCOMPLETE) {
+    const total = (exp || 0) + (skipped || 0);
+    return { fill: total ? Math.max(0.08, (exp || 0) / total) : 0.5, color, outline: 'incomplete' };
+  }
+  return { fill: 1, color, outline: st === PARTIAL ? 'partial' : '' };
+}
+
 /** Podsumowanie pary albo całego źródła (rows = sklejone wiersze miesięcy). pct = obecne / oczekiwane,
  * gdzie oczekiwane obejmują też miesiące niepobrane — to jest „ile jeszcze brakuje”. */
 export function summarize(rows) {

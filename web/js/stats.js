@@ -1,6 +1,6 @@
 // Zakładka Stats: baza świec, latencja, mapa pokrycia danych, dziennik dzień po dniu, flagi jakości.
 // meta/status i runner/heartbeat nagłówek i tak nasłuchuje; mapa pokrycia z gałęzi data — 0 dodatkowych odczytów Firestore (Z2, Z4).
-import { biggestHoles, cellKind, EMPTY, FAILED, INCOMPLETE, FULL, fmtRange, gapsInMonth, layoutBands, mergeLive, NONE, PARTIAL, STATUS_LABEL, summarize } from './coverage.js';
+import { biggestHoles, cellView, EMPTY, FAILED, INCOMPLETE, FULL, fmtRange, gapsInMonth, layoutBands, mergeLive, NONE, PARTIAL, STATUS_LABEL, summarize } from './coverage.js';
 import { getJSON, refreshData } from './data.js';
 import { healthView, problemWord, sortChecks } from './health.js';
 import { PAIRS } from './metrics.js';
@@ -124,7 +124,7 @@ function dailyLog(s) {
 let cov; // undefined = jeszcze nie wczytano, null = Mac jeszcze nie opublikował
 let covErr = null, covSrc = 'dukascopy', sel = null, covLoading = false;
 const ROW = 18, CELL = 12, AXIS = 18;
-const KIND_LABEL = { p: 'tylko ta para', w: 'wspólna' };
+const KIND_LABEL = { p: 'dziura', w: 'rynek nieczynny', q: 'bez ruchu ceny' };
 const MONTHS = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru'];
 const monthName = (key) => `${MONTHS[+key.slice(5, 7) - 1]} ${key.slice(0, 4)}`;
 const hours = (n) => `${num(n, 0)} h`;
@@ -149,6 +149,7 @@ function currentSource() {
 
 function cellTitle(pair, key, r) {
   const parts = [`${PAIRS[pair].label} · ${monthName(key)}`, STATUS_LABEL[r[0]]];
+  if (r[0] === INCOMPLETE) parts.push(`pobrano ${num(100 * (r[1] || 0) / Math.max(1, (r[1] || 0) + (r[6] || 0)), 0)}% godzin sesji, brakuje ${num(r[6] || 0, 0)} h`);
   if (r[3] != null && r[0] !== EMPTY) {
     parts.push(`${num(r[2], 0)} z ${num(r[1], 0)} h`);
     if (r[3]) parts.push(`dziury ${hours(r[3])}`);
@@ -183,7 +184,10 @@ function drawMap(box, data, lay) {
       for (let i = from; i < to; i++) {
         const row = data.pairs[p].m[i];
         const on = sel && sel.pair === p && sel.i === i;
-        svg += `<rect x="${xs[i] + 0.5}" y="${y + 0.5}" width="${cw - inner}" height="${CELL - 1}" class="c-${cellKind(row)}${on ? ' sel' : ''}" data-p="${p}" data-i="${i}"><title>${esc(cellTitle(p, data.keys[i], row))}</title></rect>`;
+        const v = cellView(row), w = cw - inner, hh = CELL - 1, fh = Math.max(v.fill ? 1 : 0, Math.round(hh * v.fill));
+        const tip = `<title>${esc(cellTitle(p, data.keys[i], row))}</title>`;
+        svg += `<rect x="${xs[i] + 0.5}" y="${y + 0.5}" width="${w}" height="${hh}" class="c-bg o-${v.outline || 'in'}${on ? ' sel' : ''}" data-p="${p}" data-i="${i}">${tip}</rect>`;
+        if (fh) svg += `<rect x="${xs[i] + 0.5}" y="${y + 0.5 + hh - fh}" width="${w}" height="${fh}" class="f-${v.color}" data-p="${p}" data-i="${i}">${tip}</rect>`;
       }
     });
   });
@@ -285,14 +289,16 @@ function renderCoverage() {
     renderCoverage();
   } });
   const legend = h('div', { class: 'covlegend' },
-    ...[['full', 'pełny'], ...(data.live ? [['fresh', 'pobrany przed chwilą']] : []), ['holes1', 'dziury 1–5 h'], ['holes2', '6–47 h'], ['holes3', '≥ 48 h'], ['partial', 'w toku'],
-      ['incomplete', 'częściowo'], ['none', 'nie pobrany'], ['failed', 'błąd'], ...(covSrc === 'dukascopy' ? [['empty', 'Dukascopy nie ma']] : [])]
-      .map(([k, l]) => h('span', {}, h('i', { class: `sw c-${k}` }), l)));
+    ...[['f-ok', 'bez dziur'], ['f-h1', 'dziury 1–5 h'], ['f-h2', '6–47 h'], ['f-h3', '≥ 48 h'], ...(data.live ? [['f-fresh', 'pobrany, luki po synchronizacji']] : []),
+      ['o-incomplete', 'pobrany częściowo (wysokość = ile)'], ['o-partial', 'bieżący miesiąc'], ['o-none', 'nie pobrany'], ['o-failed', 'błąd'],
+      ['o-empty', 'Dukascopy nie ma']]
+      .map(([k, l]) => h('span', {}, h('i', { class: `sw ${k}` }), l)));
   panel.replaceChildren(head, h('p', { class: 'covsum', html: line }), live,
     h('div', { class: 'covmap' }, labels, scroll, sums), legend,
     h('div', { class: 'covdetail' }, ...covDetail(data)),
-    h('p', { class: 'hint' }, 'Liczone na Macu z surowych danych wobec kalendarza sesji. Dziura = brakuje godziny tylko tej parze. ',
-      'Wspólna luka = brakuje jej co najmniej połowie par (święto, krótka sesja albo przerwa źródła). ',
+    h('p', { class: 'hint' }, 'Liczone na Macu z surowych danych wobec kalendarza sesji (weekendy i święta 25.12, 1.01 nie są oczekiwane). ',
+      'Wysokość kafelka = ile miesiąca pobrano, kolor = jak duże dziury. Dziura = brakuje godziny, w której rynek działał (inne pary mają notowania) i cena się ruszała. ',
+      'Nie są dziurami: rynek nieczynny (brakuje jej co najmniej połowie par) i luka bez ruchu ceny (≤ 3 h, cena po niej taka sama jak przed). ',
       data.meta.thin ? `Cienka godzina = świeca z mniej niż ${cov?.thin_minutes ?? 30} minut z notowaniami. ` : '', gen));
   const lay = layoutBands(data.keys, scroll.clientWidth);
   labels.replaceChildren(...lay.bands.flatMap((_, bi) => labelBlock(bi)));
@@ -303,7 +309,8 @@ function renderCoverage() {
 // ---------- audyt Yahoo świeca po świecy (D-027) ----------
 
 const AUDIT_LABEL = { ok: 'jest', late: 'spóźniona (> 20 min po zamknięciu)', flag: 'z flagą jakości (korekta Yahoo albo zła świeca)',
-  missing: 'brak', pending: 'w drodze (zamknięta < 20 min temu)', closed: 'rynek zamknięty' };
+  missing: 'brak', pending: 'w drodze (zamknięta < 20 min temu)', closed: 'rynek zamknięty (weekend, święto)',
+  allgap: 'brak we wszystkich parach — rynek nieczynny albo przerwa Yahoo' };
 const WDAY = ['nd', 'pn', 'wt', 'śr', 'cz', 'pt', 'sb'];
 let auditSel = null;
 
@@ -338,7 +345,7 @@ function renderYahooAudit(panel, head) {
       h('span', { class: count(p, 'missing') ? 'neg' : 'dimmed' }, String(count(p, 'missing'))), h('span', { class: 'dimmed' }, '\u00a0·\u00a0'),
       h('span', { class: count(p, 'late') ? 'warn' : 'dimmed' }, String(count(p, 'late'))))));
   const legend = h('div', { class: 'covlegend' }, ...[['a-ok', 'jest'], ['a-late', 'spóźniona'], ['a-flag', 'z flagą'], ['a-missing', 'brak'],
-    ['a-pending', 'w drodze'], ['a-closed', 'rynek zamknięty']].map(([k, l]) => h('span', {}, h('i', { class: `sw ${k}` }), l)));
+    ['a-pending', 'w drodze'], ['a-allgap', 'brak we wszystkich parach'], ['a-closed', 'rynek zamknięty']].map(([k, l]) => h('span', {}, h('i', { class: `sw ${k}` }), l)));
 
   // lista: wybrana świeca albo ostatnie problemy (braki, spóźnienia, flagi), od najnowszych
   const fmt = (ts) => { const d = new Date(ts * 1000); return `${WDAY[d.getUTCDay()]} ${dateUTC(ts, true).slice(8, 10)}.${dateUTC(ts).slice(5, 7)} ${dateUTC(ts, true).slice(11)} UTC`; };

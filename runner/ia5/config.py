@@ -6,6 +6,8 @@ ACCOUNT_CCY = "USD"
 START_CAPITAL = 10_000.0
 DEFAULT_SIZING = (5, 10, 15, 20, 30)  # % kapitału jako depozyt (B4)
 OOS_FRACTION = 0.25  # W1
+TRADING_TZ = "Europe/Warsaw"   # B11, D-028: handel tylko 07:00–17:00 czasu polskiego (najniższe spready)
+TRADING_HOURS = (7, 17)        # wejście na open świecy otwartej o 07:00 … 16:00 czasu polskiego
 
 
 @dataclass(frozen=True)

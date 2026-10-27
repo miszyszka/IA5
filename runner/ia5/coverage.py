@@ -27,6 +27,8 @@ DAY = 86400
 THIN_MINUTES = 30      # godzina H1 złożona z mniej niż 30 minut z notowaniami = „cienka”
 COMMON_SHARE = 0.5     # luka wspólna, gdy brakuje jej w ≥ połowie par mających ten okres
 COMMON_MIN_PAIRS = 3   # przy mniej niż 3 parach nie da się powiedzieć, że luka jest wspólna
+QUIET_PIPS = 1.0       # luka do 3 h, po której cena jest ta sama (< 1 pips) = „bez ruchu” — nic nie przepadło (D-028)
+QUIET_MAX_H = 3
 NONE, FULL, PARTIAL, EMPTY, FAILED, INCOMPLETE = 0, 1, 2, 3, 4, 5
 LIVE_CODE = {NONE: ".", FULL: "o", PARTIAL: "~", EMPTY: "-", FAILED: "x", INCOMPLETE: "!"}
 
@@ -38,7 +40,13 @@ def expected_mask(ts) -> np.ndarray:
     ts = np.asarray(ts, dtype=np.int64)
     wd = (ts // DAY + 4) % 7  # 0 = niedziela; 1970-01-01 był czwartkiem
     hr = (ts % DAY) // H
-    return ~((wd == 6) | ((wd == 5) & (hr >= 21)) | ((wd == 0) & (hr < 22)))
+    day = (ts // DAY).astype("datetime64[D]")
+    mon = day.astype("datetime64[M]")
+    dom = (day - mon).astype(np.int64) + 1
+    mo = mon.astype(np.int64) % 12 + 1
+    # święta FX: 24.12 od 21:00 do 25.12 22:00 UTC i 31.12 od 21:00 do 1.01 22:00 UTC — rynek nieczynny (D-028)
+    hol = ((mo == 12) & ((dom == 24) | (dom == 31)) & (hr >= 21)) | (((mo == 12) & (dom == 25)) | ((mo == 1) & (dom == 1))) & (hr < 22)
+    return ~((wd == 6) | ((wd == 5) & (hr >= 21)) | ((wd == 0) & (hr < 22)) | hol)
 
 
 def expected_hours(a: int, b: int) -> np.ndarray:
@@ -154,7 +162,11 @@ def source_coverage(month_info: dict[str, list[dict]], frames: dict[str, pd.Data
     other[para] = (godziny obecne w drugim źródle, godziny objęte drugim źródłem) — do potwierdzenia luk.
     Zwraca {"pairs": {para: {"m": [[status, oczekiwane, obecne, dziury, wspólne, cienkie], ...],
                               "gaps": [[od, do, godzin, rodzaj, w drugim źródle], ...]}}}.
+    Rodzaj luki: "p" dziura tej pary (rynek działał, cena się ruszała), "w" wspólna (rynek nieczynny / przerwa
+    źródła), "q" bez ruchu (≤ 3 h, cena po luce taka jak przed — nic nie przepadło). Pole „wspólne” = w + q.
     """
+    from .config import PAIRS
+
     exp, miss, pres_sets, mins_map = {}, {}, {}, {}
     for pair, info in month_info.items():
         ts, mins = _present(frames.get(pair))
@@ -178,6 +190,34 @@ def source_coverage(month_info: dict[str, list[dict]], frames: dict[str, pd.Data
         missing = mc[np.searchsorted(mu, mh)] if len(mh) else np.empty(0, np.int64)
         common = (cover >= COMMON_MIN_PAIRS) & (missing >= COMMON_SHARE * cover)
 
+        # zakresy luk: kolejne godziny w ciągu oczekiwanych (luka przez weekend to jedna luka)
+        gaps = []
+        if len(mh):
+            pos = np.searchsorted(e, mh)
+            # cięcie: przerwa w ciągu oczekiwanych godzin, zmiana rodzaju albo miesiąc bez danych pomiędzy
+            cut = np.flatnonzero((np.diff(pos) != 1) | (np.diff(common.astype(np.int8)) != 0)
+                                 | (np.diff(mh) > 4 * DAY)) + 1
+            o_pres, o_cov = (other or {}).get(pair, (None, None))
+            df = frames.get(pair)
+            px = df is not None and {"open", "close"} <= set(df.columns) and pair in PAIRS
+            if px:
+                ord_ = np.argsort(ts)
+                ts_s, op_s, cl_s = ts[ord_], df["open"].to_numpy(float)[ord_], df["close"].to_numpy(float)[ord_]
+            quiet = np.zeros(len(mh), bool)
+            for seg_i, seg_h, seg_c in zip(np.split(np.arange(len(mh)), cut), np.split(mh, cut), np.split(common, cut)):
+                conf = -1
+                if o_cov is not None and np.isin(seg_h, o_cov).all():
+                    conf = int(np.isin(seg_h, o_pres).sum())
+                kind = "w" if seg_c[0] else "p"
+                # D-028: krótka luka, po której cena się nie ruszyła — rynek stał, nie ma czego brakować
+                if kind == "p" and px and len(seg_h) <= QUIET_MAX_H:
+                    j = np.searchsorted(ts_s, seg_h[0])
+                    if 0 < j < len(ts_s) and abs(op_s[j] - cl_s[j - 1]) / PAIRS[pair].pip < QUIET_PIPS:
+                        kind = "q"
+                        quiet[seg_i] = True
+                gaps.append([int(seg_h[0]), int(seg_h[-1]) + H, int(len(seg_h)), kind, conf])
+            common = common | quiet
+        # dziury = tylko luki, w których rynek działał i cena się ruszała; wspólne i „bez ruchu” liczone osobno
         n = len(info)
         holes = np.bincount(month_index(mh[~common], start), minlength=n)[:n]
         shared = np.bincount(month_index(mh[common], start), minlength=n)[:n]
@@ -198,19 +238,6 @@ def source_coverage(month_info: dict[str, list[dict]], frames: dict[str, pd.Data
             else:  # bez danych: oczekiwane wg kalendarza całego miesiąca — tyle brakuje
                 rows.append([mi["status"], int(len(expected_hours(*mi["cal"]))) if mi["status"] != EMPTY else 0, 0, 0, 0, 0, 0])
 
-        # zakresy luk: kolejne godziny w ciągu oczekiwanych (luka przez weekend to jedna luka)
-        gaps = []
-        if len(mh):
-            pos = np.searchsorted(e, mh)
-            # cięcie: przerwa w ciągu oczekiwanych godzin, zmiana rodzaju albo miesiąc bez danych pomiędzy
-            cut = np.flatnonzero((np.diff(pos) != 1) | (np.diff(common.astype(np.int8)) != 0)
-                                 | (np.diff(mh) > 4 * DAY)) + 1
-            o_pres, o_cov = (other or {}).get(pair, (None, None))
-            for seg_p, seg_h, seg_c in zip(np.split(pos, cut), np.split(mh, cut), np.split(common, cut)):
-                conf = -1
-                if o_cov is not None and np.isin(seg_h, o_cov).all():
-                    conf = int(np.isin(seg_h, o_pres).sum())
-                gaps.append([int(seg_h[0]), int(seg_h[-1]) + H, int(len(seg_h)), "w" if seg_c[0] else "p", conf])
         out[pair] = {"m": rows, "gaps": gaps}
     return {"pairs": out}
 

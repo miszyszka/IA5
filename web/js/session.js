@@ -11,6 +11,10 @@ export function isExpectedBar(ts) {
   if (day === 6) return false;
   if (day === 5 && hr >= 21) return false;
   if (day === 0 && hr < 22) return false;
+  // święta FX: 24.12 od 21:00 do 25.12 22:00 UTC i 31.12 od 21:00 do 1.01 22:00 UTC — rynek nieczynny (D-028)
+  const mo = d.getUTCMonth() + 1, dom = d.getUTCDate();
+  if (((mo === 12 && dom === 24) || (mo === 12 && dom === 31)) && hr >= 21) return false;
+  if (((mo === 12 && dom === 25) || (mo === 1 && dom === 1)) && hr < 22) return false;
   return true;
 }
 
@@ -80,7 +84,8 @@ export const FLAG_LABEL = {
  * Audyt świeca po świecy z meta/status.recent (D-027): { start, pairs: { PARA: napis, 1 znak = 1 godzina } }.
  * Znaki z Apps Script: '1' jest, 'l' spóźniona (> 20 min po zamknięciu), 'f' z flagą jakości, '.' brak.
  * Zwraca { hours: [ts…], pairs: { PARA: [stan…] } } tylko do ostatniej zamkniętej godziny;
- * stany: ok, late, flag, missing (oczekiwana, a brak > 20 min po zamknięciu), pending (zamknięta < 20 min temu), closed (poza sesją).
+ * stany: ok, late, flag, missing (oczekiwana, a brak > 20 min po zamknięciu), pending (zamknięta < 20 min temu), closed (poza sesją i święta),
+ * allgap (brak w ≥ 75% par naraz — rynek nieczynny albo przerwa Yahoo, nie brak tej pary).
  */
 export function recentCells(recent, now, graceS = 20 * 60) {
   if (!recent?.pairs) return null;
@@ -88,6 +93,10 @@ export function recentCells(recent, now, graceS = 20 * 60) {
   const hours = [];
   for (let ts = recent.start; ts <= last; ts += H) hours.push(ts);
   const pairs = {};
+  const names = Object.keys(recent.pairs);
+  // D-028: godzina, której brakuje w ≥ 75% par, to rynek nieczynny (święto spoza kalendarza) albo przerwa Yahoo —
+  // nie zaznaczamy jej jako brak konkretnej pary
+  const allGap = hours.map((ts, i) => names.length >= 3 && names.filter((p) => (recent.pairs[p][i] ?? '.') === '.').length >= 0.75 * names.length);
   for (const [p, str] of Object.entries(recent.pairs)) {
     pairs[p] = hours.map((ts, i) => {
       const c = str[i] ?? '.';
@@ -95,7 +104,8 @@ export function recentCells(recent, now, graceS = 20 * 60) {
       if (c === 'l') return 'late';
       if (c === 'f') return 'flag';
       if (!isExpectedBar(ts)) return 'closed';
-      return now - (ts + H) > graceS ? 'missing' : 'pending';
+      if (now - (ts + H) <= graceS) return 'pending';
+      return allGap[i] ? 'allgap' : 'missing';
     });
   }
   return { hours, pairs };
