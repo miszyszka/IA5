@@ -1,6 +1,29 @@
 {
  "strategies": [
   {
+   "id": "eIxqXZ5hlh0yDzW6Wmus",
+   "name": "strategia 3",
+   "run_id": "20261027-181812",
+   "created": 1793125092,
+   "verdict": "red",
+   "verdict_note": "brak przewagi",
+   "n_variants": 1248,
+   "hypothesis": "W wyraźnym trendzie (EMA200 na H1 i EMA50 na H4) skrajny ruch przeciw trendowi (RSI14 za 70/30)\nzwykle się wyczerpuje — ale wejście w chwili przebicia łapie też te ruchy, które są początkiem odwrócenia trendu\ni dają największe straty. Czekamy więc na dowód wyczerpania: RSI wraca zza poziomu, a świeca zamyka się\nw kierunku trendu. Każda pozycja ma stop cenowy w ATR, więc pojedyncza pomyłka kosztuje z góry znaną kwotę.",
+   "pairs": [
+    "EURUSD"
+   ],
+   "data_from": 1052082000,
+   "data_to": 1793055600,
+   "source": "dukascopy",
+   "engine_version": "0.6.0",
+   "best_exit": "ATR14 TP 2× SL 1× max 120",
+   "is_mean_r": 0.11137,
+   "oos_mean_r": -0.194174,
+   "oos_mean_pips": -0.746124,
+   "oos_trades": 38,
+   "demo": false
+  },
+  {
    "id": "3JIF1vMloW2HVlObaegX",
    "name": "Strategia 2 (jedna pozycja)",
    "run_id": "20261027-175940",
