@@ -86,6 +86,22 @@ def heartbeat(state: str, job: dict | None = None, sync: dict | None = None) -> 
     db().collection("runner").document("heartbeat").set(doc)
 
 
+def list_strategies() -> list[dict]:
+    """Wszystkie strategie (do przeglądu zdrowia; tyle odczytów, ile strategii — kilka-kilkanaście)."""
+    out = []
+    for snap in db().collection("strategies").stream():
+        d = snap.to_dict() or {}
+        if hasattr(d.get("createdAt"), "timestamp"):
+            d["createdAt"] = int(d["createdAt"].timestamp())
+        out.append({"id": snap.id, **{k: d.get(k) for k in ("name", "status", "error", "createdAt", "frozenAt")}})
+    return out
+
+
+def write_health(h: dict) -> None:
+    """meta/status.health — 1 zapis na przegląd (co godzinę ≈ 24 zapisy/dobę, D-023)."""
+    db().collection("meta").document("status").set({"health": h}, merge=True)
+
+
 def set_data_sha(sha: str) -> None:
     db().collection("meta").document("status").set({"dataSha": sha}, merge=True)
 

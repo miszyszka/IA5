@@ -104,10 +104,34 @@ def do_sync(progress=None, live: dict | None = None, beat=None) -> None:
         log(f"  {pair}: dziury {holes} h · brakujące miesiące {left}")
 
     log("Publikacja na gałąź data…")
-    sha = publish.publish_candles(yahoo, source="yahoo", log=lambda m: log(m))
-    sha = publish.publish_coverage(cov, log=lambda m: log(m)) or sha
-    if sha:
-        cloud.set_data_sha(sha)
+    publish_error = None
+    try:
+        sha = publish.publish_candles(yahoo, source="yahoo", log=lambda m: log(m))
+        sha = publish.publish_coverage(cov, log=lambda m: log(m)) or sha
+        if sha:
+            cloud.set_data_sha(sha)
+    except Exception as e:  # noqa: BLE001 — brak publikacji nie zatrzymuje programu; zgłasza go przegląd zdrowia
+        publish_error = str(e)[:300]
+        log(f"  publikacja nie powiodła się: {publish_error}")
+    until_ts = int(datetime(until.year, until.month, until.day, tzinfo=UTC).timestamp()) + 86400
+    return {"h1": h1, "yahoo": yahoo, "cov": cov, "until_ts": until_ts, "publish_error": publish_error}
+
+
+def do_health(ctx: dict, beat_state: str | None = None, write: bool = True) -> dict:
+    """Przegląd zdrowia (D-023) na danych z ostatniej synchronizacji i świeżym meta/status."""
+    from . import cloud, health
+
+    try:
+        docs = cloud.list_strategies()
+    except Exception:  # noqa: BLE001
+        docs = None
+    h = health.run(cloud.read_status(), ctx["h1"], ctx["yahoo"], ctx["cov"], ctx["until_ts"], docs=docs,
+                   beat_state=beat_state, publish_error=ctx.get("publish_error"), home=HOME)
+    if write:
+        cloud.write_health(h)
+    bad = [c for c in h["checks"] if c["state"] != "ok"]
+    log(f"Przegląd zdrowia: {h['summary'] if bad else 'wszystko w porządku'}")
+    return h
 
 
 def cmd_start(_args) -> int:
@@ -149,9 +173,10 @@ def cmd_start(_args) -> int:
         state["job"] = {"id": "sync", "name": name, "progress": pct}
 
     state["sync"] = {}
-    do_sync(progress=sync_progress, live=state["sync"], beat=beat_now)
+    ctx = do_sync(progress=sync_progress, live=state["sync"], beat=beat_now)
     state["job"] = None
     state["sync"] = None
+    safe_health(ctx, "idle")
 
     owner = config().get("owner_uid")
     jobs: queue.Queue = queue.Queue()
@@ -174,17 +199,22 @@ def cmd_start(_args) -> int:
     cloud.heartbeat("idle")
     enqueue_frozen(jobs, owner)
     log("Połączony. Czekam na strategie (Ctrl+C kończy).")
-    last_sync = time.time()
+    last_sync = last_health = time.time()
     while True:
         try:
             sid, data = jobs.get(timeout=60)
         except queue.Empty:
+            if time.time() - last_health > HEALTH_SECONDS:
+                safe_health(ctx, state["now"])
+                last_health = time.time()
             if time.time() - last_sync > RESYNC_SECONDS:  # nowe świece → forward test zamrożonych (W4)
                 state["now"] = "syncing"
                 state["sync"] = {}
-                do_sync(progress=sync_progress, live=state["sync"], beat=beat_now)
+                ctx = do_sync(progress=sync_progress, live=state["sync"], beat=beat_now)
                 state["job"] = None
                 state["sync"] = None
+                safe_health(ctx, "idle")
+                last_health = time.time()
                 last_sync = time.time()
                 state["now"] = "idle"
                 enqueue_frozen(jobs, owner)
@@ -198,6 +228,14 @@ def cmd_start(_args) -> int:
 
 
 RESYNC_SECONDS = 6 * 3600
+HEALTH_SECONDS = 3600
+
+
+def safe_health(ctx: dict, beat_state: str | None) -> None:
+    try:
+        do_health(ctx, beat_state)
+    except Exception as e:  # noqa: BLE001 — przegląd nie może zatrzymać programu
+        log(f"Przegląd zdrowia: błąd — {e}")
 
 
 def enqueue_frozen(jobs: queue.Queue, owner: str | None) -> None:
@@ -264,9 +302,27 @@ def handle_delete(sid: str) -> None:
 def cmd_sync(_args) -> int:
     from . import cloud
 
-    do_sync()
+    safe_health(do_sync(), None)
     cloud.heartbeat("offline")
     return 0
+
+
+def cmd_health(_args) -> int:
+    """Opisowy przegląd zdrowia na danych lokalnych, bez pobierania; wynik też na dashboard (Stats)."""
+    from datetime import UTC, datetime, timedelta
+
+    import pandas as pd
+
+    from . import coverage, health
+
+    load = lambda d: {p: pd.read_parquet(d / f"{p}.parquet") for p in PAIRS if (d / f"{p}.parquet").exists()}  # noqa: E731
+    h1, yahoo = load(DATA / "h1"), load(DATA / "yahoo")
+    until = datetime.now(UTC).date() - timedelta(days=1)
+    ctx = {"h1": h1, "yahoo": yahoo, "cov": coverage.build(DATA, h1, yahoo, until=until) if h1 else None,
+           "until_ts": int(datetime(until.year, until.month, until.day, tzinfo=UTC).timestamp()) + 86400}
+    h = do_health(ctx)
+    print(health.report(h))
+    return 0 if h["state"] != "bad" else 1
 
 
 def cmd_run(args) -> int:
@@ -327,6 +383,7 @@ def main(argv=None) -> int:
     p_chk.add_argument("--h1")
     p_chk.set_defaults(func=cmd_check)
     sub.add_parser("status").set_defaults(func=cmd_status)
+    sub.add_parser("health", help="opisowy przegląd zdrowia danych i projektu").set_defaults(func=cmd_health)
     args = parser.parse_args(argv)
     return args.func(args)
 
