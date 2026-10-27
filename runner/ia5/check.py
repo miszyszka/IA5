@@ -56,6 +56,13 @@ def check_code_on(code: str, h1_dir: Path) -> dict:
     info.append(f"Warianty: {len(params)} wejścia × {n_exits} wyjść = {n_var}.")
     if n_var > MAX_VARIANTS_WARN:
         warnings.append(f"{n_var} wariantów — przy tak dużym przeszukaniu DSR i PBO mocno ukarzą wynik (W2). Zawęź PARAMS.")
+    if meta.get("pyramid", 1) > 1:
+        info.append(f"Dokładanie: do {meta['pyramid']} pozycji naraz w parze (PYRAMID, D-034).")
+    if meta.get("hours") is False:
+        info.append("Bez okna godzin: wejścia o każdej porze (HOURS = False, D-034).")
+    w = sig["sig"].abs() if len(sig) else sig["sig"]
+    if len(w) and (w != 1).any():
+        info.append(f"Wagi pozycji: od {w.min():.2f} do {w.max():.2f} (średnio {w.mean():.2f}).")
     if not meta.get("hypothesis"):
         warnings.append("Brak HYPOTHESIS — spisz w 1–3 zdaniach, dlaczego to ma działać, zanim zobaczysz wynik.")
 
@@ -78,7 +85,7 @@ def check_code_on(code: str, h1_dir: Path) -> dict:
         if tab["pct_bars"].max() > 10:
             warnings.append(f"Sygnał w {tab['pct_bars'].max():.0f}% świec — to raczej stan niż zdarzenie. "
                             "Użyj ind.cross_above / cross_below albo warunku „pierwsza świeca, w której…”.")
-        if tab["consecutive"].max() > 0.5:
+        if tab["consecutive"].max() > 0.5 and meta.get("pyramid", 1) == 1:
             warnings.append("Ponad połowa sygnałów pada w kolejnych świecach (stan zamiast zdarzenia). Silnik i tak "
                             "pominie je przy otwartej pozycji (B8), ale lepiej sygnalizować tylko moment wejścia.")
         if tab["short"].sum() == 0:

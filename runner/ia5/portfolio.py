@@ -23,6 +23,7 @@ def simulate_equity(t: pd.DataFrame, pct: float, capital: float = START_CAPITAL,
     if t.empty:
         return {"ts": [], "equity": [], "taken": 0, "skipped_margin": 0, "final": capital}
     ret = trade_returns(t)
+    wts = t["weight"].to_numpy(float) if "weight" in t else np.ones(len(t))
     ev = []  # (czas, typ: 0=wyjście przed 1=wejście w tej samej chwili, indeks)
     for k, (a, b) in enumerate(zip(t["entry_ts"].to_numpy(), t["exit_ts"].to_numpy())):
         ev.append((int(a), 1, k))
@@ -35,7 +36,7 @@ def simulate_equity(t: pd.DataFrame, pct: float, capital: float = START_CAPITAL,
     skipped = 0
     for ts, kind, k in ev:
         if kind == 1:
-            m = eq * pct / 100
+            m = eq * pct / 100 * wts[k]  # D-034: waga pozycji mnoży depozyt
             if margin_used + m > eq + 1e-9 or eq <= 0:
                 skipped += 1
                 continue

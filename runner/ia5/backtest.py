@@ -96,7 +96,7 @@ def trades_table(res: dict) -> pd.DataFrame:
     o, e = res["outcomes"], res["entries"]
     if o.empty:
         return pd.DataFrame()
-    t = o.merge(e[["entry_id", "entry_i", "dir", "entry_ts", "entry_px"]], on="entry_id")
+    t = o.merge(e[["entry_id", "entry_i", "dir", "weight", "entry_ts", "entry_px"]], on="entry_id")
     t = t.sort_values(["variant_id", "entry_ts"], kind="stable").reset_index(drop=True)
     return pd.DataFrame({
         "variant_id": t["variant_id"].astype(np.int32), "pair": t["pair"].astype(str),
@@ -106,7 +106,7 @@ def trades_table(res: dict) -> pd.DataFrame:
         "pips_gross": t["pips_gross"].astype(np.float32), "pips_net": t["pips_net"].astype(np.float32),
         "r_net": t["r_net"].astype(np.float32), "mae": t["mae"].astype(np.float32), "mfe": t["mfe"].astype(np.float32),
         "bars": t["bars"].astype(np.int16), "ambiguous": t["ambiguous"].astype(bool),
-        "sample": t["sample"].astype(str), "entry_i": t["entry_i"].astype(np.int32),
+        "sample": t["sample"].astype(str), "weight": t["weight"].astype(np.float32), "entry_i": t["entry_i"].astype(np.int32),
     })
 
 
@@ -126,7 +126,7 @@ def clean(x):
 
 
 def validate_best(res: dict, variants: pd.DataFrame, trades: pd.DataFrame, exits: list[Exit], signals: dict,
-                  h1: dict, sizing, log=print) -> dict:
+                  h1: dict, sizing, log=print, hours=None) -> dict:
     ranked = variants.dropna(subset=["rank_is"]).sort_values("rank_is")
     if ranked.empty:
         return {"verdict": {"color": "yellow", "note": "żaden wariant nie ma 30 transakcji IS", "checks": []}}
@@ -141,7 +141,7 @@ def validate_best(res: dict, variants: pd.DataFrame, trades: pd.DataFrame, exits
                  "is_mean_r": float(best["is_exp_r"])}
     log("Walidacja: benchmark losowych wejść (1000 losowań)…")
     sig_best = {pair: signals[(pid, pair)] for pair in h1}
-    out["benchmark"] = random_benchmark(res["preps"], bt, ex, signals=sig_best)
+    out["benchmark"] = random_benchmark(res["preps"], bt, ex, signals=sig_best, hours=hours)
     log("Walidacja: Deflated Sharpe, PBO, walk-forward…")
     is_t = trades[trades["sample"] == "IS"]
     sharpes = is_t.groupby("variant_id")["r_net"].apply(lambda r: per_trade_sharpe(r.to_numpy(float))
@@ -200,19 +200,22 @@ def run_file(code: str, name: str, h1_dir: Path, out_root: Path, m1_dir: Path | 
     signals = {}
     for pid in range(len(meta["params"])):
         for pair, df in h1.items():
-            arr = np.zeros(len(df), np.int8)
+            arr = np.zeros(len(df), np.float32)
             part = sig[(sig.param_id == pid) & (sig.pair == pair)]
-            arr[part["i"].to_numpy(int)] = part["sig"].to_numpy(np.int8)
+            arr[part["i"].to_numpy(int)] = part["sig"].to_numpy(np.float32)
             signals[(pid, pair)] = arr
     exits = exits_from(meta.get("exits"))
     sizing = [float(x) for x in (meta.get("sizing") or DEFAULT_SIZING)]
     log(f"Silnik: {len(meta['params'])} wariant(y) wejścia × {len(exits)} wyjść × {len(h1)} par…")
     use_m1 = m1_dir is not None and m1_dir.exists() and any(m1_dir.iterdir())
     resolver = m1_resolver_lazy(m1_dir) if use_m1 else None
-    res = run(h1, signals, meta["params"], exits=exits, resolver=resolver)
+    hours = meta.get("hours")  # D-034: None = okno z config (B11), False = bez okna, [od, do] = własne
+    hours = tuple(hours) if isinstance(hours, list) else hours
+    pyramid = int(meta.get("pyramid") or 1)
+    res = run(h1, signals, meta["params"], exits=exits, resolver=resolver, hours=hours, pyramid=pyramid)
     variants = variant_table(res)
     trades = trades_table(res)
-    validation = validate_best(res, variants, trades, exits, signals, h1, sizing, log=log)
+    validation = validate_best(res, variants, trades, exits, signals, h1, sizing, log=log, hours=hours)
 
     run_id = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     sid = strategy_id or name
@@ -236,7 +239,8 @@ def run_file(code: str, name: str, h1_dir: Path, out_root: Path, m1_dir: Path | 
         "data_source": source or ("dukascopy" if use_m1 else "inne"), "m1_resolver": resolver is not None,
         "candles": "pełne" if full_candles else f"wycinki ±{CANDLE_PAD} świec wokół transakcji {TOP_FOR_CANDLES} najlepszych wariantów",
         "pairs": sorted(h1), "params": meta["params"], "n_variants": res["n_variants"], "n_exits": len(exits),
-        "oos_cutoff": int(res["cutoff"]), "sizing": sizing,
+        "oos_cutoff": int(res["cutoff"]), "sizing": sizing, "pyramid": pyramid,
+        "hours": "bez okna" if hours is False else (list(hours) if hours else "07–17 czasu polskiego (B11)"),
         "data_from": int(min(df.ts.iloc[0] for df in h1.values())), "data_to": int(max(df.ts.iloc[-1] for df in h1.values())),
         "data_clean": data_clean_info(h1_dir, h1),
         "skipped": res["skipped"], "hypothesis": meta.get("hypothesis"), "trades_rows": int(len(trades)),

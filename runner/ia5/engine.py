@@ -7,6 +7,9 @@ Model wykonania:
 - Wyjście czasowe po N świecach: zamknięcie świecy e+N-1.
 - Wyjścia wskaźnikowe (RSI 50, SMA, sygnał przeciwny): warunek na zamknięciu świecy j → wyjście na open j+1.
 - B8: jedna pozycja na parę na wariant; nowe wejście tylko na świecy późniejszej niż świeca wyjścia.
+  Strategia może pozwolić na dokładanie (PYRAMID = k, D-034): do k pozycji naraz w parze, tylko w jednym kierunku.
+- Waga pozycji (D-034): |sygnał| (domyślnie 1) mnoży depozyt w symulacji kapitału; pipsy i R są na pozycję.
+- Wyjście „seria RSI” (D-034): RSI14 przez `run` kolejnych zamknięć po złej stronie poziomu → wyjście na open następnej.
 - Transakcje, którym zabrakło danych do wyjścia, są odrzucane i liczone.
 
 Obliczenia są wektorowe (numpy) po wszystkich wejściach naraz, osobno dla każdego wariantu wyjścia.
@@ -29,11 +32,13 @@ H = 3600
 
 @dataclass(frozen=True)
 class Exit:
-    kind: str          # time | atr | rsi50 | sma | opposite
+    kind: str          # time | atr | rsi50 | sma | opposite | rsi_streak
     n: int = 14        # time: N świec; atr: okres ATR
     tp: float = 0.0    # × ATR (tylko atr)
     sl: float = 0.0    # × ATR(n) dla atr, × ATR(14) dla wskaźnikowych; 0 = bez SL
     cap: int = W       # limit czasu w świecach (B7)
+    run: int = 0       # rsi_streak: ile kolejnych zamknięć RSI14 po złej stronie poziomu zamyka pozycję
+    level: float = 0.0  # rsi_streak: poziom dla short (np. 70); dla long lustrzany 100 − level (30)
 
     @property
     def family(self) -> str:
@@ -44,6 +49,10 @@ class Exit:
             return f"po {self.n} świecach"
         if self.kind == "atr":
             return f"ATR{self.n} TP {self.tp:g}× SL {self.sl:g}× max {self.cap}"
+        if self.kind == "rsi_streak":
+            tp = f"TP {self.tp:g}×ATR{self.n}, " if self.tp > 0 else ""
+            sl = f"SL {self.sl:g}×ATR14, " if self.sl > 0 else ""
+            return f"{tp}{sl}RSI {self.run} świec za {self.level:g}/{100 - self.level:g}, max {self.cap}"
         name = {"rsi50": "RSI do 50", "sma": "cena przez SMA20", "opposite": "sygnał przeciwny"}[self.kind]
         return f"{name}, SL {self.sl:g}×ATR14, max {self.cap}"
 
@@ -94,12 +103,12 @@ def data_cancel(P: dict, signal_i: np.ndarray, entry_i: np.ndarray, exit_i: np.n
 
 def find_entries(P: dict, sig: np.ndarray) -> pd.DataFrame:
     """B1: sygnał w świecy i → wejście na open świecy i+1."""
-    s = np.nan_to_num(np.asarray(sig, float)).astype(int)
-    i = np.flatnonzero(s != 0)
+    v = np.nan_to_num(np.asarray(sig, float))
+    i = np.flatnonzero(v != 0)
     i = i[i + 1 < len(P["o"])]
     e = i + 1
     return pd.DataFrame({
-        "signal_i": i, "entry_i": e, "dir": s[i].astype(np.int8),
+        "signal_i": i, "entry_i": e, "dir": np.sign(v[i]).astype(np.int8), "weight": np.abs(v[i]),
         "signal_ts": P["ts"][i], "entry_ts": P["ts"][e], "entry_px": P["o"][e],
         "atr5": P["atr5"][i], "atr14": P["atr14"][i],
     })
@@ -127,6 +136,16 @@ def _windows(P: dict, e: np.ndarray, d: np.ndarray, width: int) -> dict:
     }
 
 
+def _streak(x: np.ndarray) -> np.ndarray:
+    """Długość bieżącej serii True kończącej się w każdej świecy (0 gdy False)."""
+    out = np.zeros(len(x), np.int64)
+    run = 0
+    for k, v in enumerate(x):
+        run = run + 1 if v else 0
+        out[k] = run
+    return out
+
+
 def _first(mask: np.ndarray) -> np.ndarray:
     """Indeks pierwszego True w wierszu; brak = szerokość."""
     has = mask.any(axis=1)
@@ -146,12 +165,12 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     cap = ex.cap
     w = _windows(P, e, d, cap + 1)
     En = ent["entry_px"].to_numpy() * d
-    atr = ent[f"atr{ex.n}" if ex.kind == "atr" else "atr14"].to_numpy()
+    atr = ent[f"atr{ex.n}" if ex.kind in ("atr", "rsi_streak") else "atr14"].to_numpy()
 
     # opcjonalny limit świec dla każdego wejścia osobno (kolumna max_bars); domyślnie limit wariantu
     cap_r = np.clip(ent["max_bars"].to_numpy(np.int64), 1, cap) if "max_bars" in ent else np.full(m, cap)
     beyond = np.arange(cap)[None, :] >= cap_r[:, None]
-    tp = En + ex.tp * atr if ex.kind == "atr" else np.full(m, np.inf)
+    tp = En + ex.tp * atr if ex.kind == "atr" or (ex.kind == "rsi_streak" and ex.tp > 0) else np.full(m, np.inf)
     sl = En - ex.sl * atr if ex.sl > 0 else np.full(m, -np.inf)
     Hw, Lw, Ow = w["H"][:, :cap], w["L"][:, :cap], w["O"][:, :cap]
     hit_sl = Lw <= sl[:, None]
@@ -171,8 +190,17 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
         xs = np.where(d[:, None] > 0, r >= 50, r <= 50)
     elif ex.kind == "sma":
         xs = w["C"][:, :cap] < w["sma"][:, :cap]
+    elif ex.kind == "rsi_streak":
+        key = ("streak", ex.level)
+        if key not in P:  # liczone raz na parę i poziom
+            r = np.nan_to_num(P["rsi14"], nan=50.0)
+            P[key] = (_streak(r > ex.level), _streak(r < 100 - ex.level))
+        up, dn = P[key]
+        wi = w["idx"][:, :cap]
+        xs = np.where(d[:, None] < 0, up[wi], dn[wi]) >= ex.run
+        xs &= w["ok"][:, :cap]
     elif ex.kind == "opposite" and opp is not None:
-        o_sig = np.nan_to_num(opp[w["idx"][:, :cap]]).astype(int)
+        o_sig = np.sign(np.nan_to_num(opp[w["idx"][:, :cap]])).astype(int)
         xs = (o_sig == -d[:, None]) & w["ok"][:, :cap]
     if cap > 0:
         xs = xs & ~beyond
@@ -219,7 +247,7 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     exit_n = np.where(xw, w["O"][rows, jx], exit_n)
     exit_j = np.where(xw, jx, exit_j)
     exit_at_open |= xw
-    reason[xw] = {"rsi50": "RSI50", "sma": "SMA", "opposite": "przeciwny"}.get(ex.kind, "")
+    reason[xw] = {"rsi50": "RSI50", "sma": "SMA", "opposite": "przeciwny", "rsi_streak": "seria RSI"}.get(ex.kind, "")
 
     # 3) limit czasu: zamknięcie świecy cap-1
     tw = ~stop & ~xw
@@ -262,23 +290,26 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     return df[cols]
 
 
-def no_overlap(entry_i: np.ndarray, exit_i: np.ndarray) -> np.ndarray:
-    """B8: maska wejść wykonanych przy jednej pozycji naraz (kolejność rosnąca entry_i)."""
+def no_overlap(entry_i: np.ndarray, exit_i: np.ndarray, dirs: np.ndarray | None = None, cap: int = 1) -> np.ndarray:
+    """B8: maska wykonanych wejść (kolejność rosnąca entry_i). cap = najwięcej pozycji naraz w parze (PYRAMID, D-034);
+    pozycja jest otwarta do swojej świecy wyjścia włącznie; dokładać można tylko w kierunku już otwartych pozycji."""
     keep = np.zeros(len(entry_i), bool)
-    last = -1
+    open_: list[tuple[float, int]] = []
     for k in range(len(entry_i)):
         if np.isnan(exit_i[k]):
             continue
-        if entry_i[k] > last:
+        open_ = [o for o in open_ if o[0] >= entry_i[k]]
+        d = int(dirs[k]) if dirs is not None else 0
+        if len(open_) < cap and all(o[1] == d for o in open_):
             keep[k] = True
-            last = exit_i[k]
+            open_.append((exit_i[k], d))
     return keep
 
 
 # ---------- uruchomienie dla strategii ----------
 
 def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray], params: list[dict],
-        exits: list[Exit] | None = None, resolver=None, oos_frac: float = 0.25, hours=None) -> dict:
+        exits: list[Exit] | None = None, resolver=None, oos_frac: float = 0.25, hours=None, pyramid: int = 1) -> dict:
     """Pełny przebieg: wszystkie warianty wejścia (params) × wszystkie wyjścia × wszystkie pary.
 
     signals[(param_id, pair)] = tablica sygnałów (+1/-1/0) na świecach h1[pair].
@@ -320,7 +351,7 @@ def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray],
             cancel = gap | fill
             xi = res["exit_i"].to_numpy(float).copy()
             xi[cancel] = np.nan
-            keep = no_overlap(ent["entry_i"].to_numpy(), xi)
+            keep = no_overlap(ent["entry_i"].to_numpy(), xi, ent["dir"].to_numpy(), pyramid)
             skipped["brak_danych"] += int(missing.sum())
             skipped["luka_danych"] += int(gap.sum())
             skipped["swieca_uzupelniona"] += int(fill.sum())

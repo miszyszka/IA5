@@ -45,6 +45,8 @@ def signals(df, p, ind):       # WYMAGANE — dokładnie ta nazwa i te trzy argu
 
 # EXITS = [...]                # opcjonalne: własna siatka wyjść zamiast domyślnej (sekcja 5)
 # SIZING = [5, 10, 20]         # opcjonalne: % kapitału jako depozyt (domyślnie 5, 10, 15, 20, 30)
+# PYRAMID = 5                  # opcjonalne, tylko na życzenie: do 5 pozycji naraz w parze, jeden kierunek (D-034)
+# HOURS = False                # opcjonalne, tylko na życzenie: bez okna 07–17 (albo (od, do) czasu polskiego)
 ```
 
 | Element | Szczegóły |
@@ -52,7 +54,7 @@ def signals(df, p, ind):       # WYMAGANE — dokładnie ta nazwa i te trzy argu
 | `df` | Świece H1 **jednej** pary: kolumny `open`, `high`, `low`, `close` (ceny mid z Dukascopy). Indeks `DatetimeIndex` w UTC = czas **otwarcia** świecy. Tylko zamknięte świece. Funkcja jest wołana osobno dla każdej z 8 par. |
 | `p` | Słownik z jedną kombinacją `PARAMS` (np. `{"level": 25, "n": 20}`); `{}` gdy brak `PARAMS`. |
 | `ind` | Biblioteka wskaźników (sekcja 3). Własnych RSI/ATR/EMA nie piszemy (B9). |
-| wynik | `pd.Series` na tym samym indeksie (albo tablica tej samej długości) z wartościami `-1`, `0`, `1`; `True/False` też działa (`.astype("int8")`). `NaN` = 0. |
+| wynik | `pd.Series` na tym samym indeksie (albo tablica tej samej długości) z wartościami `-1`, `0`, `1`; `True/False` też działa (`.astype("int8")`). `NaN` = 0. Liczba = kierunek × **waga** (0,1–10, np. `-1.6`): waga mnoży depozyt w symulacji kapitału; pipsy i R są na pozycję (D-034). |
 | moment | Sygnał w świecy `t` znaczy: warunek spełniony **na zamknięciu** `t`. Wejście silnik robi na **open** `t+1` (B1). |
 | godziny | Silnik wchodzi tylko wtedy, gdy świeca `t+1` zaczyna się **07:00–16:00 czasu polskiego** (B11, najniższe spready). Sygnały poza oknem są pomijane i liczone w raporcie — strategia nie musi sama filtrować godzin. Wyjście na dowolnej świecy (także po nocy i weekendzie), według wariantu wyjścia. |
 | importy | Tylko `numpy`, `pandas`, `math`. Zakazane: `open`, `exec`, `eval`, `compile`, `__import__`, atrybuty `__…`. |
@@ -143,6 +145,8 @@ EXITS = [
     {"kind": "rsi50", "n": 14, "sl": 2.0, "cap": 120},                   # RSI wraca do 50, SL 2×ATR14
     {"kind": "sma", "n": 14, "sl": 2.0, "cap": 120},                     # zamknięcie po złej stronie SMA20
     {"kind": "opposite", "n": 14, "sl": 2.0, "cap": 120},                # sygnał przeciwny z signals()
+    {"kind": "rsi_streak", "n": 14, "tp": 1.5, "run": 6, "level": 70, "cap": 120},
+    # ↑ TP 1,5×ATR14; RSI14 6 zamknięć z rzędu > 70 (short) / < 30 (long) → wyjście na open następnej (D-034)
 ]
 ```
 
@@ -165,7 +169,7 @@ Każde wyjście musi mieć SL albo limit czasu (B7).
 
 ## 7. Przykłady (każdy sprawdzany w CI)
 
-`strategies/examples/`: `sma200_rsi_pullback.py`, `donchian_breakout.py`, `bollinger_reversion.py`, `macd_trend_adx.py`, `asia_range_breakout.py` (poziomy sesji bez look-ahead), `stoch_session_reversal.py` (filtry czasu).
+`strategies/examples/`: `rsi_trend_pyramid.py` (dokładanie z wagami, `PYRAMID`, `HOURS`, wyjście `rsi_streak`), `rsi_trend_single.py` (to samo, 1 pozycja), `sma200_rsi_pullback.py`, `donchian_breakout.py`, `bollinger_reversion.py`, `macd_trend_adx.py`, `asia_range_breakout.py` (poziomy sesji bez look-ahead), `stoch_session_reversal.py` (filtry czasu).
 
 ---
 

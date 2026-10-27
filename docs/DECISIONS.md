@@ -5,6 +5,16 @@ Najnowsze na górze.
 
 ---
 
+### D-034 · 2026-10-27 · Dokładanie pozycji, wagi, wyjście „seria RSI”, strategia bez okna godzin
+- **Decyzja (Michał), przy strategii „RSI 70/30 w silnym trendzie”:** „do 5 pozycji na wybicie: kolejna, gdy RSI na zamknięciu pobije rekord z ostatniego wejścia; waga = 1 + (odległość RSI od progu) / 5, maksymalnie 3”; „zamknięcie wszystkiego, gdy RSI 6 świec z rzędu > 70 przy short (< 30 przy long), wyjście na open następnej świecy”; „bez okna godzin”; „dla porównania druga wersja: 1 pozycja, stała stawka”.
+- **B8:** domyślnie bez zmian (1 pozycja na parę). Strategia może ustawić `PYRAMID = k` (1–10): do k pozycji naraz w parze, tylko w jednym kierunku; pozycja zajmuje miejsce do swojej świecy wyjścia włącznie. Każda pozycja ma własne TP (od własnej ceny wejścia, ATR ze swojej świecy sygnału) i własny limit czasu.
+- **Wagi:** sygnał może być liczbą: znak = kierunek, |sygnał| (0,1–10) = waga. Waga mnoży depozyt w symulacji kapitału (Python i przeglądarka, B4: suma depozytów ≤ 100% — nadwyżka pominięta). Pipsy, R, ranking, DSR, PBO i benchmark losowy liczone na pozycję, bez wag — żeby wagi nie mnożyły prób i nie zmieniały definicji przewagi transakcji.
+- **Nowe wyjście `rsi_streak`** (`run`, `level`, opcjonalnie `tp`×ATR(n), `sl`, `cap`): RSI14 przez `run` kolejnych zamknięć po złej stronie poziomu (short > level, long < 100 − level) → wyjście na open następnej świecy. Seria liczona na RSI całej pary, więc zamyka wszystkie otwarte pozycje naraz. TP w świecy ma pierwszeństwo przed wyjściem na open następnej.
+- **B11:** strategia może ustawić `HOURS = False` (bez okna) albo `HOURS = (od, do)` w godzinach czasu polskiego; domyślnie 07–17. Benchmark losowy losuje w tym samym oknie.
+- Logika dokładania (epizod, rekord RSI, licznik do 5, waga) jest w kodzie strategii, nie w silniku — silnik tylko pilnuje limitu i kierunku.
+- `ENGINE_VERSION` 0.6.0 (domyślne zachowanie bez zmian, ale B10).
+- **Odrzucone:** dokładanie wbudowane w silnik (każda strategia ma inną regułę dokładania); wagi jako osobne warianty w rankingu (mnożyłyby próby, W2); wyjście „seria RSI” liczone od świecy wejścia zamiast od początku przesady (Michał: „6 świec z rzędu” — świeca przebicia jest pierwszą).
+
 ### D-033 · 2026-10-27 · Świece Yahoo najszybciej, jak się da; audyt ostatniej doby z zegarem od pełnej godziny
 - **Decyzja (Michał):** „Jak wybija pełna godzina, musi się zacząć odliczanie na czerwono przy każdej parze i trwać, dopóki nowa świeca nie zostanie zapisana. Skrypt ma pobierać najnowsze świece najszybciej, jak to możliwe. Mapa Yahoo: ostatnia doba, każda świeca podpisana godziną, trwająca godzina jako przerywana kratka.”
 - **Apps Script:** wyzwalacz co 1 min (najkrótszy w Apps Script). Gdy wszystkie pary mają oczekiwaną świecę — koniec po odczycie Script Properties. W pierwszej minucie po pełnej godzinie skrypt czeka do +61 s (D2), potem rundy co 15 s tylko dla brakujących par, przez 10 min po zamknięciu, najwyżej 100 s na uruchomienie (blokada nie pozwala nałożyć się dwóm). Status zapisywany po każdej rundzie z nową świecą — dashboard zatrzymuje zegar tej pary od razu. W arkuszu `log` tylko wiersze z nową świecą, flagą albo błędem.

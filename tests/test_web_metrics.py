@@ -21,6 +21,7 @@ def test_dashboard_js(tmp_path):
     t = pd.DataFrame({"pair": rng.choice(["EURUSD", "USDJPY", "EURGBP"], n), "entry_ts": entry,
                       "exit_ts": entry + 3600 * rng.integers(1, 60, n), "pips_net": rng.normal(1, 20, n).round(1)})
     t["entry_px"] = t["pair"].map({"EURUSD": 1.1, "USDJPY": 150.0, "EURGBP": 0.85})
+    t["weight"] = rng.choice([1.0, 1.0, 1.6, 3.0], n)  # D-034: wagi pozycji — JS i Python muszą liczyć tak samo
     expected = {}
     for pct in (5, 10, 15, 20, 30):
         c = simulate_equity(t, pct)

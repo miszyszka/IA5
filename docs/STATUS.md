@@ -28,6 +28,8 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 - **D-033:** Apps Script co 1 min + rundy co 15 s po pełnej godzinie; nagłówek i Stats → Yahoo: czerwony zegar od pełnej godziny do zapisu, audyt ostatniej doby z godzinami.
 - Wykres transakcji: okna zamiast sklejonych wycinków, nawigacja ← → (D-031a). 107 testów + Node zielone.
 
+- **D-034:** dokładanie pozycji (`PYRAMID`), wagi pozycji (|sygnał| mnoży depozyt), wyjście `rsi_streak`, `HOURS = False` dla strategii; `ENGINE_VERSION` 0.6.0. Strategie „RSI 70/30 w silnym trendzie” w dwóch wersjach: `strategies/examples/rsi_trend_pyramid.py` i `rsi_trend_single.py`. 122 testy + Node zielone.
+
 **Następne (Michał)**
 0. Wkleić nowy `apps_script/Code.gs` do Apps Script, zapisać i **raz uruchomić `installTrigger()`** (wyzwalacz co 1 min zamiast co 5).
 1. Na Macu: przerwij działające `ia5 start` (Ctrl+C), `git pull`. Potem **dwa terminale**: w pierwszym `ia5 fetch` (pobiera, działa bez końca), w drugim `ia5 start` (liczy).

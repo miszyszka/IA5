@@ -50,7 +50,7 @@ export function simulateEquity(trades, pct, capital = START_CAPITAL, leverage = 
   const ts = [Math.min(...trades.map((t) => t.entry_ts))], equity = [capital];
   for (const [time, kind, k] of ev) {
     if (kind === 1) {
-      const m = (eq * pct) / 100;
+      const m = ((eq * pct) / 100) * (trades[k].weight ?? 1); // D-034: waga pozycji mnoży depozyt
       if (used + m > eq + 1e-9 || eq <= 0) { skipped++; continue; }
       open.set(k, m); used += m;
     } else if (open.has(k)) {

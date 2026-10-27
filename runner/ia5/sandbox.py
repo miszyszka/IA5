@@ -24,6 +24,9 @@ LOOKAHEAD_CUTS = 8
 DENSE_CUTS = 24
 DENSE_BARS = 2000
 WARMUP = 300
+MIN_WEIGHT, MAX_WEIGHT = 0.1, 10.0   # D-034: |sygnał| = waga pozycji
+MAX_PYRAMID = 10
+W_MAX = 120
 
 
 class StrategyError(Exception):
@@ -74,9 +77,42 @@ def _as_signal(s, df) -> np.ndarray:
         if len(v) != len(df):
             raise StrategyError("signals() zwróciło inną liczbę wartości niż świec")
     v = np.nan_to_num(v.astype(float))
-    if not np.isin(v, (-1, 0, 1)).all():
-        raise StrategyError("Sygnał może mieć tylko wartości −1, 0, +1")
-    return v.astype(np.int8)
+    a = np.abs(v)
+    if ((a > 0) & (a < MIN_WEIGHT) | (a > MAX_WEIGHT)).any():
+        raise StrategyError(f"Sygnał: 0 albo ±waga, waga od {MIN_WEIGHT:g} do {MAX_WEIGHT:g} (+1 / −1 = zwykła pozycja)")
+    return v.astype(np.float32)
+
+
+def read_settings(ns: dict) -> dict:
+    """Ustawienia modułu strategii poza PARAMS/EXITS/SIZING (D-034): PYRAMID i HOURS."""
+    out = {}
+    pyr = ns.get("PYRAMID", 1)
+    if not isinstance(pyr, int) or isinstance(pyr, bool) or not 1 <= pyr <= MAX_PYRAMID:
+        raise StrategyError(f"PYRAMID musi być liczbą całkowitą 1–{MAX_PYRAMID}")
+    out["pyramid"] = pyr
+    if "HOURS" in ns:
+        h = ns["HOURS"]
+        if h is False or h is None:
+            out["hours"] = False
+        elif isinstance(h, (list, tuple)) and len(h) == 2 and all(isinstance(x, int) and 0 <= x <= 24 for x in h) and h[0] < h[1]:
+            out["hours"] = [int(h[0]), int(h[1])]
+        else:
+            raise StrategyError("HOURS: False (bez okna) albo (od, do) w godzinach czasu polskiego, np. (7, 17)")
+    if ns.get("EXITS"):
+        from .engine import Exit
+
+        for e in ns["EXITS"]:
+            try:
+                ex = Exit(**e)
+            except TypeError as err:
+                raise StrategyError(f"EXITS: {e} — {err}") from err
+            if ex.kind not in ("time", "atr", "rsi50", "sma", "opposite", "rsi_streak"):
+                raise StrategyError(f"EXITS: nieznany rodzaj wyjścia „{ex.kind}”")
+            if not 1 <= ex.cap <= W_MAX:
+                raise StrategyError(f"EXITS: limit czasu cap 1–{W_MAX} świec (B7)")
+            if ex.kind == "rsi_streak" and not (ex.run >= 1 and 50 < ex.level < 100):
+                raise StrategyError("EXITS rsi_streak: run ≥ 1 i level między 50 a 100 (np. 70)")
+    return out
 
 
 def lookahead_cuts(fn, df, p, ind, seed: int = 0) -> list[int]:
@@ -136,6 +172,7 @@ def worker_main(code_path: str, h1_dir: str, out_dir: str) -> None:
         meta["hypothesis"] = ns.get("HYPOTHESIS")
         meta["sizing"] = ns.get("SIZING")
         meta["exits"] = ns.get("EXITS")
+        meta.update(read_settings(ns))
         rows = []
         for f in sorted(Path(h1_dir).glob("*.parquet")):
             pair = f.stem

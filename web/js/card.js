@@ -316,7 +316,7 @@ const TR_COLS = [
   ['pair', 'para', (t) => PAIRS[t.pair]?.label || t.pair], ['dir', 'kier.', (t) => (t.dir > 0 ? 'long' : 'short')],
   ['entry_ts', 'wejście UTC', (t) => dateUTC(t.entry_ts, true)], ['entry_px', 'cena', (t) => t.entry_px.toFixed(t.entry_px > 20 ? 3 : 5)],
   ['exit_ts', 'wyjście UTC', (t) => dateUTC(t.exit_ts, true)], ['exit_px', 'cena', (t) => t.exit_px.toFixed(t.exit_px > 20 ? 3 : 5)],
-  ['reason', 'powód', (t) => t.reason], ['pips_net', 'pips netto', (t) => `<span class="${cls(t.pips_net)}">${signed(t.pips_net, 1)}</span>`],
+  ['reason', 'powód', (t) => t.reason], ['weight', 'waga', (t) => num(t.weight ?? 1, 2)], ['pips_net', 'pips netto', (t) => `<span class="${cls(t.pips_net)}">${signed(t.pips_net, 1)}</span>`],
   ['r_net', 'R', (t) => `<span class="${cls(t.r_net)}">${signed(t.r_net)}</span>`], ['mae', 'MAE', (t) => num(t.mae, 1)], ['mfe', 'MFE', (t) => num(t.mfe, 1)],
   ['bars', 'świece', (t) => t.bars], ['sample', 'próba', (t) => t.sample], ['ambiguous', '', (t) => (t.ambiguous ? '<span title="TP i SL w tej samej świecy — przyjęty SL">⚑</span>' : '')],
 ];
