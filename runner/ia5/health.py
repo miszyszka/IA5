@@ -42,6 +42,22 @@ def fmt(n, d=0) -> str:
     return f"{n:,.{d}f}".replace(",", " ").replace(".", ",")
 
 
+def pl(n: int, one: str, few: str, many: str) -> str:
+    """Polska odmiana: 1 problem, 2 problemy, 5 problemów."""
+    if n == 1:
+        return one
+    return few if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14) else many
+
+
+def month_key(start: str, i: int) -> str:
+    y, m = int(start[:4]), int(start[5:7]) - 1 + i
+    return f"{y + m // 12}-{m % 12 + 1:02d}"
+
+
+STATUS_PL = {"policzona": "policzone", "blad": "z błędem", "do_policzenia": "w kolejce", "liczy_sie": "w trakcie liczenia",
+             "do_usuniecia": "do usunięcia"}
+
+
 def check(cid, name, state, text, detail=None, fix=None) -> dict:
     return {"id": cid, "name": name, "state": state, "text": text, "detail": list(detail or [])[:12], "fix": fix}
 
@@ -246,7 +262,7 @@ def frozen(h1: dict) -> dict:
             "frozen",
             "Zamrożone notowania",
             "warn",
-            f"{len(hits)} okresów, w których cena stała w miejscu ≥ {FROZEN_HOURS} h.",
+            f"{len(hits)} {pl(len(hits), 'okres', 'okresy', 'okresów')}, w których cena stała w miejscu ≥ {FROZEN_HOURS} h.",
             hits,
             "Na żywym rynku to prawie niemożliwe — prawdopodobnie źródło powtarzało starą cenę.",
         )
@@ -289,8 +305,8 @@ def coverage_check(cov: dict | None) -> dict:
             "coverage",
             "Kompletność historii",
             "bad",
-            f"{len(failed)} miesięcy nie udało się pobrać. " + text,
-            [f"{label(p)}: miesiąc nr {i + 1} od {src['start']}" for p, i in failed],
+            f"{len(failed)} {pl(len(failed), 'miesiąca', 'miesięcy', 'miesięcy')} nie udało się pobrać. " + text,
+            [f"{label(p)}: {month_key(src['start'], i)}" for p, i in failed],
             "ia5 start ponowi je automatycznie; jeśli błąd się powtarza — sprawdź sieć.",
         )
     if left:
@@ -335,7 +351,7 @@ def strategies(docs: list[dict] | None, beat_state: str | None, now: int) -> dic
     counts = {}
     for d in docs:
         counts[d.get("status")] = counts.get(d.get("status"), 0) + 1
-    text = ", ".join(f"{n} {s.replace('_', ' ')}" for s, n in sorted(counts.items())) or "Brak strategii."
+    text = ", ".join(f"{n} {STATUS_PL.get(s, s)}" for s, n in sorted(counts.items(), key=lambda x: -x[1])) or "Brak strategii."
     if stuck or waiting:
         return check("strategies", "Strategie", "warn", text, detail, "Strategię „utkniętą” wyślij ponownie: karta → Policz ponownie.")
     if errs:
@@ -423,8 +439,8 @@ def run(
     summary = (
         "Wszystko w porządku — każda kontrola przeszła."
         if not problems
-        else f"{len(problems)} {'problem' if len(problems) == 1 else 'problemy' if len(problems) < 5 else 'problemów'}: "
-        + "; ".join(f"{c['name']} — {c['text']}" for c in sorted(problems, key=lambda c: -RANK[c["state"]])[:3])
+        else f"{len(problems)} {pl(len(problems), 'problem', 'problemy', 'problemów')}: "
+        + "; ".join(f"{c['name']} — {c['text'].rstrip('.')}" for c in sorted(problems, key=lambda c: -RANK[c["state"]])[:3])
     )
     return {"at": now, "state": worst, "summary": summary, "facts": facts(status, h1, yahoo, cov, docs), "checks": checks}
 

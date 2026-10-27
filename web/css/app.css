@@ -39,6 +39,7 @@ a.ind:hover { border-color: var(--line-2); }
 .ind .s { overflow: hidden; text-overflow: ellipsis; }
 .ind[data-state=warn] .s { color: var(--warn); } .ind[data-state=bad] .s { color: var(--bad); }
 .ind.flags { color: var(--warn); border-color: rgba(245, 165, 36, .35); }
+.ind.flags[data-state=bad] { color: var(--bad); border-color: rgba(255, 77, 79, .4); }
 .pairs-tile { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px;
   font-size: 12.5px; color: var(--muted); white-space: nowrap; cursor: default; }
 .pairs-tile b { color: var(--text); font-weight: 600; }
@@ -221,6 +222,23 @@ table.daily tr.short .meter i { background: var(--warn); }
 .flaglist li { display: grid; grid-template-columns: 140px 70px 1fr; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); }
 .flaglist .mono { color: var(--muted); }
 
+/* przegląd zdrowia (D-023) */
+.hsum { margin: 0 0 10px; font-size: 14px; max-width: 110ch; }
+.hsum.state-ok { color: var(--text); }
+.hfacts { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 2px; color: var(--muted); font-size: 12.5px; }
+.hklist { list-style: none; margin: 0; padding: 0; display: grid; border-top: 1px solid var(--line); }
+.hk { border-bottom: 1px solid var(--line); font-size: 13px; }
+.hk summary, .hk-row { display: grid; grid-template-columns: 18px 200px 1fr; gap: 10px; align-items: baseline; padding: 7px 0; font-weight: 400; list-style: none; }
+.hk summary::-webkit-details-marker { display: none; }
+.hk summary { cursor: pointer; }
+.hk summary:hover b { text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; }
+.hk b { font-weight: 600; }
+.hk.ok span { color: var(--muted); }
+.hk-mark { font: 600 12px var(--mono); font-style: normal; text-align: center; }
+.hk-mark.ok { color: var(--ok); } .hk-mark.warn { color: var(--warn); } .hk-mark.bad { color: var(--bad); }
+.hk-detail { margin: 0 0 6px 228px; padding: 0; list-style: none; display: grid; gap: 2px; font: 12px var(--mono); color: var(--muted); }
+.hk-fix { margin: 0 0 10px 228px; font-size: 12.5px; color: var(--text); }
+
 /* mapa pokrycia (D-022): szary = jest, bursztyn = dziura tej pary, obrys = brak pliku, czerwony obrys = błąd */
 .covsum { margin: 0 0 6px; color: var(--muted); font-size: 12.5px; }
 .covlive { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 12.5px; }
@@ -314,6 +332,9 @@ textarea.code { flex: 1; font: 13px/1.55 var(--mono); tab-size: 4; resize: none;
   .flaglist li { grid-template-columns: 1fr auto; }
   .flaglist li span:last-child { grid-column: 1 / -1; color: var(--muted); }
   .covsums { display: none; }
+  .hk summary, .hk-row { grid-template-columns: 18px 1fr; }
+  .hk summary > span, .hk-row > span { grid-column: 2; color: var(--muted); }
+  .hk-detail, .hk-fix { margin-left: 28px; }
   .covmap { grid-template-columns: auto minmax(0, 1fr); }
   .gaplist li, .gaplist li:not(:has(b)) { grid-template-columns: 1fr auto; gap: 2px 10px; }
   .gaplist li > span:nth-last-child(-n+2) { color: var(--muted); }

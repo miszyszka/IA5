@@ -2,6 +2,7 @@
 // Nasłuch 2 dokumentów — meta/status i runner/heartbeat (Z2). Szczegóły: zakładka Stats (stats.js).
 import { HEARTBEAT_OK_S } from './config.js';
 import { watchDoc } from './fb.js';
+import { healthView, problemWord } from './health.js';
 import { PAIRS } from './metrics.js';
 import { expectedTs, H, isExpectedBar, lastClosedTs, nextClose } from './session.js';
 import { $, ago, dateUTC, esc, store } from './util.js';
@@ -74,8 +75,16 @@ function renderMac() {
 }
 
 function renderFlags() {
-  const n = flagCount();
   const el = $('#ind-flags');
+  if (status?.health) { // przegląd zdrowia z Maca (D-023) — problemy zamiast samych flag Yahoo
+    const hv = healthView(status.health, Date.now() / 1000, heartbeatState().online);
+    el.hidden = !hv.problems;
+    el.dataset.state = hv.state;
+    el.textContent = hv.problems ? `${hv.problems} ${problemWord(hv.problems)}` : '';
+    el.title = hv.summary;
+    return;
+  }
+  const n = flagCount();
   el.hidden = !n;
   el.textContent = n ? `${n} ${n === 1 ? 'flaga' : n < 5 ? 'flagi' : 'flag'}` : '';
   el.title = 'Flagi jakości danych — lista w zakładce Stats';

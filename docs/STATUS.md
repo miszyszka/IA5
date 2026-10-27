@@ -9,8 +9,10 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 - Mac: `ia5/coverage.py`, publikacja `coverage/coverage.json` na gałąź `data`, `heartbeat.sync`; naprawione kasowanie `job` w heartbeacie po każdej parze.
 - Testy: kalendarz wektorowy vs `is_expected_bar` (każda godzina 2003–2026), podłożone luki, przepływ `do_sync` bez sieci, publikacja tylko przy zmianie, logika mapy w Node. Zrzuty w headless Chromium 1440 / 390 px (spoczynek, pobieranie na żywo, klik w miesiąc, klik w parę, Yahoo).
 
+- **Przegląd zdrowia** (D-023): `ia5/health.py`, `ia5 health`, co godzinę w `ia5 start`, panel „Stan systemu” w Stats, liczba problemów w nagłówku (zamiast kafelka „Kontrola krzyżowa”).
+
 **Następne (Michał)**
-1. Na Macu `git pull` i `ia5 start` — mapa pojawi się w Stats po synchronizacji (przy pierwszym pobieraniu od razu, na żywo).
+1. Na Macu `git pull` i `ia5 start` — mapa i przegląd zdrowia pojawią się w Stats po synchronizacji (przy pierwszym pobieraniu od razu, na żywo).
 2. Jeśli jeszcze nie: nowy `apps_script/Code.gs` do Apps Script (dziennik dzień po dniu).
 
 **Znane problemy**

@@ -2,6 +2,7 @@
 // meta/status i runner/heartbeat nagłówek i tak nasłuchuje; mapa pokrycia z gałęzi data — 0 dodatkowych odczytów Firestore (Z2, Z4).
 import { biggestHoles, cellKind, EMPTY, FAILED, FULL, fmtRange, gapsInMonth, layoutBands, mergeLive, NONE, PARTIAL, STATUS_LABEL, summarize } from './coverage.js';
 import { getJSON, refreshData } from './data.js';
+import { healthView, problemWord, sortChecks } from './health.js';
 import { PAIRS } from './metrics.js';
 import { dailyRows, FLAG_LABEL, parseFlag } from './session.js';
 import { flagCount, heartbeatState } from './status.js';
@@ -22,15 +23,45 @@ function summary(s) {
   const lat = s.latency24h || [];
   const last = lat.length ? lat[lat.length - 1].s : null;
   const med = median(lat.map((x) => x.s));
-  const cross = s.cross || {};
   const run = s.lastRun || {};
+  const hv = healthView(s.health, Date.now() / 1000, heartbeatState(store.state.beat).online);
   const item = (label, value, sub = '') => h('div', { class: 'stat' }, h('small', {}, label), h('b', { html: value }), h('span', { class: 'hint', html: sub }));
   return h('section', { class: 'panel stats-sum' },
     item('Świece w bazie', num(s.totalBars || 0, 0), `Yahoo H1 w Firestore${run.finishedAt ? `<br>ostatnie pobranie ${local(run.finishedAt)}` : ''}${run.ok === false ? `<br><span class="neg">błąd: ${esc(run.error)}</span>` : ''}`),
     item('Latencja ostatniej świecy', last == null ? '—' : `${num(last, 0)} s`, `${med == null ? '' : `mediana 24 h ${num(med, 0)} s`}${spark(lat)}`),
-    item('Kontrola krzyżowa', `${cross.eurjpyPips == null ? '—' : num(cross.eurjpyPips, 1)} / ${cross.eurgbpPips == null ? '—' : num(cross.eurgbpPips, 1)} pips`,
-      'odchyłka trójkątów EUR/JPY i EUR/GBP'),
+    item('Przegląd zdrowia', hv.problems ? `<span class="state-${hv.state}">${hv.problems} ${problemWord(hv.problems)}</span>` : '<span class="state-ok">OK</span>',
+      hv.at ? `${hv.checks.length} kontroli · ${local(hv.at)}` : 'jeszcze nie było'),
     item('Flagi jakości', String(flagCount(s)), 'kontrola D5 — lista niżej'));
+}
+
+function headline(hv) {
+  if (!hv.at) return hv.summary;
+  if (!hv.problems) return 'Wszystko w porządku — każda kontrola przeszła.';
+  const n = (st) => hv.checks.filter((c) => c.state === st).length;
+  const parts = [n('bad') && `${n('bad')} ${n('bad') === 1 ? 'błąd' : n('bad') < 5 ? 'błędy' : 'błędów'}`,
+    n('warn') && `${n('warn')} ${n('warn') === 1 ? 'uwaga' : n('warn') < 5 ? 'uwagi' : 'uwag'}`].filter(Boolean);
+  return `${hv.problems} ${problemWord(hv.problems)}: ${parts.join(', ')} — ${hv.checks.find((c) => c.state === hv.state).name.toLowerCase()} i inne poniżej.`;
+}
+
+function healthPanel(s) {
+  const hv = healthView(s.health, Date.now() / 1000, heartbeatState(store.state.beat).online);
+  const MARK = { ok: '✓', warn: '!', bad: '✕' };
+  const rows = sortChecks(hv.checks).map((c) => {
+    const more = (c.detail || []).length || c.fix;
+    const head = [h('i', { class: `hk-mark ${c.state}`, 'aria-label': c.state }, MARK[c.state]), h('b', {}, c.name), h('span', {}, c.text)];
+    return more
+      ? h('li', { class: `hk ${c.state}` }, h('details', { open: c.state === 'bad' },
+        h('summary', {}, ...head),
+        (c.detail || []).length ? h('ul', { class: 'hk-detail' }, ...c.detail.map((d) => h('li', {}, d))) : '',
+        c.fix ? h('p', { class: 'hk-fix' }, 'Co zrobić: ', c.fix) : ''))
+      : h('li', { class: `hk ${c.state}` }, h('div', { class: 'hk-row' }, ...head));
+  });
+  return h('section', { class: 'panel health' },
+    h('div', { class: 'phead' }, h('h3', {}, 'Stan systemu'),
+      h('span', { class: 'hint' }, hv.at ? `przegląd ${local(hv.at)} · co godzinę na Macu · ręcznie: ia5 health` : 'przegląd robi Mac co godzinę')),
+    h('p', { class: `hsum state-${hv.state}`, title: hv.summary }, headline(hv)),
+    hv.facts.length ? h('ul', { class: 'hfacts' }, ...hv.facts.map((f) => h('li', {}, f))) : '',
+    h('ul', { class: 'hklist' }, ...rows));
 }
 
 function pairsTable(s) {
@@ -279,7 +310,7 @@ export function renderStats() {
     root.replaceChildren(h('div', { class: 'empty' }, store.state.statusError ? `Firestore: ${store.state.statusError}` : 'Wczytywanie stanu…'));
     return;
   }
-  root.replaceChildren(h('div', { class: 'toolbar' }, h('h2', {}, 'Stats')), summary(s),
+  root.replaceChildren(h('div', { class: 'toolbar' }, h('h2', {}, 'Stats')), healthPanel(s), summary(s),
     h('section', { id: 'covpanel', class: 'panel' }), dailyLog(s), h('div', { class: 'grid2' }, pairsTable(s), flagsList(s)));
   renderCoverage();
   if (cov === undefined) loadCoverage();

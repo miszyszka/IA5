@@ -83,3 +83,16 @@ test('mapa pokrycia: statusy na żywo, podsumowanie, luki w miesiącu', async ()
   assert.equal(c.gapsInMonth(src.pairs.EURUSD.gaps, '2024-03').length, 0);
   assert.equal(c.biggestHoles(src.pairs)[0].pair, 'EURUSD');
 });
+
+test('przegląd zdrowia: brak przeglądu, nieaktualny przegląd, liczenie problemów', async () => {
+  const z = await import('../../web/js/health.js');
+  assert.equal(z.healthView(null, 1000, true).problems, 1);
+  const health = { at: 1000, summary: 'Wszystko w porządku', facts: ['x'], checks: [
+    { id: 'a', name: 'A', state: 'ok', text: '' }, { id: 'b', name: 'B', state: 'warn', text: '' }, { id: 'c', name: 'C', state: 'bad', text: '' }] };
+  const fresh = z.healthView(health, 1000 + 600, true);
+  assert.equal(fresh.state, 'bad'); assert.equal(fresh.problems, 2); assert.equal(fresh.checks.length, 3);
+  const stale = z.healthView({ ...health, checks: [health.checks[0]] }, 1000 + 3 * 3600, false);
+  assert.equal(stale.checks[0].id, 'watchdog'); assert.equal(stale.state, 'warn'); assert.match(stale.summary, /3 h temu.*Mac rozłączony/);
+  assert.deepEqual(z.sortChecks(health.checks).map((c) => c.id), ['c', 'b', 'a']);
+  assert.deepEqual([1, 2, 5, 12, 22].map(z.problemWord), ['problem', 'problemy', 'problemów', 'problemów', 'problemy']);
+});
