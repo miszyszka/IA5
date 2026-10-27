@@ -1,0 +1,149 @@
+{
+ "files": {
+  "candles/AUDUSD/2024.parquet": {
+   "bars": 1119,
+   "from": 1730073600,
+   "hash": "86f71919a2a0a543",
+   "to": 1735686000
+  },
+  "candles/AUDUSD/2025.parquet": {
+   "bars": 6208,
+   "from": 1735689600,
+   "hash": "fef9a6a0b4153810",
+   "to": 1767222000
+  },
+  "candles/AUDUSD/2026.parquet": {
+   "bars": 4984,
+   "from": 1767225600,
+   "hash": "cbaa5331abc9d531",
+   "to": 1793116800
+  },
+  "candles/EURGBP/2024.parquet": {
+   "bars": 1108,
+   "from": 1730073600,
+   "hash": "623fb0c366a53a09",
+   "to": 1735682400
+  },
+  "candles/EURGBP/2025.parquet": {
+   "bars": 6189,
+   "from": 1735754400,
+   "hash": "81e1dad55b7b0b5c",
+   "to": 1767222000
+  },
+  "candles/EURGBP/2026.parquet": {
+   "bars": 4974,
+   "from": 1767225600,
+   "hash": "6bad35465ecc8d02",
+   "to": 1793116800
+  },
+  "candles/EURJPY/2024.parquet": {
+   "bars": 1108,
+   "from": 1730073600,
+   "hash": "623f65e9d151fd2c",
+   "to": 1735682400
+  },
+  "candles/EURJPY/2025.parquet": {
+   "bars": 6180,
+   "from": 1735754400,
+   "hash": "091ac53a9ba79949",
+   "to": 1767218400
+  },
+  "candles/EURJPY/2026.parquet": {
+   "bars": 4969,
+   "from": 1767229200,
+   "hash": "d5cb4854dceb0f37",
+   "to": 1793116800
+  },
+  "candles/EURUSD/2024.parquet": {
+   "bars": 1105,
+   "from": 1730073600,
+   "hash": "ea33c1402a5ccf4c",
+   "to": 1735682400
+  },
+  "candles/EURUSD/2025.parquet": {
+   "bars": 6175,
+   "from": 1735707600,
+   "hash": "ea1c103c79f5ac81",
+   "to": 1767222000
+  },
+  "candles/EURUSD/2026.parquet": {
+   "bars": 4967,
+   "from": 1767225600,
+   "hash": "921cebfed3939082",
+   "to": 1793116800
+  },
+  "candles/GBPUSD/2024.parquet": {
+   "bars": 1106,
+   "from": 1730073600,
+   "hash": "59715b6100f409a8",
+   "to": 1735682400
+  },
+  "candles/GBPUSD/2025.parquet": {
+   "bars": 6175,
+   "from": 1735754400,
+   "hash": "72f2cde11ea56bc5",
+   "to": 1767222000
+  },
+  "candles/GBPUSD/2026.parquet": {
+   "bars": 4969,
+   "from": 1767225600,
+   "hash": "daf9aa77ab98522e",
+   "to": 1793116800
+  },
+  "candles/USDCAD/2024.parquet": {
+   "bars": 1117,
+   "from": 1730073600,
+   "hash": "f0225617e35d2d21",
+   "to": 1735686000
+  },
+  "candles/USDCAD/2025.parquet": {
+   "bars": 6212,
+   "from": 1735689600,
+   "hash": "6efaa60ed0df8310",
+   "to": 1767222000
+  },
+  "candles/USDCAD/2026.parquet": {
+   "bars": 4981,
+   "from": 1767225600,
+   "hash": "43a01e35468fba0f",
+   "to": 1793116800
+  },
+  "candles/USDCHF/2024.parquet": {
+   "bars": 1102,
+   "from": 1730073600,
+   "hash": "2dcf0f430a753113",
+   "to": 1735678800
+  },
+  "candles/USDCHF/2025.parquet": {
+   "bars": 6146,
+   "from": 1735754400,
+   "hash": "2db1f39f92060a58",
+   "to": 1767214800
+  },
+  "candles/USDCHF/2026.parquet": {
+   "bars": 4942,
+   "from": 1767229200,
+   "hash": "2dd93a6953b6afa7",
+   "to": 1793116800
+  },
+  "candles/USDJPY/2024.parquet": {
+   "bars": 1101,
+   "from": 1730073600,
+   "hash": "ff347f6579e2c8b3",
+   "to": 1735678800
+  },
+  "candles/USDJPY/2025.parquet": {
+   "bars": 6139,
+   "from": 1735754400,
+   "hash": "84b30ac6046d1acd",
+   "to": 1767214800
+  },
+  "candles/USDJPY/2026.parquet": {
+   "bars": 4940,
+   "from": 1767290400,
+   "hash": "778b03d09db03735",
+   "to": 1793116800
+  }
+ },
+ "source": "yahoo"
+}
