@@ -13,8 +13,8 @@ def trades(n, pips, start=1_600_000_000, step=7200, hold=3600, pair="EURUSD"):
 
 def test_equity_compounds_and_respects_margin():
     t = trades(2, [100.0, 100.0])                      # +1% na nominale każda
-    c = simulate_equity(t, 10)                          # depozyt 10% → nominał 50% kapitału → +0,5%
-    assert np.isclose(c["final"], 10_000 * 1.005 * 1.005)
+    c = simulate_equity(t, 10)                          # depozyt 10% → nominał 300% kapitału (30:1, D-024) → +3%
+    assert np.isclose(c["final"], 10_000 * 1.03 * 1.03)
     over = trades(5, [10.0] * 5, step=60, hold=36_000)  # 5 pozycji naraz
     c = simulate_equity(over, 30)                       # 30% → zmieszczą się 3
     assert c["taken"] == 3 and c["skipped_margin"] == 2

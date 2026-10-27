@@ -259,6 +259,7 @@ table.daily tr.short .meter i { background: var(--warn); }
 .c-none { fill: transparent; stroke: var(--line-2); }
 .c-failed { fill: rgba(255, 77, 79, .2); stroke: var(--bad); }
 .c-empty { fill: var(--line); }
+.c-incomplete { fill: var(--dim); fill-opacity: .45; stroke: var(--warn); stroke-dasharray: 2 1; }
 .c-holes1 { fill: var(--warn); fill-opacity: .4; }
 .c-holes2 { fill: var(--warn); fill-opacity: .7; }
 .c-holes3 { fill: var(--warn); }
@@ -270,6 +271,7 @@ table.daily tr.short .meter i { background: var(--warn); }
 .covlegend .sw.c-full { background: var(--dim); opacity: .8; } .covlegend .sw.c-fresh { background: var(--dim); opacity: .55; } .covlegend .sw.c-partial { background: var(--dim); opacity: .35; }
 .covlegend .sw.c-none { background: none; border: 1px solid var(--line-2); } .covlegend .sw.c-failed { background: rgba(255, 77, 79, .2); border: 1px solid var(--bad); }
 .covlegend .sw.c-empty { background: var(--line); }
+.covlegend .sw.c-incomplete { background: rgba(91, 102, 117, .45); border: 1px dashed var(--warn); }
 .covlegend .sw.c-holes1 { background: var(--warn); opacity: .4; } .covlegend .sw.c-holes2 { background: var(--warn); opacity: .7; }
 .covlegend .sw.c-holes3 { background: var(--warn); }
 .covdetail { border-top: 1px solid var(--line); padding-top: 12px; margin-bottom: 8px; }

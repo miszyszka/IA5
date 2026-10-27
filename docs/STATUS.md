@@ -11,8 +11,11 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
 - **Przegląd zdrowia** (D-023): `ia5/health.py`, `ia5 health`, co godzinę w `ia5 start`, panel „Stan systemu” w Stats, liczba problemów w nagłówku (zamiast kafelka „Kontrola krzyżowa”).
 
+- **Dźwignia 30:1** (D-024, zmiana B4 na polecenie Michała), `ENGINE_VERSION` 0.1.0.
+- **Pobieranie Dukascopy (D-025):** niepełne miesiące zapisywane od razu z listą brakujących dni, kolejne przebiegi pobierają tylko brakujące; szybciej (8 dni naraz, 3 próby); mapa publikowana po każdej parze w trakcie długiego pobierania.
+
 **Następne (Michał)**
-1. Na Macu `git pull` i `ia5 start` — mapa i przegląd zdrowia pojawią się w Stats po synchronizacji (przy pierwszym pobieraniu od razu, na żywo).
+1. Na Macu `git pull` i `ia5 start` (przerwij działające Ctrl+C) — mapa i przegląd zdrowia pojawią się w Stats po synchronizacji (przy pierwszym pobieraniu od razu, na żywo).
 2. Jeśli jeszcze nie: nowy `apps_script/Code.gs` do Apps Script (dziennik dzień po dniu).
 
 **Znane problemy**

@@ -1,7 +1,7 @@
 // Czyste obliczenia dashboardu (bez DOM) — testowane w Node (tests/test_web_metrics.py).
 // Symulacja kapitału = ta sama logika co runner/ia5/portfolio.py (zmiany w obu miejscach).
 
-export const LEVERAGE = 5;
+export const LEVERAGE = 30; // B4, D-024: zawsze 30:1
 export const START_CAPITAL = 10000;
 export const SIZING = [5, 10, 15, 20, 30];
 

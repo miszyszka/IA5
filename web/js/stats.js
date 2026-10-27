@@ -1,6 +1,6 @@
 // Zakładka Stats: baza świec, latencja, mapa pokrycia danych, dziennik dzień po dniu, flagi jakości.
 // meta/status i runner/heartbeat nagłówek i tak nasłuchuje; mapa pokrycia z gałęzi data — 0 dodatkowych odczytów Firestore (Z2, Z4).
-import { biggestHoles, cellKind, EMPTY, FAILED, FULL, fmtRange, gapsInMonth, layoutBands, mergeLive, NONE, PARTIAL, STATUS_LABEL, summarize } from './coverage.js';
+import { biggestHoles, cellKind, EMPTY, FAILED, INCOMPLETE, FULL, fmtRange, gapsInMonth, layoutBands, mergeLive, NONE, PARTIAL, STATUS_LABEL, summarize } from './coverage.js';
 import { getJSON, refreshData } from './data.js';
 import { healthView, problemWord, sortChecks } from './health.js';
 import { PAIRS } from './metrics.js';
@@ -216,6 +216,7 @@ function covDetail(data) {
     let note;
     if (row[0] === NONE) note = 'Jeszcze nie pobrany — ia5 start na Macu dociągnie go przy najbliższym uruchomieniu.';
     else if (row[0] === FAILED) note = 'Pobieranie nie powiodło się (sieć albo serwer Dukascopy). Ponowi się przy następnym ia5 start.';
+    else if (row[0] === INCOMPLETE) note = `Pobrany częściowo: brakuje ${hours(row[6] || 0)} sesji w dniach, których nie udało się pobrać. Pobrane dni są już zapisane i używane; resztę dociągnie ia5 start.`;
     else if (row[0] === EMPTY) note = 'Dukascopy nie ma notowań tej pary w tym miesiącu — to nie jest luka do uzupełnienia.';
     else if (row[3] == null) note = 'Pobrany przed chwilą — luki policzy Mac po zakończeniu synchronizacji.';
     else if (!gaps.length) note = 'Wszystkie godziny sesji są na miejscu.';
@@ -262,7 +263,7 @@ function renderCoverage() {
   const all = summarize(pairs.flatMap((p) => data.pairs[p].m));
   const line = [
     `${covSrc === 'yahoo' ? 'w bazie' : 'pobrane'} ${num(all.done, 0)} z ${num(all.months, 0)} miesięcy`,
-    all.left ? `brakuje ${num(all.left, 0)} mies. (${hours(all.leftHours)} sesji)` : 'niczego nie brakuje',
+    all.left || all.incomplete ? `brakuje ${all.left ? `${num(all.left, 0)} mies.` : ''}${all.left && all.incomplete ? ' + ' : ''}${all.incomplete ? `dni w ${num(all.incomplete, 0)} mies.` : ''} (${hours(all.leftHours)} sesji)` : 'niczego nie brakuje',
     all.failed ? `<span class="neg">błędy ${num(all.failed, 0)}</span>` : '',
     `dziury ${hours(all.holes)} w ${num(all.holeMonths, 0)} mies.`,
     `wspólne luki ${hours(all.common)}`,
@@ -289,7 +290,7 @@ function renderCoverage() {
   } });
   const legend = h('div', { class: 'covlegend' },
     ...[['full', 'pełny'], ...(data.live ? [['fresh', 'pobrany przed chwilą']] : []), ['holes1', 'dziury 1–5 h'], ['holes2', '6–47 h'], ['holes3', '≥ 48 h'], ['partial', 'w toku'],
-      ['none', 'nie pobrany'], ['failed', 'błąd'], ...(covSrc === 'dukascopy' ? [['empty', 'Dukascopy nie ma']] : [])]
+      ['incomplete', 'częściowo'], ['none', 'nie pobrany'], ['failed', 'błąd'], ...(covSrc === 'dukascopy' ? [['empty', 'Dukascopy nie ma']] : [])]
       .map(([k, l]) => h('span', {}, h('i', { class: `sw c-${k}` }), l)));
   panel.replaceChildren(head, h('p', { class: 'covsum', html: line }), live,
     h('div', { class: 'covmap' }, labels, scroll, sums), legend,

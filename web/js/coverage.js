@@ -1,8 +1,8 @@
 // Mapa pokrycia danych — czyste funkcje (testy: tests/web). Dane: coverage/coverage.json z gałęzi data
 // (liczy Mac, runner/ia5/coverage.py) + statusy na żywo z runner/heartbeat.sync w trakcie pobierania.
-export const NONE = 0, FULL = 1, PARTIAL = 2, EMPTY = 3, FAILED = 4;
-const LIVE = { '.': NONE, o: FULL, '~': PARTIAL, '-': EMPTY, x: FAILED };
-export const STATUS_LABEL = { [NONE]: 'nie pobrany', [FULL]: 'pełny', [PARTIAL]: 'w toku', [EMPTY]: 'Dukascopy nie ma danych', [FAILED]: 'błąd pobierania' };
+export const NONE = 0, FULL = 1, PARTIAL = 2, EMPTY = 3, FAILED = 4, INCOMPLETE = 5;
+const LIVE = { '.': NONE, o: FULL, '~': PARTIAL, '-': EMPTY, x: FAILED, '!': INCOMPLETE };
+export const STATUS_LABEL = { [NONE]: 'nie pobrany', [FULL]: 'pełny', [PARTIAL]: 'w toku', [EMPTY]: 'Dukascopy nie ma danych', [FAILED]: 'błąd pobierania', [INCOMPLETE]: 'pobrany częściowo — brakujące dni dociągną się' };
 
 /** ['2003-05', '2003-06', …] — n miesięcy od start. */
 export function monthKeys(start, n) {
@@ -60,6 +60,7 @@ export function cellKind(row) {
   if (st === NONE) return 'none';
   if (st === FAILED) return 'failed';
   if (st === EMPTY) return 'empty';
+  if (st === INCOMPLETE) return 'incomplete';
   if (holes == null) return st === PARTIAL ? 'partial' : 'fresh'; // pobrany na żywo, luki policzy Mac po synchronizacji
   if (holes >= 48) return 'holes3';
   if (holes >= 6) return 'holes2';
@@ -70,15 +71,16 @@ export function cellKind(row) {
 /** Podsumowanie pary albo całego źródła (rows = sklejone wiersze miesięcy). pct = obecne / oczekiwane,
  * gdzie oczekiwane obejmują też miesiące niepobrane — to jest „ile jeszcze brakuje”. */
 export function summarize(rows) {
-  const s = { months: 0, done: 0, left: 0, failed: 0, uncounted: 0, exp: 0, pres: 0, holes: 0, common: 0, thin: 0, holeMonths: 0, leftHours: 0, firstData: -1 };
+  const s = { months: 0, done: 0, incomplete: 0, left: 0, failed: 0, uncounted: 0, exp: 0, pres: 0, holes: 0, common: 0, thin: 0, holeMonths: 0, leftHours: 0, firstData: -1 };
   rows.forEach((r, i) => {
     const [st, exp, pres, holes, common, thin] = r;
     if (st === EMPTY) return;
     s.months++;
     if (s.firstData < 0 && st !== NONE && st !== FAILED) s.firstData = i;
-    if (st === FULL || st === PARTIAL) s.done++;
+    if (st === INCOMPLETE) { s.incomplete++; s.leftHours += r[6] || 0; }
+    if (st === FULL || st === PARTIAL || st === INCOMPLETE) s.done++;
     else { s.left++; s.leftHours += exp || 0; if (st === FAILED) s.failed++; }
-    if ((st === FULL || st === PARTIAL) && holes == null) { s.uncounted++; return; } // pobrany na żywo, jeszcze bez liczb
+    if ((st === FULL || st === PARTIAL || st === INCOMPLETE) && holes == null) { s.uncounted++; return; } // pobrany na żywo, jeszcze bez liczb
     s.exp += exp || 0;
     s.pres += pres || 0;
     s.holes += holes || 0;

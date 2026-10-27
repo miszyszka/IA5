@@ -271,7 +271,7 @@ function renderVariant() {
   const v = S.byId.get(S.selected);
   const t = filtered();
   const pctSz = +S.f.sizing;
-  $('#eq-title').textContent = `Kapitał od początku — ${v.exit} (${paramsLabel(v.params)}), depozyt ${pctSz}% × dźwignia 1:5`;
+  $('#eq-title').textContent = `Kapitał od początku — ${v.exit} (${paramsLabel(v.params)}), depozyt ${pctSz}% × dźwignia 30:1`;
   const curve = simulateEquity(t, pctSz);
   const st = equityStats(curve);
   const sm = summarize(t);

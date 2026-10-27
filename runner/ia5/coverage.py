@@ -27,8 +27,8 @@ DAY = 86400
 THIN_MINUTES = 30      # godzina H1 złożona z mniej niż 30 minut z notowaniami = „cienka”
 COMMON_SHARE = 0.5     # luka wspólna, gdy brakuje jej w ≥ połowie par mających ten okres
 COMMON_MIN_PAIRS = 3   # przy mniej niż 3 parach nie da się powiedzieć, że luka jest wspólna
-NONE, FULL, PARTIAL, EMPTY, FAILED = 0, 1, 2, 3, 4
-LIVE_CODE = {NONE: ".", FULL: "o", PARTIAL: "~", EMPTY: "-", FAILED: "x"}
+NONE, FULL, PARTIAL, EMPTY, FAILED, INCOMPLETE = 0, 1, 2, 3, 4, 5
+LIVE_CODE = {NONE: ".", FULL: "o", PARTIAL: "~", EMPTY: "-", FAILED: "x", INCOMPLETE: "!"}
 
 
 # ---------- kalendarz ----------
@@ -46,6 +46,14 @@ def expected_hours(a: int, b: int) -> np.ndarray:
     a = -(-int(a) // H) * H
     hours = np.arange(a, int(b), H, dtype=np.int64)
     return hours[expected_mask(hours)]
+
+
+def win_hours(mi: dict) -> np.ndarray:
+    """Oczekiwane godziny okna miesiąca bez dni, których jeszcze nie pobrano (te nie są lukami)."""
+    e = expected_hours(*mi["win"])
+    if mi.get("skip"):
+        e = e[~np.isin(e // DAY * DAY, np.asarray(mi["skip"], np.int64))]
+    return e
 
 
 def month_key(y: int, m: int) -> str:
@@ -92,7 +100,7 @@ def dukascopy_months(root: Path, pair: str, until: date, failed=()) -> list[dict
     Okno pełnego miesiąca kończy się z miesiącem (albo z końcem danych). Okno niepełnego kończy się
     na ostatnim dniu w pliku — brakujący ogon to nie luka, tylko dane do dociągnięcia.
     """
-    from .dukascopy import START, _max_ts, month_complete
+    from .dukascopy import START, _max_ts, month_complete, read_missing
 
     folder = root / "m1" / pair
     data_end = int(datetime(until.year, until.month, until.day, tzinfo=UTC).timestamp()) + DAY
@@ -104,10 +112,11 @@ def dukascopy_months(root: Path, pair: str, until: date, failed=()) -> list[dict
         path = folder / f"{month_key(y, m)}.parquet"
         has = path.exists()
         rows = _rows(path) if has else 0
-        if month_key(y, m) in failed:
-            st = FAILED
-        elif not has:
-            st = NONE
+        missing = read_missing(path) if has else []
+        if not has:
+            st = FAILED if month_key(y, m) in failed else NONE
+        elif missing:
+            st = INCOMPLETE  # część dni pobrana i zapisana, reszta dociągnie się później (D-025)
         elif rows == 0:
             st = EMPTY
         elif (y, m) == (until.year, until.month) or not month_complete(path, y, m):
@@ -115,9 +124,11 @@ def dukascopy_months(root: Path, pair: str, until: date, failed=()) -> list[dict
         else:
             st = FULL
         win = None
-        if rows:
-            win = (a, b) if st == FULL else (a, min(b, day_end(_max_ts(path))))
-        out.append({"key": month_key(y, m), "status": st, "cal": (a, b), "win": win})
+        skip = [int(datetime.fromisoformat(d).replace(tzinfo=UTC).timestamp()) for d in missing]
+        if rows or missing:
+            end = max(([day_end(_max_ts(path))] if rows else []) + [x + DAY for x in skip])
+            win = (a, b) if st == FULL else (a, min(b, end))
+        out.append({"key": month_key(y, m), "status": st, "cal": (a, b), "win": win, "skip": skip})
     return out
 
 
@@ -147,7 +158,7 @@ def source_coverage(month_info: dict[str, list[dict]], frames: dict[str, pd.Data
     exp, miss, pres_sets, mins_map = {}, {}, {}, {}
     for pair, info in month_info.items():
         ts, mins = _present(frames.get(pair))
-        hours = [expected_hours(*mi["win"]) for mi in info if mi["win"]]
+        hours = [win_hours(mi) for mi in info if mi["win"]]
         e = np.concatenate(hours) if hours else np.empty(0, np.int64)
         exp[pair] = e
         miss[pair] = e[~np.isin(e, ts)]
@@ -179,11 +190,13 @@ def source_coverage(month_info: dict[str, list[dict]], frames: dict[str, pd.Data
 
         rows = []
         for i, mi in enumerate(info):
+            # 7. pole: godziny sesji w dniach jeszcze niepobranych (tyle brakuje w niepełnym miesiącu)
             if mi["win"]:
-                rows.append([mi["status"], int(len(expected_hours(*mi["win"]))), int(present[i]),
-                             int(holes[i]), int(shared[i]), int(thin[i])])
+                skipped = int(len(expected_hours(*mi["win"])) - len(win_hours(mi))) if mi.get("skip") else 0
+                rows.append([mi["status"], int(len(win_hours(mi))), int(present[i]),
+                             int(holes[i]), int(shared[i]), int(thin[i]), skipped])
             else:  # bez danych: oczekiwane wg kalendarza całego miesiąca — tyle brakuje
-                rows.append([mi["status"], int(len(expected_hours(*mi["cal"]))) if mi["status"] != EMPTY else 0, 0, 0, 0, 0])
+                rows.append([mi["status"], int(len(expected_hours(*mi["cal"]))) if mi["status"] != EMPTY else 0, 0, 0, 0, 0, 0])
 
         # zakresy luk: kolejne godziny w ciągu oczekiwanych (luka przez weekend to jedna luka)
         gaps = []
@@ -235,7 +248,7 @@ def build(root: Path, h1: dict[str, pd.DataFrame], yahoo: dict[str, pd.DataFrame
     y_info = {p: yahoo_months(yahoo.get(p), y_start, datetime.fromtimestamp(now, UTC).date()) for p in pairs}
 
     def cover(info):  # godziny objęte oknami źródła
-        hours = [expected_hours(*mi["win"]) for mi in info if mi["win"]]
+        hours = [win_hours(mi) for mi in info if mi["win"]]
         return np.concatenate(hours) if hours else np.empty(0, np.int64)
 
     d_ts = {p: _present(h1.get(p))[0] for p in pairs}

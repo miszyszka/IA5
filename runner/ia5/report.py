@@ -66,7 +66,7 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
         "- Wejście na open świecy po sygnale. TP i SL w tej samej świecy: "
         + ("rozstrzygane na M1, w tej samej minucie — SL." if m["m1_resolver"] else "przyjęty SL (brak danych M1)."),
         f"- Spread raz na transakcję (pips): {spreads}. Swapy pominięte.",
-        f"- Kapitał {START_CAPITAL:,.0f} USD, dźwignia 1:{LEVERAGE}, depozyt na pozycję: "
+        f"- Kapitał {START_CAPITAL:,.0f} USD, dźwignia {LEVERAGE}:1, depozyt na pozycję: "
         + ", ".join(f"{x:g}%" for x in m["sizing"]) + "; suma depozytów ≤ 100% kapitału.",
         "## Skala przeszukiwania",
         f"- **Przetestowane warianty: {n_var}** ({len(m['params'])} wejścia × {m['n_exits']} wyjść).",

@@ -1,7 +1,7 @@
 """Parametry rynku — jedyne źródło prawdy (CLAUDE.md, sekcja 2)."""
 from dataclasses import dataclass
 
-LEVERAGE = 5
+LEVERAGE = 30  # B4, D-024: zawsze 30:1
 ACCOUNT_CCY = "USD"
 START_CAPITAL = 10_000.0
 DEFAULT_SIZING = (5, 10, 15, 20, 30)  # % kapitału jako depozyt (B4)

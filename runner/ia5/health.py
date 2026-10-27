@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 
 from .config import PAIRS
-from .coverage import EMPTY, FAILED, NONE, expected_hours
+from .coverage import EMPTY, FAILED, INCOMPLETE, NONE, expected_hours
 from .quality import bar_flags
 from .session import H, expected_ts, is_expected_bar, last_closed_ts
 
@@ -309,10 +309,14 @@ def coverage_check(cov: dict | None) -> dict:
             [f"{label(p)}: {month_key(src['start'], i)}" for p, i in failed],
             "ia5 start ponowi je automatycznie; jeśli błąd się powtarza — sprawdź sieć.",
         )
-    if left:
-        return check(
-            "coverage", "Kompletność historii", "warn", f"Brakuje {fmt(left)} miesięcy. " + text, fix="ia5 start dociągnie resztę."
-        )
+    partial = [(p, i, m[6] if len(m) > 6 else 0) for p, d in src["pairs"].items() for i, m in enumerate(d["m"]) if m[0] == INCOMPLETE]
+    if left or partial:
+        lead = (f"Brakuje {fmt(left)} miesięcy. " if left else "") + (
+            f"{len(partial)} {pl(len(partial), 'miesiąc', 'miesiące', 'miesięcy')} pobrane częściowo "
+            f"(brakuje {fmt(sum(x[2] for x in partial))} h sesji). " if partial else "")
+        return check("coverage", "Kompletność historii", "warn", lead + text,
+                     [f"{label(p)}: {month_key(src['start'], i)} — brakuje {h} h" for p, i, h in partial],
+                     "ia5 start dociągnie brakujące dni; pobrane już są zapisane i używane.")
     if exp and holes / exp > 0.001:
         return check("coverage", "Kompletność historii", "warn", text, fix="Szczegóły w mapie pokrycia — „Największe dziury”.")
     return check("coverage", "Kompletność historii", "ok", text)

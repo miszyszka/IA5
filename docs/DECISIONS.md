@@ -5,6 +5,18 @@ Najnowsze na górze.
 
 ---
 
+### D-025 · 2026-10-27 · Dukascopy: niepełne miesiące zapisywane od razu, pobierane tylko brakujące dni
+- **Problem (Michał):** pojedynczy nieudany dzień wyrzucał cały pobrany miesiąc; przy wielogodzinnym pierwszym pobieraniu częste błędy sieci oznaczały powtarzanie tej samej pracy, a dashboard nie pokazywał, co już jest.
+- **Decyzja:** pobrane dni są dopisywane do `RRRR-MM.parquet` od razu; dni, które się nie udały, trafiają do `RRRR-MM.missing.json` i przy następnym uruchomieniu pobierane są tylko one (oraz dni po ostatnim zapisanym — bieżący miesiąc nie jest już pobierany od nowa przy każdym starcie). Już zapisane minuty się nie zmieniają (D4). Szybciej: 8 dni naraz zamiast 4, 3 próby na plik zamiast 6 (nieudany dzień i tak wróci w kolejnym przebiegu).
+- **Mapa pokrycia:** nowy stan „pobrany częściowo” (przerywany bursztynowy obrys), godziny niepobranych dni liczone osobno jako „brakuje”, nie jako dziury. W trakcie długiego pobierania mapa jest publikowana po każdej parze (gdy para pobierała się > 2 min), a statusy miesięcy idą na żywo przez heartbeat.
+- **Odrzucone:** zapis dziennych plików (≈ 60 tys. plików na parę); zapis bez listy brakujących dni (luki stałyby się niewidoczne i trwałe).
+
+### D-024 · 2026-10-27 · Dźwignia 30:1 zawsze (zmiana żelaznej zasady B4)
+- **Decyzja (Michał, wprost: „trading zawsze jest na dźwigni 30:1”):** B4, sekcja 2 i 8.5: nominał = 30 × depozyt. Depozyt nadal X% kapitału, X ∈ {5, 10, 15, 20, 30}%, suma depozytów ≤ 100% kapitału → łączna ekspozycja ≤ 30:1. `LEVERAGE = 30` w `runner/ia5/config.py` i `web/js/metrics.js`; `ENGINE_VERSION` 0.0.1 → 0.1.0 (B10 — starsze wyniki, w tym DEMO, są nieaktualne).
+- **Skutek:** przy tej samej wielkości depozytu wynik i obsunięcia kapitału są 6× większe niż przy 1:5 (np. depozyt 30% = nominał 9× kapitału na pozycję). Przewaga transakcji (pips, R), ranking, DSR i PBO się nie zmieniają — zależą tylko od transakcji.
+- **Do decyzji:** brak modelu stop-out brokera — kapitał może spaść poniżej zera, wtedy nowe wejścia są pomijane. Jeśli „X%” miało oznaczać nominał, a nie depozyt — trzeba zmienić B4.
+- **Odrzucone:** zostawienie 1:5 jako domyślnej i 30:1 jako opcji (Michał: „zawsze”).
+
 ### D-023 · 2026-10-27 · Przegląd zdrowia zamiast kafelka „Kontrola krzyżowa”
 - **Decyzja (Michał: „ogólny system, który informuje o błędach i opisowo mówi o stanie bazy i projektu”):** `ia5/health.py` na Macu uruchamia zestaw nazwanych kontroli po każdej synchronizacji, co godzinę i na żądanie (`ia5 health`, opisowy raport w terminalu). Wynik w `meta/status.health`: stan, jedno zdanie, opis bazy i projektu, kontrole `{id, name, state, text, detail, fix}`. Stats otwiera się panelem „Stan systemu”; nagłówek liczy problemy z przeglądu.
 - **Kontrole:** świeżość Yahoo (od pierwszej brakującej świecy), Apps Script bez błędów, flagi Yahoo, aktualność Dukascopy, kompletność historii (z mapy pokrycia), poprawność świec, trójkąty EUR/JPY i EUR/GBP godzina po godzinie na całej historii (próg 15 / 8 pips, uwaga > 0,1% godzin, lista najgorszych miesięcy), Dukascopy vs Yahoo z wykrywaniem przesunięcia czasu o ±1 h, zamrożone notowania (≥ 8 h tego samego zamknięcia), publikacja na GitHub (błąd pusha już nie przerywa synchronizacji), strategie z błędem / utknięte / zbyt długo w kolejce, wolne miejsce na dysku.

@@ -60,15 +60,16 @@ def do_sync(progress=None, live: dict | None = None, beat=None) -> None:
             if progress:
                 progress(f"Pobieranie Dukascopy · {pair}", round(100 * (pi + i / max(n, 1)) / len(pairs)))
 
-        def on_month(y, m, ok, rows, pair=pair):
+        def on_month(y, m, code, pair=pair):
             if live is None:
                 return
             i = (y - start.year) * 12 + m - start.month
             s = list(live["pairs"][pair])
             if 0 <= i < len(s):
-                s[i] = "x" if not ok else "-" if not rows else "~" if (y, m) == (until.year, until.month) else "o"
+                s[i] = code
                 live["pairs"][pair] = "".join(s)
 
+        t0 = time.time()
         r = dukascopy.sync_pair(pair, DATA, log=lambda m: log(m), progress=prog, on_month=on_month)
         if r["failed"]:
             failed[pair] = r["failed"]
@@ -77,11 +78,13 @@ def do_sync(progress=None, live: dict | None = None, beat=None) -> None:
         h1[pair].to_parquet(DATA / "h1" / f"{pair}.parquet", index=False)
         f = quality.bar_flags(h1[pair])
         log(f"  {pair} H1: {len(h1[pair]):,} świec · luki {f['gaps']} · OHLC {f['ohlc']} · ts {f['ts']}")
+        if time.time() - t0 > 120 and pi < len(pairs) - 1:  # długie pobieranie: mapa w Stats aktualna po każdej parze (D-025)
+            publish_partial_coverage(h1, until)
         beat()
 
     if failed:
-        log(f"Uwaga: nie pobrano {sum(map(len, failed.values()))} miesięcy ({', '.join(f'{p} {len(v)}' for p, v in failed.items())}) "
-            "— dociągną się przy następnym `ia5 start`. Na razie są lukami w danych (mapa w Stats pokazuje je na czerwono).")
+        log(f"Uwaga: niepełne {sum(map(len, failed.values()))} miesięcy ({', '.join(f'{p} {len(v)}' for p, v in failed.items())}) "
+            "— pobrane dni są już zapisane, brakujące dociągną się przy następnym `ia5 start` (mapa w Stats pokazuje je osobno).")
     if progress:
         progress("Kontrola danych", 100)
     log("Yahoo z Firestore…")
@@ -115,6 +118,28 @@ def do_sync(progress=None, live: dict | None = None, beat=None) -> None:
         log(f"  publikacja nie powiodła się: {publish_error}")
     until_ts = int(datetime(until.year, until.month, until.day, tzinfo=UTC).timestamp()) + 86400
     return {"h1": h1, "yahoo": yahoo, "cov": cov, "until_ts": until_ts, "publish_error": publish_error}
+
+
+def publish_partial_coverage(h1: dict, until) -> None:
+    """Mapa pokrycia w trakcie pierwszego, wielogodzinnego pobierania: pary już przeliczone + reszta z dysku."""
+    import pandas as pd
+
+    from . import cloud, coverage, publish
+
+    try:
+        frames = dict(h1)
+        for p in PAIRS:
+            f = DATA / "h1" / f"{p}.parquet"
+            if p not in frames and f.exists():
+                frames[p] = pd.read_parquet(f)
+        yahoo = {p: pd.read_parquet(DATA / "yahoo" / f"{p}.parquet") for p in PAIRS if (DATA / "yahoo" / f"{p}.parquet").exists()}
+        for p in PAIRS:
+            frames.setdefault(p, pd.DataFrame(columns=["ts", "minutes"]))
+        sha = publish.publish_coverage(coverage.build(DATA, frames, yahoo, until=until), log=lambda m: log(m))
+        if sha:
+            cloud.set_data_sha(sha)
+    except Exception as e:  # noqa: BLE001 — mapa pośrednia jest tylko podglądem
+        log(f"  mapa pokrycia (w trakcie): {e}")
 
 
 def do_health(ctx: dict, beat_state: str | None = None, write: bool = True) -> dict:

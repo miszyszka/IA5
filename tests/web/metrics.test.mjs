@@ -96,3 +96,13 @@ test('przegląd zdrowia: brak przeglądu, nieaktualny przegląd, liczenie proble
   assert.deepEqual(z.sortChecks(health.checks).map((c) => c.id), ['c', 'b', 'a']);
   assert.deepEqual([1, 2, 5, 12, 22].map(z.problemWord), ['problem', 'problemy', 'problemów', 'problemów', 'problemy']);
 });
+
+test('mapa pokrycia: miesiąc pobrany częściowo (D-025)', async () => {
+  const c = await import('../../web/js/coverage.js');
+  const m = c.mergeLive({ start: '2024-01', pairs: { EURUSD: { m: [[5, 480, 470, 0, 0, 0, 24]], gaps: [] } } }, null, ['EURUSD']);
+  assert.equal(c.cellKind(m.pairs.EURUSD.m[0]), 'incomplete');
+  const s = c.summarize(m.pairs.EURUSD.m);
+  assert.equal(s.done, 1); assert.equal(s.incomplete, 1); assert.equal(s.leftHours, 24);
+  const live = c.mergeLive(null, { start: '2024-01', pairs: { EURUSD: '!' } }, ['EURUSD']);
+  assert.equal(c.cellKind(live.pairs.EURUSD.m[0]), 'incomplete');
+});

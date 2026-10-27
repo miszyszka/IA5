@@ -92,15 +92,20 @@ def test_cross_and_compare():
     assert np.isclose(c["median"], 2.0)
 
 
-def test_sync_survives_network_errors(tmp_path, monkeypatch):
-    """Błąd jednego dnia: ten miesiąc nie jest zapisany (dociągnie się później), reszta tak, bez przerwania."""
+def test_sync_saves_partial_month_and_fetches_only_missing_days(tmp_path, monkeypatch):
+    """D-025: błąd jednego dnia nie wyrzuca miesiąca — pobrane dni są zapisane, brakujący dzień trafia na listę
+    i przy następnym uruchomieniu pobierany jest tylko on. Błąd sieci nie przerywa synchronizacji."""
+    import json
+
     from ia5 import dukascopy
 
     monkeypatch.setattr(dukascopy, "START", date(2024, 1, 1))
-    bad_day = date(2024, 2, 7)
+    bad_day = {date(2024, 2, 7)}
+    calls = []
 
     def fake_fetch(pair, d):
-        if d == bad_day:
+        calls.append(d)
+        if d in bad_day:
             raise RuntimeError("Dukascopy: timeout")
         return pd.DataFrame([[int(pd.Timestamp(d).timestamp()), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], columns=dukascopy.COLS)
 
@@ -111,13 +116,21 @@ def test_sync_survives_network_errors(tmp_path, monkeypatch):
 
     monkeypatch.setattr(dukascopy, "fetch_day", fake_fetch)
     monkeypatch.setattr(dukascopy, "datetime", Today)
-    calls = []
-    r = dukascopy.sync_pair("EURUSD", tmp_path, log=lambda m: None, progress=lambda i, n: calls.append((i, n)))
-    files = sorted(p.name for p in (tmp_path / "m1" / "EURUSD").glob("*.parquet"))
-    assert r["failed"] == ["2024-02"] and files == ["2024-01.parquet", "2024-03.parquet", "2024-04.parquet"]
-    assert calls[-1] == (4, 4)
-    # następne uruchomienie: do pobrania luty (brak pliku) i bieżący kwiecień
-    assert dukascopy.months_to_sync(tmp_path, "EURUSD", date(2024, 4, 9)) == [(2024, 2), (2024, 4)]
+    codes = []
+    r = dukascopy.sync_pair("EURUSD", tmp_path, log=lambda m: None, on_month=lambda y, m, c: codes.append(c))
+    folder = tmp_path / "m1" / "EURUSD"
+    assert r["failed"] == ["2024-02"] and codes == ["o", "!", "o", "~"]
+    assert sorted(p.name for p in folder.glob("*.parquet")) == ["2024-01.parquet", "2024-02.parquet", "2024-03.parquet", "2024-04.parquet"]
+    assert json.loads((folder / "2024-02.missing.json").read_text()) == ["2024-02-07"]
+    assert len(pd.read_parquet(folder / "2024-02.parquet")) == len(dukascopy.month_days(2024, 2, date(2024, 4, 9))) - 1
+    # następne uruchomienie: tylko brakujący dzień lutego + dni kwietnia po ostatnim zapisanym (9-ty już jest)
+    bad_day.clear()
+    calls.clear()
+    dukascopy.sync_pair("EURUSD", tmp_path, log=lambda m: None)
+    assert calls == [date(2024, 2, 7)]
+    assert not (folder / "2024-02.missing.json").exists()
+    assert len(pd.read_parquet(folder / "2024-02.parquet")) == len(dukascopy.month_days(2024, 2, date(2024, 4, 9)))
+    assert len(dukascopy.load_m1("EURUSD", tmp_path)) == sum(len(dukascopy.month_days(2024, m, date(2024, 4, 9))) for m in (1, 2, 3, 4))
 
 
 def test_get_retries_then_raises_and_404_is_empty(monkeypatch):

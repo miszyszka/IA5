@@ -7,6 +7,7 @@ Dane bieżącego dnia pojawiają się po jego zakończeniu, więc M1 kończy si�
 """
 from __future__ import annotations
 
+import json
 import lzma
 import struct
 import threading
@@ -22,8 +23,9 @@ import pandas as pd
 BASE = "https://datafeed.dukascopy.com/datafeed"
 REC = struct.Struct(">5if")
 START = date(2003, 5, 1)
-WORKERS = 4      # jednoczesne dni na parę (każdy dzień = 2 pliki: BID i ASK)
-TRIES = 6        # próby na plik, przerwy 2, 4, 8, 16, 32 s
+WORKERS = 8      # jednoczesne dni na parę (każdy dzień = 2 pliki: BID i ASK)
+TRIES = 3        # próby na plik, przerwy 2, 4 s — dzień, który się nie pobrał, zostaje zapisany jako brakujący
+                 # i jest dociągany przy następnym uruchomieniu (D-025), więc nie warto czekać minutami
 COLS = ["ts", "bo", "bh", "bl", "bc", "bv", "ao", "ah", "al", "ac", "av"]
 
 
@@ -130,6 +132,30 @@ def _max_ts(path: Path) -> int | None:
     return int(ts.max()) if len(ts) else None
 
 
+def missing_path(path: Path) -> Path:
+    """Plik obok miesiąca z listą dni, których nie udało się pobrać (D-025): RRRR-MM.missing.json."""
+    return path.with_name(path.stem + ".missing.json")
+
+
+def read_missing(path: Path) -> list[str]:
+    try:
+        return sorted(json.loads(missing_path(path).read_text()))
+    except (FileNotFoundError, ValueError):
+        return []
+
+
+def days_to_fetch(path: Path, y: int, m: int, until: date) -> list[date]:
+    """Dni do pobrania: cały miesiąc, gdy pliku nie ma; inaczej brakujące dni + dni po ostatnim dniu w pliku."""
+    days = month_days(y, m, until)
+    if not path.exists():
+        return days
+    missing = set(read_missing(path))
+    mx = _max_ts(path)
+    last = datetime.fromtimestamp(mx, UTC).date() if mx is not None else None
+    return [d for d in days if d.isoformat() in missing or (last is not None and d > last)
+            or (last is None and not missing)]
+
+
 def month_complete(path: Path, y: int, m: int) -> bool:
     """Czy zapisany miesiąc ma wszystkie dni.
 
@@ -139,7 +165,7 @@ def month_complete(path: Path, y: int, m: int) -> bool:
     (wtedy zawiera wszystko, co Dukascopy ma — np. gdy ostatni dzień był świętem bez notowań).
     Pusty plik = Dukascopy nie ma tego miesiąca (np. przed startem notowań pary) — pełny.
     """
-    if not path.exists():
+    if not path.exists() or missing_path(path).exists():
         return False
     end = datetime(y, m, monthrange(y, m)[1], tzinfo=UTC) + timedelta(days=1)
     if datetime.fromtimestamp(path.stat().st_mtime, UTC) >= end + timedelta(days=2):
@@ -162,13 +188,15 @@ def months_to_sync(root: Path, pair: str, until: date) -> list[tuple[int, int]]:
 
 
 def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress=None, on_month=None) -> dict:
-    """Dociąga brakujące miesiące do root/m1/{PARA}/{RRRR-MM}.parquet.
+    """Dociąga brakujące dane do root/m1/{PARA}/{RRRR-MM}.parquet (D-025).
 
-    Zamknięty miesiąc zapisujemy raz i nie ruszamy (D4). Bieżący miesiąc nadpisujemy przy każdym sync.
-    Miesiąc, w którym choć jeden dzień się nie pobrał, NIE jest zapisywany — dociągnie się przy następnym
-    uruchomieniu (inaczej zostałaby trwała luka). Błąd sieci nigdy nie przerywa całej synchronizacji.
+    Pobierane są tylko brakujące dni: cały miesiąc, gdy pliku nie ma; inaczej dni z listy brakujących
+    (RRRR-MM.missing.json) i dni po ostatnim dniu w pliku (bieżący miesiąc, miesiąc zapisany w trakcie).
+    Pobrane dni są dopisywane do pliku od razu — nawet gdy część dni się nie udała; te trafiają na listę
+    brakujących i są ponawiane przy następnym uruchomieniu. Już zapisane minuty się nie zmieniają (D4).
+    Błąd sieci nigdy nie przerywa całej synchronizacji.
     progress(i, n) — wołane po każdym miesiącu.
-    on_month(y, m, ok, rows) — wynik miesiąca (mapa pokrycia na żywo w dashboardzie).
+    on_month(y, m, code) — stan miesiąca dla mapy na żywo: "o" pełny, "~" bieżący, "!" niepełny, "x" nic, "-" brak u Dukascopy.
     """
     folder = root / "m1" / pair
     folder.mkdir(parents=True, exist_ok=True)
@@ -183,30 +211,45 @@ def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress
             return e
 
     for k, (y, m) in enumerate(todo, 1):
-        days = month_days(y, m, yesterday)
+        path = folder / f"{y}-{m:02d}.parquet"
+        days = days_to_fetch(path, y, m, yesterday)
         with ThreadPoolExecutor(workers) as ex:
             res = list(ex.map(safe_day, days))
-        errs = [r for r in res if isinstance(r, Exception)]
-        if errs:
+        bad = [d for d, r in zip(days, res) if isinstance(r, Exception)]
+        frames = [r for r in res if not isinstance(r, Exception) and len(r)]
+        missing = sorted((set(read_missing(path)) - {d.isoformat() for d in days}) | {d.isoformat() for d in bad})
+        if len(bad) == len(days) and days and not path.exists():
             failed.append(f"{y}-{m:02d}")
-            log(f"  {pair} {y}-{m:02d}: {len(errs)} dni nie pobrano ({str(errs[0])[-80:]}) — ponowię przy następnym uruchomieniu")
-            if on_month:
-                on_month(y, m, False, 0)
+            log(f"  {pair} {y}-{m:02d}: nic nie pobrano ({str(res[0])[-80:]}) — ponowię przy następnym uruchomieniu")
+            code = "x"
         else:
-            frames = [f for f in res if len(f)]
-            df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=COLS)
-            df.to_parquet(folder / f"{y}-{m:02d}.parquet", index=False)
+            old = pd.read_parquet(path) if path.exists() else None
+            parts = ([old] if old is not None and len(old) else []) + frames
+            df = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=COLS)
+            if len(df):
+                df = df.drop_duplicates("ts", keep="first").sort_values("ts").reset_index(drop=True)  # D4: stare minuty zostają
+            df.to_parquet(path, index=False)
+            mp = missing_path(path)
+            if missing:
+                mp.write_text(json.dumps(missing))
+                failed.append(f"{y}-{m:02d}")
+                log(f"  {pair} {y}-{m:02d}: {len(df):,} minut, brakuje {len(missing)} dni ({', '.join(x[8:] for x in missing[:6])}"
+                    f"{'…' if len(missing) > 6 else ''}) — dociągnę przy następnym uruchomieniu")
+                code = "!"
+            else:
+                mp.unlink(missing_ok=True)
+                log(f"  {pair} {y}-{m:02d}: {len(df):,} minut")
+                code = "-" if not len(df) else "~" if (y, m) == (yesterday.year, yesterday.month) else "o"
             written += 1
-            log(f"  {pair} {y}-{m:02d}: {len(df):,} minut")
-            if on_month:
-                on_month(y, m, True, len(df))
+        if on_month:
+            on_month(y, m, code)
         if progress:
             progress(k, len(todo))
     return {"written": written, "failed": failed, "todo": len(todo)}
 
 
 def load_m1(pair: str, root: Path) -> pd.DataFrame:
-    files = sorted((root / "m1" / pair).glob("*.parquet"))
+    files = sorted((root / "m1" / pair).glob("????-??.parquet"))
     if not files:
         return pd.DataFrame(columns=COLS)
     return pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)

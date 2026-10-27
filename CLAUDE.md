@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.8 · 2026-10-27 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
+Wersja 0.9 · 2026-10-27 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
 
 ---
 
@@ -32,7 +32,7 @@ Zakładka **Inwestorzy** istnieje, ale jest pusta („wkrótce"). Nie budujemy j
 - **B1.** Sygnał liczony na zamknięciu świecy `t`, wejście na **open świecy `t+1`**. Nigdy po cenie, której w danej chwili nie dało się znać.
 - **B2.** Strategia widzi tylko przeszłość. Przed liczeniem każda strategia przechodzi **detektor look-ahead** (sekcja 9). Niezaliczony = status `błąd: look-ahead`, bez liczenia.
 - **B3.** Sygnały i poziomy TP/SL liczone na cenie środkowej (mid = (bid + ask) / 2). Spread z tabeli (sekcja 2) odejmowany **jednorazowo** od każdej transakcji, w pipsach. Pips = `0,0001`; dla par z JPY = `0,01`. Faktyczny spread z danych bid/ask służy tylko jako test wrażliwości (sekcja 9).
-- **B4.** Dźwignia **1:5**. Wielkość pozycji = X% kapitału jako depozyt, nominał = 5 × X% kapitału. Domyślnie zawsze liczymy **X ∈ {5, 10, 15, 20, 30}%**; strategia może podać własne wartości (`SIZING`). Suma depozytów otwartych pozycji ≤ 100% kapitału, czyli łącznie nigdy ponad 1:5. Sygnał bez wolnego depozytu jest pomijany i liczony w raporcie. Szczegóły: 8.5.
+- **B4.** Dźwignia **30:1** — zawsze (D-024). Wielkość pozycji = X% kapitału jako depozyt, nominał = 30 × X% kapitału. Domyślnie zawsze liczymy **X ∈ {5, 10, 15, 20, 30}%**; strategia może podać własne wartości (`SIZING`). Suma depozytów otwartych pozycji ≤ 100% kapitału, czyli łącznie nigdy ponad 30:1. Sygnał bez wolnego depozytu jest pomijany i liczony w raporcie. Szczegóły: 8.5.
 - **B5.** Gdy w jednej świecy H1 mieszczą się i TP, i SL → kolejność rozstrzygamy na świecach **M1** (Dukascopy). Gdy oba poziomy padają w tej samej minucie → **SL** (pesymistycznie) i transakcja dostaje flagę `ambiguous`. Wynik z > 2% takich transakcji dostaje ostrzeżenie.
 - **B6.** Luka cenowa: open za poziomem SL → wyjście po open (gorzej). Open za poziomem TP → wyjście po poziomie TP (bez zysku z luki).
 - **B7.** Każdy wariant wyjścia ma SL albo limit czasu. Żadnych pozycji bez końca.
@@ -88,7 +88,7 @@ Zakładka **Inwestorzy** istnieje, ale jest pusta („wkrótce"). Nie budujemy j
 
 \* Nazwy potwierdzić testem przy implementacji (E1, E2).
 
-- Dźwignia **1:5**. Waluta konta: **USD**. Kapitał startowy: **10 000 USD**.
+- Dźwignia **30:1** (B4, D-024). Waluta konta: **USD**. Kapitał startowy: **10 000 USD**.
 - Wynik w walucie kwotowanej przeliczany na walutę konta po kursie z zamknięcia świecy wyjścia, z naszych własnych danych (JPY przez USD/JPY, GBP przez GBP/USD, CHF przez USD/CHF, CAD przez USD/CAD).
 - Swap / rolowanie: domyślnie 0 (decyzja O5). Raport pokazuje, ile nocy przez 21:00 UTC trzymano pozycje, żeby było widać skalę pominiętego kosztu.
 
@@ -197,6 +197,7 @@ Wejścia są wspólne dla wszystkich wariantów wyjścia, więc trzymamy je raz 
   service-account.json                     # klucz Firebase (S3)
   config.json                              # {"owner_uid": "..."} — kto może zlecać liczenie (S1)
   data/m1/{PARA}/{RRRR-MM}.parquet         # M1 bid i ask z Dukascopy — surowe, niezmienne (D4), nigdy na GitHub (D-010)
+  data/m1/{PARA}/{RRRR-MM}.missing.json    # dni, których jeszcze nie udało się pobrać — dociągane w kolejnym przebiegu (D-025)
   data/h1/{PARA}.parquet                   # H1 zbudowane z M1 — do silnika
   data-repo/                               # lokalny klon gałęzi data
   data/yahoo/{PARA}.parquet                # kopia świec z Firestore
@@ -226,7 +227,7 @@ Dane Dukascopy (M1 i zbudowane z nich H1) zostają na Macu: są za duże na GitH
 - Python 3.12, menedżer `uv`. Instalacja: `uv tool install -e runner` → w terminalu działa komenda `ia5`.
 - `ia5 start`:
   1. Sprawdza połączenie i stan bazy (`meta/status`).
-  2. Dociąga z Dukascopy brakujące dni M1 (bid i ask; za pierwszym razem całą historię, od ok. 2003) i składa z nich świece H1.
+  2. Dociąga z Dukascopy brakujące dni M1 (bid i ask; za pierwszym razem całą historię, od ok. 2003) i składa z nich świece H1. Pobrane dni zapisuje od razu, nieudane dni zapisuje jako brakujące i ponawia przy następnym uruchomieniu (D-025).
   3. Synchronizuje świece Yahoo z Firestore, robi kontrolę jakości (D5) i porównuje Yahoo z Dukascopy na wspólnym okresie; pokazuje różnice.
   4. Liczy mapę pokrycia (luki wobec kalendarza sesji, D-022) i pushuje na gałąź `data` świece H1 z Yahoo oraz `coverage/coverage.json` (każde tylko, jeśli coś się zmieniło).
   5. Przegląd zdrowia (D-023) po każdej synchronizacji i co godzinę → `meta/status.health`.
@@ -289,8 +290,8 @@ Pips brutto, pips netto (− spread), R (względem SL; dla wyjść bez SL — wz
 
 ### 8.5 Portfel i kapitał
 - Najpierw przewaga transakcji (pips, R) — niezależna od wielkości pozycji. Osobno symulacja kapitału — zależna od wielkości pozycji.
-- Wielkość pozycji (B4): depozyt = X% bieżącego kapitału, nominał = 5 × depozyt, procent składany przy wejściu. Domyślnie liczymy wszystkie X ∈ {5, 10, 15, 20, 30}%; strategia może podać własną listę w `SIZING`.
-- Limit: suma depozytów otwartych pozycji ≤ 100% kapitału. Przy X = 30% to najwyżej 3 pozycje naraz; czwarty sygnał jest pomijany i liczony. Dzięki temu łącznie nigdy ponad 1:5.
+- Wielkość pozycji (B4): depozyt = X% bieżącego kapitału, nominał = 30 × depozyt, procent składany przy wejściu. Domyślnie liczymy wszystkie X ∈ {5, 10, 15, 20, 30}%; strategia może podać własną listę w `SIZING`.
+- Limit: suma depozytów otwartych pozycji ≤ 100% kapitału. Przy X = 30% to najwyżej 3 pozycje naraz; czwarty sygnał jest pomijany i liczony. Dzięki temu łącznie nigdy ponad 30:1. Kapitał może spaść do zera lub poniżej (brak modelu stop-out brokera) — wtedy nowe wejścia są pomijane.
 - Wynik w USD: zysk w walucie kwotowanej przeliczany po kursie z zamknięcia świecy wyjścia (sekcja 2).
 - W karcie strategii wielkość pozycji to **przełącznik**, nie kolejne warianty w rankingu. Ranking, DSR i PBO liczymy na przewadze transakcji (R), żeby wielkość pozycji nie mnożyła liczby prób.
 - Kapitał przeliczany także w przeglądarce, gdy wyłączasz pary w filtrach.
@@ -335,7 +336,7 @@ Rozbicia: para, rok, kierunek, sesja (Azja 00–07, Europa 07–13, USA 13–21 
 **Strategie** | **Stats** | **Inwestorzy** (pusta, „wkrótce").
 
 **Stats** (`meta/status` + `runner/heartbeat` + `coverage/coverage.json` z gałęzi `data`, 0 dodatkowych odczytów Firestore): **Stan systemu** (D-023) — jedno zdanie o stanie, opis bazy i projektu (ile świec w którym źródle, zakresy, strategie, gałąź `data`) i lista nazwanych kontroli (✓ / ! / ✕) z opisem, szczegółami i „co zrobić”; gdy przegląd jest starszy niż 2 h, strona mówi to wprost; świece w bazie i ostatnie pobranie, latencja (ostatnia, mediana 24 h, mini-wykres), wynik przeglądu, liczba flag;
-**mapa pokrycia** (D-022) — 8 par × miesiące, Dukascopy od 2003 / Yahoo 730 dni, każdy miesiąc wobec kalendarza sesji: nie pobrany / błąd / pełny / z dziurami (natężenie) / w toku / Dukascopy nie ma; luki rozdzielone na *dziury* (brak tylko w tej parze) i *wspólne* (brak w ≥ połowie par: święto, krótka sesja, przerwa źródła), z potwierdzeniem z drugiego źródła; cienkie godziny (< 30 minut z notowaniami); klik miesiąc → lista luk co do godziny, klik para → wszystkie jej dziury; w trakcie pobierania mapa wypełnia się na żywo z heartbeatu; **dziennik dzień po dniu** — z ostatnich 30 dni, ile świec przybyło każdego dnia (wg dnia świecy, UTC) wobec oczekiwanych z kalendarza sesji, per para, z brakami na kolor; tabela par; lista flag.
+**mapa pokrycia** (D-022) — 8 par × miesiące, Dukascopy od 2003 / Yahoo 730 dni, każdy miesiąc wobec kalendarza sesji: nie pobrany / błąd / pobrany częściowo (brakujące dni) / pełny / z dziurami (natężenie) / w toku / Dukascopy nie ma; luki rozdzielone na *dziury* (brak tylko w tej parze) i *wspólne* (brak w ≥ połowie par: święto, krótka sesja, przerwa źródła), z potwierdzeniem z drugiego źródła; cienkie godziny (< 30 minut z notowaniami); klik miesiąc → lista luk co do godziny, klik para → wszystkie jej dziury; w trakcie pobierania mapa wypełnia się na żywo z heartbeatu; **dziennik dzień po dniu** — z ostatnich 30 dni, ile świec przybyło każdego dnia (wg dnia świecy, UTC) wobec oczekiwanych z kalendarza sesji, per para, z brakami na kolor; tabela par; lista flag.
 
 ### 10.3 Lista strategii
 Nazwa, status (do policzenia / liczy się x% / policzona / błąd / zamrożona), data, werdykt, kluczowe liczby najlepszego wariantu IS obok OOS.

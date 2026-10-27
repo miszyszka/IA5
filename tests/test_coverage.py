@@ -78,3 +78,18 @@ def test_map_finds_planted_gaps_and_classifies_them(tmp_path, monkeypatch):
     assert coverage.live_states(tmp_path, "GBPUSD", until, ["2024-02"]) == "ox~"
     assert coverage.live_states(tmp_path, "EURGBP", until) == "-o~"
     assert coverage.content_hash(cov) == coverage.content_hash({**cov, "generated": 1})
+
+
+def test_incomplete_month_missing_days_are_not_holes(tmp_path, monkeypatch):
+    """D-025: dzień, którego jeszcze nie pobrano, nie jest dziurą — liczy się osobno jako brakujący."""
+    import json
+
+    monkeypatch.setattr(dukascopy, "START", date(2024, 2, 1))
+    f = tmp_path / "m1" / "EURUSD"
+    write_m1(f, "2024-02", ts(2024, 2, 29, 20))
+    (f / "2024-02.missing.json").write_text(json.dumps(["2024-02-07"]))
+    hrs = [int(t) for t in coverage.expected_hours(ts(2024, 2, 1), ts(2024, 3, 1)) if not ts(2024, 2, 7) <= t < ts(2024, 2, 8)]
+    cov = coverage.build(tmp_path, {"EURUSD": pd.DataFrame({"ts": hrs, "minutes": 60})}, {}, until=date(2024, 3, 5), now=ts(2024, 3, 6))
+    row = cov["sources"]["dukascopy"]["pairs"]["EURUSD"]["m"][0]
+    assert row[0] == coverage.INCOMPLETE and row[3] == 0 and row[6] == 24 and row[1] == row[2]
+    assert coverage.live_states(tmp_path, "EURUSD", date(2024, 3, 5)) == "!."
