@@ -9,6 +9,7 @@ def test_do_sync_live_states_and_coverage(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "DATA", tmp_path)
     monkeypatch.setattr(cli, "PAIRS", {"EURUSD": None, "USDJPY": None})
     monkeypatch.setattr(dukascopy, "START", date(2024, 1, 1))
+    monkeypatch.setattr(dukascopy, "COOLDOWN", 0)
 
     class Today(dukascopy.datetime):
         @classmethod

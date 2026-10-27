@@ -394,6 +394,9 @@ def cmd_status(_args) -> int:
 
 
 def main(argv=None) -> int:
+    # gRPC (Firestore) wypisuje szum „FD from fork parent…” przy każdym podprocesie (git, sandbox) — tylko błędy
+    os.environ.setdefault("GRPC_VERBOSITY", "ERROR")
+    os.environ.setdefault("GLOG_minloglevel", "2")
     parser = argparse.ArgumentParser(prog="ia5")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("start", help="sync + heartbeat + kolejka strategii").set_defaults(func=cmd_start)

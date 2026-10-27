@@ -5,6 +5,11 @@ Najnowsze na górze.
 
 ---
 
+### D-026 · 2026-10-27 · Dukascopy: tempo pobierania dobierane do dławienia serwera
+- **Obserwacja (log z Maca, 27.10):** miesiąc bez błędów pobiera się w ~10–15 s, miesiąc z błędami w 2–3 min; błędy to `connect timeout` / `read timeout` seriami — serwer dławi zbyt wiele połączeń naraz (8 dni = 16 plików jednocześnie w D-025 pogorszyło sprawę).
+- **Decyzja:** start od 6 dni naraz; po miesiącu z błędami tempo spada o połowę (min. 1), przy > 25% odrzuconych dni przerwa 45 s; odrzucone dni są od razu ponawiane wolniej w tym samym przebiegu; po czystym miesiącu tempo rośnie o 1 (maks. 8). Ucisza też szum gRPC („FD from fork parent…”).
+- **Sprzątanie:** z repo usunięte przypadkowo dodane paczki `.whl` (≈ 49 MB, stąd wolny `git pull`); `*.whl` w `.gitignore`. Historia gita zostaje (G4).
+
 ### D-025 · 2026-10-27 · Dukascopy: niepełne miesiące zapisywane od razu, pobierane tylko brakujące dni
 - **Problem (Michał):** pojedynczy nieudany dzień wyrzucał cały pobrany miesiąc; przy wielogodzinnym pierwszym pobieraniu częste błędy sieci oznaczały powtarzanie tej samej pracy, a dashboard nie pokazywał, co już jest.
 - **Decyzja:** pobrane dni są dopisywane do `RRRR-MM.parquet` od razu; dni, które się nie udały, trafiają do `RRRR-MM.missing.json` i przy następnym uruchomieniu pobierane są tylko one (oraz dni po ostatnim zapisanym — bieżący miesiąc nie jest już pobierany od nowa przy każdym starcie). Już zapisane minuty się nie zmieniają (D4). Szybciej: 8 dni naraz zamiast 4, 3 próby na plik zamiast 6 (nieudany dzień i tak wróci w kolejnym przebiegu).

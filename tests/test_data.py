@@ -100,6 +100,7 @@ def test_sync_saves_partial_month_and_fetches_only_missing_days(tmp_path, monkey
     from ia5 import dukascopy
 
     monkeypatch.setattr(dukascopy, "START", date(2024, 1, 1))
+    monkeypatch.setattr(dukascopy, "COOLDOWN", 0)
     bad_day = {date(2024, 2, 7)}
     calls = []
 
@@ -159,6 +160,7 @@ def test_month_written_mid_month_is_refetched(tmp_path, monkeypatch):
     from ia5 import dukascopy
 
     monkeypatch.setattr(dukascopy, "START", date(2024, 1, 1))
+    monkeypatch.setattr(dukascopy, "COOLDOWN", 0)
     folder = tmp_path / "m1" / "EURUSD"
     folder.mkdir(parents=True)
 
@@ -178,3 +180,28 @@ def test_month_written_mid_month_is_refetched(tmp_path, monkeypatch):
     # niepełny, ale zapisany długo po końcu miesiąca (np. święto bez notowań) — nie pobieramy w kółko
     write("2024-02.parquet", "2024-02-27", "2024-03-10")
     assert dukascopy.months_to_sync(tmp_path, "EURUSD", date(2024, 4, 9)) == [(2024, 4)]
+
+
+def test_sync_retries_throttled_days_in_same_run(tmp_path, monkeypatch):
+    """D-026: dzień odrzucony przez serwer (dławienie) jest ponawiany wolniej w tym samym przebiegu."""
+    from ia5 import dukascopy
+
+    monkeypatch.setattr(dukascopy, "START", date(2024, 3, 1))
+    monkeypatch.setattr(dukascopy, "COOLDOWN", 0)
+    seen = set()
+
+    def flaky(pair, d):
+        if d.day % 3 == 0 and d not in seen:  # co trzeci dzień: pierwsza próba odrzucona
+            seen.add(d)
+            raise RuntimeError("Connection timed out")
+        return pd.DataFrame([[int(pd.Timestamp(d).timestamp()), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], columns=dukascopy.COLS)
+
+    class Today(dukascopy.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return dukascopy.datetime(2024, 4, 2, tzinfo=tz)
+
+    monkeypatch.setattr(dukascopy, "fetch_day", flaky)
+    monkeypatch.setattr(dukascopy, "datetime", Today)
+    r = dukascopy.sync_pair("EURUSD", tmp_path, log=lambda m: None)
+    assert r["failed"] == [] and not list((tmp_path / "m1" / "EURUSD").glob("*.missing.json"))

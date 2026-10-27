@@ -23,7 +23,9 @@ import pandas as pd
 BASE = "https://datafeed.dukascopy.com/datafeed"
 REC = struct.Struct(">5if")
 START = date(2003, 5, 1)
-WORKERS = 8      # jednoczesne dni na parę (każdy dzień = 2 pliki: BID i ASK)
+WORKERS = 6      # jednoczesne dni na start (każdy dzień = 2 pliki: BID i ASK); dalej tempo dobiera się samo (D-026)
+MIN_WORKERS, MAX_WORKERS = 1, 8
+COOLDOWN = 45    # s przerwy, gdy serwer zaczyna odrzucać połączenia (dławienie po stronie Dukascopy)
 TRIES = 3        # próby na plik, przerwy 2, 4 s — dzień, który się nie pobrał, zostaje zapisany jako brakujący
                  # i jest dociągany przy następnym uruchomieniu (D-025), więc nie warto czekać minutami
 COLS = ["ts", "bo", "bh", "bl", "bc", "bv", "ao", "ah", "al", "ac", "av"]
@@ -210,11 +212,30 @@ def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress
         except Exception as e:  # noqa: BLE001
             return e
 
+    pace = workers
+
+    def fetch(days, n):
+        with ThreadPoolExecutor(max(1, n)) as ex:
+            return list(ex.map(safe_day, days))
+
     for k, (y, m) in enumerate(todo, 1):
         path = folder / f"{y}-{m:02d}.parquet"
         days = days_to_fetch(path, y, m, yesterday)
-        with ThreadPoolExecutor(workers) as ex:
-            res = list(ex.map(safe_day, days))
+        res = fetch(days, pace)
+        bad_i = [i for i, r in enumerate(res) if isinstance(r, Exception)]
+        if bad_i:
+            # D-026: błędy to prawie zawsze dławienie serwera — zwalniamy, czekamy i od razu ponawiamy te dni
+            # wolniej (zamiast zostawiać je na następne uruchomienie)
+            pace = max(MIN_WORKERS, pace // 2)
+            if len(bad_i) > len(days) // 4:
+                log(f"  {pair} {y}-{m:02d}: serwer odrzuca połączenia ({len(bad_i)} z {len(days)} dni) — przerwa {COOLDOWN} s, "
+                    f"dalej {pace} naraz")
+                time.sleep(COOLDOWN)
+            retry = fetch([days[i] for i in bad_i], max(1, pace // 2))
+            for i, r in zip(bad_i, retry):
+                res[i] = r
+        elif pace < MAX_WORKERS:
+            pace += 1  # czysty miesiąc — ostrożnie przyspieszamy
         bad = [d for d, r in zip(days, res) if isinstance(r, Exception)]
         frames = [r for r in res if not isinstance(r, Exception) and len(r)]
         missing = sorted((set(read_missing(path)) - {d.isoformat() for d in days}) | {d.isoformat() for d in bad})
