@@ -5,6 +5,12 @@ Najnowsze na górze.
 
 ---
 
+### D-036 · 2026-10-27 · Badanie przed strategią na niezależnych danych (research/)
+- **Powód:** cztery strategie pisane „z głowy” i oceniane na tych samych danych dały 🔴 — każda kolejna poprawka była dopasowaniem do historii EUR/USD. Michał: „postaraj się bardziej”.
+- **Decyzja:** hipotezę szukamy na innym źródle niż to, na którym Mac ją ocenia. Odkrycie: H1 brokera MT (8 par, 2012–2022, publiczne repo `ejtraderLabs/historical-data`), z podziałem na połowę odkrycia (≤ 2017) i potwierdzenia (≥ 2018). Ocena: Dukascopy na Macu (2003–2026) — inne źródło cen i 9 lat, których badanie nie widziało. Skrypty w `research/`, dane tylko lokalnie (nie w repo, nie do backtestów — D7 bez zmian).
+- **Pierwszy wynik:** EUR/USD słabnie w porannej sesji europejskiej (zgodne z Breedon i Ranaldo 2013) → `strategies/examples/eurusd_europe_morning.py`, 18 wariantów.
+- **Odrzucone:** dalsze strojenie strategii RSI/Donchian na Dukascopy (PBO i korelacja IS–OOS pokazały brak przewagi); przeszukiwanie setek wariantów na jednych danych.
+
 ### D-035 · 2026-10-27 · Stop kroczący i limit czasu do 480 świec
 - **Decyzja (Michał):** „Zrób oba jako dwie strategie” — strategia 4 (wybicie z kanału Donchiana, trend D1, wyjścia z obecnej siatki) i strategia 5 (to samo wejście, nowy stop kroczący).
 - **Nowe wyjście `trail`** (`n`, `sl`, `trail`, opcjonalnie `tp`, `cap`): stop w świecy j = max(stop początkowy `sl`×ATR, najwyższe high świec przed j − `trail`×ATR) dla long, lustrzanie dla short. ATR ze świecy sygnału, stały przez całą transakcję. High bieżącej świecy nie przesuwa stopu w tej samej świecy — nie wiemy, czy padło przed dołkiem (pesymistycznie, jak B5). Luka za stopem → wyjście po open (B6). Powód wyjścia „stop kroczący”, gdy stop był już wyżej niż początkowy; R względem stopu początkowego.

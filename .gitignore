@@ -33,3 +33,4 @@ node_modules/
 
 # Paczki pobrane lokalnie (nie należą do repo)
 *.whl
+research/data/

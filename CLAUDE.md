@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.17 · 2026-10-27 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
+Wersja 0.18 · 2026-10-27 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
 
 ---
 
@@ -399,6 +399,7 @@ IA5/
 ├─ web/                      # dashboard (GitHub Pages): index.html, css/, js/ (app, list, card, charts, editor,
 │                            #   status, stats, session, coverage, health, data, fb, metrics, util, config), vendor/
 ├─ scripts/                  # check_strategy.py (kontrola kodu bez danych Michała), demo.py
+├─ research/                 # badania hipotez na niezależnych danych, przed strategią (D-036)
 ├─ apps_script/              # Code.gs + appsscript.json (clasp)
 ├─ runner/                   # program na Maca
 │  ├─ pyproject.toml
