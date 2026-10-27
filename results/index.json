@@ -1,6 +1,29 @@
 {
  "strategies": [
   {
+   "id": "GMdgF9FKlAtMzjKEZXYk",
+   "name": "Strategia 5",
+   "run_id": "20261027-184719",
+   "created": 1793126839,
+   "verdict": "yellow",
+   "verdict_note": "zaliczone 4 z 5 testów",
+   "n_variants": 18,
+   "hypothesis": "Sezonowość w ciągu doby: waluta słabnie w godzinach pracy własnego rynku (Breedon i Ranaldo, 2013 —\n„Intraday patterns in FX returns and order flow”). Europejskie firmy i fundusze sprzedają euro rano, gdy otwiera\nsię Londyn i Frankfurt, a po południu przejmuje Nowy Jork. Stąd short EUR/USD od otwarcia Londynu na kilka godzin.\nEfekt znaleziony na niezależnych danych brokera MT 2012–2022 (8 par): tylko EUR/USD przebija spread, w obu\npołowach próby i w 10 z 11 lat; tu sprawdzamy go na Dukascopy 2003–2026 — innym źródle i dłuższym okresie.",
+   "pairs": [
+    "EURUSD"
+   ],
+   "data_from": 1052082000,
+   "data_to": 1793055600,
+   "source": "dukascopy",
+   "engine_version": "0.7.0",
+   "best_exit": "po 6 świecach",
+   "is_mean_r": 0.114031,
+   "oos_mean_r": 0.070134,
+   "oos_mean_pips": 0.697638,
+   "oos_trades": 1524,
+   "demo": false
+  },
+  {
    "id": "Yf99XxcCNef88FlxJzgR",
    "name": "Strategia 4",
    "run_id": "20261027-183217",
