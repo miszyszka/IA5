@@ -1,6 +1,29 @@
 {
  "strategies": [
   {
+   "id": "OYzV0kbdCgBsLjdrFFiD",
+   "name": "RSI 70/30 w silnym trendzie",
+   "run_id": "20261027-172058",
+   "created": 1793121658,
+   "verdict": "red",
+   "verdict_note": "brak przewagi",
+   "n_variants": 699,
+   "hypothesis": "W silnym trendzie H1 krótkie, gwałtowne ruchy przeciw trendowi (RSI14 przebija 70 przy trendzie\nspadkowym albo 30 przy wzrostowym) to chwilowa przesada: płynność wraca do kierunku głównego trendu\ni cena cofa się w jego stronę w ciągu kilku-kilkunastu godzin.",
+   "pairs": [
+    "EURUSD"
+   ],
+   "data_from": 1052082000,
+   "data_to": 1793055600,
+   "source": "dukascopy",
+   "engine_version": "0.4.0",
+   "best_exit": "po 12 świecach",
+   "is_mean_r": 0.118637,
+   "oos_mean_r": -0.113525,
+   "oos_mean_pips": -1.317647,
+   "oos_trades": 34,
+   "demo": false
+  },
+  {
    "id": "demo-sma200-rsi",
    "name": "DEMO · SMA200 rośnie + RSI poniżej progu",
    "run_id": "20261026-152110",
