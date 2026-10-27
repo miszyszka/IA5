@@ -30,6 +30,8 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
 - **D-034:** dokładanie pozycji (`PYRAMID`), wagi pozycji (|sygnał| mnoży depozyt), wyjście `rsi_streak`, `HOURS = False` dla strategii; `ENGINE_VERSION` 0.6.0. Strategie „RSI 70/30 w silnym trendzie” w dwóch wersjach: `strategies/examples/rsi_trend_pyramid.py` i `rsi_trend_single.py`. 122 testy + Node zielone.
 
+- Analiza „RSI 70/30 w silnym trendzie” (obie wersje 🔴): straty z braku stopu cenowego (do −332 pips), wejście w chwili przebicia łapie początki odwróceń, dokładanie powiększa obsunięcie (−25% przy 5% depozytu), OOS 2021–2024 ujemny, tylko EUR/USD. Nowa strategia `strategies/examples/trend_pullback_v2.py`: 32 wejścia × 39 wyjść (każde z SL) = 1248 wariantów, ok. 70 s na 23 latach EUR/USD.
+
 **Następne (Michał)**
 0. Wkleić nowy `apps_script/Code.gs` do Apps Script, zapisać i **raz uruchomić `installTrigger()`** (wyzwalacz co 1 min zamiast co 5).
 1. Na Macu: przerwij działające `ia5 start` (Ctrl+C), `git pull`. Potem **dwa terminale**: w pierwszym `ia5 fetch` (pobiera, działa bez końca), w drugim `ia5 start` (liczy).
