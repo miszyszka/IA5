@@ -1,0 +1,20 @@
+{
+ "tested": 312640,
+ "eligible": 29534,
+ "discovered": 7,
+ "confirmed": 1,
+ "p_threshold": 1.1648200522021906e-05,
+ "t_threshold": 4.230701151987232,
+ "cuts": [
+  1422568800,
+  1607812200
+ ],
+ "t0": 1052082000,
+ "t1": 1793055600,
+ "pairs": [
+  "EURUSD",
+  "USDJPY"
+ ],
+ "big": true,
+ "seconds": 7.7
+}
