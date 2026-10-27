@@ -75,3 +75,28 @@ export const FLAG_LABEL = {
   luka: 'luka w sesji', revised: 'Yahoo poprawiło świecę', ohlc: 'high/low poza open/close',
   'cena<=0': 'cena ≤ 0', ts: 'czas nie na pełnej godzinie',
 };
+
+/**
+ * Audyt świeca po świecy z meta/status.recent (D-027): { start, pairs: { PARA: napis, 1 znak = 1 godzina } }.
+ * Znaki z Apps Script: '1' jest, 'l' spóźniona (> 20 min po zamknięciu), 'f' z flagą jakości, '.' brak.
+ * Zwraca { hours: [ts…], pairs: { PARA: [stan…] } } tylko do ostatniej zamkniętej godziny;
+ * stany: ok, late, flag, missing (oczekiwana, a brak > 20 min po zamknięciu), pending (zamknięta < 20 min temu), closed (poza sesją).
+ */
+export function recentCells(recent, now, graceS = 20 * 60) {
+  if (!recent?.pairs) return null;
+  const last = lastClosedTs(now);
+  const hours = [];
+  for (let ts = recent.start; ts <= last; ts += H) hours.push(ts);
+  const pairs = {};
+  for (const [p, str] of Object.entries(recent.pairs)) {
+    pairs[p] = hours.map((ts, i) => {
+      const c = str[i] ?? '.';
+      if (c === '1') return 'ok';
+      if (c === 'l') return 'late';
+      if (c === 'f') return 'flag';
+      if (!isExpectedBar(ts)) return 'closed';
+      return now - (ts + H) > graceS ? 'missing' : 'pending';
+    });
+  }
+  return { hours, pairs };
+}

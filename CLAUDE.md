@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.9 · 2026-10-27 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
+Wersja 0.10 · 2026-10-27 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
 
 ---
 
@@ -148,6 +148,7 @@ candles/{PARA}_{RRRR-MM}            np. candles/EURUSD_2026-10
 meta/status
   lastRun: { startedAt, finishedAt, ok, error }
   daily:   { "2026-10-26": { EURUSD: 19, ... }, ... }   # dziennik: świece w bazie wg dnia świecy, 60 dni
+  recent:  { start, pairs: { EURUSD: "111l1.f…" } }       # audyt świeca po świecy, 3 tygodnie: 1 jest, l spóźniona, f flaga, . brak (D-027)
   pairs:   { EURUSD: { lastTs, latencySec, count, flags[] }, ... }
   totalBars, latency24h[], dataSha
   health:  { at, state, summary, facts[], checks: [{ id, name, state, text, detail[], fix }] }   # przegląd zdrowia z Maca (D-023)
@@ -328,15 +329,15 @@ Rozbicia: para, rok, kierunek, sesja (Azja 00–07, Europa 07–13, USA 13–21 
 - **Dane** i **Mac** — dwa wskaźniki tuż obok siebie, każdy z kropką stanu (jedyne świecące elementy strony; przy działającym systemie kropka lekko „oddycha”).
   - Dane: działa / opóźnienie / stoi / rynek zamknięty (weekend to nie awaria); obok ostatnia świeca i odliczanie do następnej. Progi w godzinach rynku: OPÓŹNIENIE gdy świecy brak > 20 min po zamknięciu, STOI gdy > 75 min.
   - Mac: połączony / synchronizuje / liczy (nazwa, postęp %) / rozłączony (od kiedy).
-- **Problemy** — liczba kontroli przeglądu zdrowia, które nie są OK (bursztyn: uwagi, czerwień: błąd); pojawia się tylko, gdy są (klik → Stats). Bez przeglądu — liczba flag Yahoo.
+- **Problemy** — liczba kontroli przeglądu zdrowia, które nie są OK (bursztyn: uwagi, czerwień: błąd); pojawia się tylko, gdy są (klik → Stats).
 - **Pary** — jeden symboliczny kafelek („8 par” + kody walut), bez danych i bez rozwijania.
 - Bez kafli KPI. Liczby (świece w bazie, latencja, flagi, pary) są w zakładce **Stats**.
 
 ### 10.2 Zakładki
 **Strategie** | **Stats** | **Inwestorzy** (pusta, „wkrótce").
 
-**Stats** (`meta/status` + `runner/heartbeat` + `coverage/coverage.json` z gałęzi `data`, 0 dodatkowych odczytów Firestore): **Stan systemu** (D-023) — jedno zdanie o stanie, opis bazy i projektu (ile świec w którym źródle, zakresy, strategie, gałąź `data`) i lista nazwanych kontroli (✓ / ! / ✕) z opisem, szczegółami i „co zrobić”; gdy przegląd jest starszy niż 2 h, strona mówi to wprost; świece w bazie i ostatnie pobranie, latencja (ostatnia, mediana 24 h, mini-wykres), wynik przeglądu, liczba flag;
-**mapa pokrycia** (D-022) — 8 par × miesiące, Dukascopy od 2003 / Yahoo 730 dni, każdy miesiąc wobec kalendarza sesji: nie pobrany / błąd / pobrany częściowo (brakujące dni) / pełny / z dziurami (natężenie) / w toku / Dukascopy nie ma; luki rozdzielone na *dziury* (brak tylko w tej parze) i *wspólne* (brak w ≥ połowie par: święto, krótka sesja, przerwa źródła), z potwierdzeniem z drugiego źródła; cienkie godziny (< 30 minut z notowaniami); klik miesiąc → lista luk co do godziny, klik para → wszystkie jej dziury; w trakcie pobierania mapa wypełnia się na żywo z heartbeatu; **dziennik dzień po dniu** — z ostatnich 30 dni, ile świec przybyło każdego dnia (wg dnia świecy, UTC) wobec oczekiwanych z kalendarza sesji, per para, z brakami na kolor; tabela par; lista flag.
+**Stats** (`meta/status` + `runner/heartbeat` + `coverage/coverage.json` z gałęzi `data`, 0 dodatkowych odczytów Firestore): **Stan systemu** (D-023) — jedno zdanie o stanie, opis bazy i projektu (ile świec w którym źródle, zakresy, strategie, gałąź `data`) i lista nazwanych kontroli (✓ / ! / ✕) z opisem, szczegółami i „co zrobić”; gdy przegląd jest starszy niż 2 h, strona mówi to wprost; świece w bazie i ostatnie pobranie, latencja (ostatnia, mediana 24 h, mini-wykres), kafelek przeglądu z listą wszystkich problemów (nazwa + zdanie);
+**mapa pokrycia** (D-022) — Dukascopy: 8 par × miesiące od 2003; Yahoo: **audyt świeca po świecy** z ostatnich 3 tygodni (1 kafelek = 1 świeca H1: jest / spóźniona > 20 min / z flagą / brak / w drodze / rynek zamknięty, na żywo z `meta/status.recent`, lista ostatnich problemów, D-027); w mapie Dukascopy każdy miesiąc wobec kalendarza sesji: nie pobrany / błąd / pobrany częściowo (brakujące dni) / pełny / z dziurami (natężenie) / w toku / Dukascopy nie ma; luki rozdzielone na *dziury* (brak tylko w tej parze) i *wspólne* (brak w ≥ połowie par: święto, krótka sesja, przerwa źródła), z potwierdzeniem z drugiego źródła; cienkie godziny (< 30 minut z notowaniami); klik miesiąc → lista luk co do godziny, klik para → wszystkie jej dziury; w trakcie pobierania mapa wypełnia się na żywo z heartbeatu; **dziennik dzień po dniu** — z ostatnich 30 dni, ile świec przybyło każdego dnia (wg dnia świecy, UTC) wobec oczekiwanych z kalendarza sesji, per para, z brakami na kolor; tabela par. Flagi Yahoo nie mają osobnej listy — widać je w audycie jako kafelki „z flagą”, a ich liczbę w przeglądzie zdrowia.
 
 ### 10.3 Lista strategii
 Nazwa, status (do policzenia / liczy się x% / policzona / błąd / zamrożona), data, werdykt, kluczowe liczby najlepszego wariantu IS obok OOS.

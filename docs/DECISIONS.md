@@ -5,6 +5,13 @@ Najnowsze na górze.
 
 ---
 
+### D-027 · 2026-10-27 · Stats: audyt Yahoo świeca po świecy, pełny kafelek przeglądu, bez listy flag
+- **Decyzja (Michał):** w widoku Yahoo mapy jeden kafelek = jedna świeca H1, ostatnie 3 tygodnie, na bieżąco. Apps Script prowadzi `meta/status.recent` (504 znaki na parę: `1` jest, `l` spóźniona > 20 min po zamknięciu, `f` z flagą jakości, `.` brak); dashboard dokłada kalendarz sesji i czas: brak = świeca w godzinach rynku, która nie dotarła 20 min po zamknięciu; „w drodze” = jeszcze w tym oknie. Ponowny zapis świecy nie kasuje oznaczeń „spóźniona” ani „flaga”.
+- **Kafelek „Przegląd zdrowia”** pokazuje każdy problem (nazwa + jedno zdanie), nie samą liczbę. **Flagi:** usunięty kafelek i lista flag (mało czytelne tokeny `luka@…`, `revised@…`); te same informacje są teraz w audycie (kafelki „z flagą”, braki) i w kontroli „Jakość świec Yahoo” przeglądu zdrowia. Apps Script nadal je liczy.
+- **Script Properties:** dziennik i audyt w osobnych właściwościach (`daily`, `recent`) — limit 9 KB na wartość był blisko przekroczenia. Stary format stanu jest wczytywany i rozdzielany automatycznie.
+- **Z4:** 0 dodatkowych zapisów (pole w istniejącym zapisie statusu), +4 KB dokumentu `meta/status`; zasiew jednorazowo 16 odczytów (te same co dziennik). Dashboard: 0 dodatkowych odczytów.
+- **Odrzucone:** czytanie świec Yahoo z Firestore w przeglądarce (Z2); audyt z mapy pokrycia Maca (aktualizowany co 6 h, nie „na bieżąco”).
+
 ### D-026 · 2026-10-27 · Dukascopy: tempo pobierania dobierane do dławienia serwera
 - **Obserwacja (log z Maca, 27.10):** miesiąc bez błędów pobiera się w ~10–15 s, miesiąc z błędami w 2–3 min; błędy to `connect timeout` / `read timeout` seriami — serwer dławi zbyt wiele połączeń naraz (8 dni = 16 plików jednocześnie w D-025 pogorszyło sprawę).
 - **Decyzja:** start od 6 dni naraz; po miesiącu z błędami tempo spada o połowę (min. 1), przy > 25% odrzuconych dni przerwa 45 s; odrzucone dni są od razu ponawiane wolniej w tym samym przebiegu; po czystym miesiącu tempo rośnie o 1 (maks. 8). Ucisza też szum gRPC („FD from fork parent…”).

@@ -202,7 +202,7 @@ table.data td.warn { color: var(--warn); }
 .more { margin-top: 8px; }
 
 /* ---------- Stats ---------- */
-.stats-sum { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 0; }
+.stats-sum { display: grid; grid-template-columns: 1fr 1fr 2fr; padding: 0; }
 .stat { display: grid; gap: 4px; align-content: start; padding: 14px 16px; min-width: 0; }
 .stat + .stat { border-left: 1px solid var(--line); }
 .stat small { color: var(--muted); font-size: 12px; }
@@ -238,6 +238,25 @@ table.daily tr.short .meter i { background: var(--warn); }
 .hk-mark.ok { color: var(--ok); } .hk-mark.warn { color: var(--warn); } .hk-mark.bad { color: var(--bad); }
 .hk-detail { margin: 0 0 6px 228px; padding: 0; list-style: none; display: grid; gap: 2px; font: 12px var(--mono); color: var(--muted); }
 .hk-fix { margin: 0 0 10px 228px; font-size: 12.5px; color: var(--text); }
+
+/* kafelek przeglądu: lista problemów */
+.ht { display: grid; gap: 3px; margin-bottom: 4px; color: var(--text); }
+.ht-row { display: block; line-height: 1.45; }
+.stat .ht-row b { font: 600 13px Inter, system-ui, sans-serif; margin-right: 4px; }
+.stat .ht-row { font-size: 12.5px; color: var(--muted); }
+.ht-row .hk-mark { margin-right: 6px; }
+
+/* audyt Yahoo świeca po świecy (D-027) */
+.a-ok { fill: var(--dim); fill-opacity: .8; }
+.a-late { fill: var(--warn); fill-opacity: .55; }
+.a-flag { fill: var(--warn); }
+.a-missing { fill: var(--bad); }
+.a-pending { fill: transparent; stroke: var(--muted); stroke-dasharray: 2 1; }
+.a-closed { fill: var(--line); fill-opacity: .5; }
+.covlegend .sw.a-ok { background: var(--dim); opacity: .8; } .covlegend .sw.a-late { background: var(--warn); opacity: .55; }
+.covlegend .sw.a-flag { background: var(--warn); } .covlegend .sw.a-missing { background: var(--bad); }
+.covlegend .sw.a-pending { background: none; border: 1px dashed var(--muted); } .covlegend .sw.a-closed { background: var(--line); }
+.gaplist.audit li { grid-template-columns: 170px 70px 1fr; }
 
 /* mapa pokrycia (D-022): szary = jest, bursztyn = dziura tej pary, obrys = brak pliku, czerwony obrys = błąd */
 .covsum { margin: 0 0 6px; color: var(--muted); font-size: 12.5px; }
@@ -334,6 +353,8 @@ textarea.code { flex: 1; font: 13px/1.55 var(--mono); tab-size: 4; resize: none;
   .flaglist li { grid-template-columns: 1fr auto; }
   .flaglist li span:last-child { grid-column: 1 / -1; color: var(--muted); }
   .covsums { display: none; }
+  .stats-sum .stat:nth-child(3) { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); }
+  .gaplist.audit li { grid-template-columns: 1fr auto; }
   .hk summary, .hk-row { grid-template-columns: 18px 1fr; }
   .hk summary > span, .hk-row > span { grid-column: 2; color: var(--muted); }
   .hk-detail, .hk-fix { margin-left: 28px; }

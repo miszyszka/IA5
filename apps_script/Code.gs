@@ -4,7 +4,7 @@
  * Źródło prawdy tego pliku: repo miszyszka/IA5, katalog apps_script/.
  *
  * Budżet Firestore (Z4): ok. 8 zapisów świec + 1 zapis statusu na godzinę ≈ 220 zapisów/dobę, 0 odczytów.
- * Dziennik świec (meta/status.daily, zakładka Stats): bez dodatkowych zapisów — jedzie w zapisie statusu;
+ * Dziennik (meta/status.daily) i audyt świeca po świecy z 3 tygodni (meta/status.recent, ok. 4 KB): bez dodatkowych zapisów — jadą w zapisie statusu;
  * jednorazowo 16 odczytów (2 miesiące × 8 par) przy pierwszym uruchomieniu i przy rebuildDaily().
  */
 const PROJECT_ID = 'project-ia5';
@@ -12,6 +12,8 @@ const DB = 'projects/' + PROJECT_ID + '/databases/(default)';
 const API = 'https://firestore.googleapis.com/v1/' + DB;
 const H = 3600;
 const DAILY_DAYS = 60; // tyle dni trzyma dziennik świec w meta/status
+const RECENT_H = 21 * 24; // audyt świeca po świecy: ostatnie 3 tygodnie (meta/status.recent, D-027)
+const LATE_S = 20 * 60;   // świeca zapisana później niż 20 min po zamknięciu = spóźniona
 
 const PAIRS = [
   { name: 'EURUSD', yahoo: 'EURUSD=X', pip: 0.0001 },
@@ -40,6 +42,7 @@ function rebuildDaily() {
   withLock_(() => {
     const state = loadState_();
     delete state.daily;
+    delete state.recent;
     saveState_(state);
     run_('tick');
   });
@@ -116,8 +119,13 @@ function run_(mode) {
   const exp = expectedTs(startedAt);
   const todo = PAIRS.filter(p => mode === 'backfill' ||
     !(state.pairs[p.name] && state.pairs[p.name].lastTs >= exp));
-  if (!todo.length && state.daily) return; // nic nowego — zero zapytań i zapisów
-  if (!state.daily) state.daily = seedDaily_(startedAt); // jednorazowo: dziennik z tego, co już jest w bazie
+  if (!todo.length && state.daily && state.recent) return; // nic nowego — zero zapytań i zapisów
+  if (!state.daily || !state.recent) { // jednorazowo: dziennik i audyt z tego, co już jest w bazie
+    const seed = seedFromDb_(startedAt);
+    state.daily = state.daily || seed.daily;
+    state.recent = state.recent || seed.recent;
+  }
+  state.recent = shiftRecent_(state.recent, startedAt);
 
   const updated = {};
   const errors = [];
@@ -164,6 +172,13 @@ function run_(mode) {
         row[p.name] = (row[p.name] || 0) + 1;
       });
       const lat = fresh.length ? writtenAt - (newest.ts + H) : null;
+      // audyt świeca po świecy: 1 = jest, l = spóźniona, f = z flagą jakości
+      const flagged = {};
+      flags.forEach(f => { const t = Number(f.split('@')[1]); if (!f.startsWith('luka')) flagged[t] = true; });
+      bars.forEach(b => {
+        const late = mode === 'tick' && b.ts > ps.lastTs && writtenAt - (b.ts + H) > LATE_S;
+        markRecent_(state.recent, p.name, b.ts, flagged[b.ts] ? 'f' : late ? 'l' : '1');
+      });
 
       ps.count = mode === 'backfill' ? bars.length : ps.count + fresh.length;
       ps.lastTs = Math.max(ps.lastTs, newest.ts);
@@ -187,6 +202,7 @@ function run_(mode) {
   const totalBars = PAIRS.reduce((s, p) => s + ((state.pairs[p.name] || {}).count || 0), 0);
   const status = {
     daily: pruneDaily_(state.daily, startedAt),
+    recent: state.recent,
     lastRun: { mode: mode, startedAt: startedAt, finishedAt: nowSec(), ok: !errors.length, error: errors.join('; ') || null },
     totalBars: totalBars,
     latency24h: state.latency24h,
@@ -196,9 +212,36 @@ function run_(mode) {
   saveState_(state);
 }
 
-/** Dziennik z dokumentów candles/* (bieżący i poprzedni miesiąc): { 'RRRR-MM-DD': { PARA: liczba } }. */
-function seedDaily_(now) {
+/** Okno audytu przesunięte do teraz: { start, pairs: { PARA: napis RECENT_H znaków } }, '.' = brak świecy. */
+function shiftRecent_(recent, now) {
+  const start = Math.floor(now / H) * H - RECENT_H * H;
+  const out = { start: start, pairs: {} };
+  PAIRS.forEach(p => {
+    const old = (recent && recent.pairs && recent.pairs[p.name]) || '';
+    const off = recent ? Math.round((start - recent.start) / H) : RECENT_H;
+    let str = '';
+    for (let i = 0; i < RECENT_H; i++) {
+      const j = i + off;
+      str += j >= 0 && j < old.length ? old[j] : '.';
+    }
+    out.pairs[p.name] = str;
+  });
+  return out;
+}
+
+function markRecent_(recent, pair, ts, ch) {
+  const i = Math.round((ts - recent.start) / H);
+  const str = recent.pairs[pair];
+  if (i < 0 || i >= RECENT_H || !str) return;
+  const rank = { '.': 0, '1': 1, l: 2, f: 3 }; // ponowny zapis tej samej świecy nie kasuje „spóźniona” ani flagi
+  if (rank[ch] < rank[str[i]]) return;
+  recent.pairs[pair] = str.slice(0, i) + ch + str.slice(i + 1);
+}
+
+/** Dziennik i audyt z dokumentów candles/* (bieżący i poprzedni miesiąc). */
+function seedFromDb_(now) {
   const daily = {};
+  const recent = shiftRecent_(null, now);
   const months = [monthKey(now), monthKey(now - 32 * 86400)];
   PAIRS.forEach(p => months.forEach(m => {
     const r = UrlFetchApp.fetch(API + '/documents/candles/' + p.name + '_' + m + '?mask.fieldPaths=bars', {
@@ -213,9 +256,10 @@ function seedDaily_(now) {
       const d = dayKey(Number(ts));
       const row = daily[d] = daily[d] || {};
       row[p.name] = (row[p.name] || 0) + 1;
+      markRecent_(recent, p.name, Number(ts), '1');
     });
   }));
-  return pruneDaily_(daily, now);
+  return { daily: pruneDaily_(daily, now), recent: recent };
 }
 
 /** Test krzyżowy par na ostatniej wspólnej świecy (D5). Zwraca odchyłki w pipsach. */
@@ -338,13 +382,26 @@ function toValue_(v) {
 
 // ---------- stan, blokada, log ----------
 
+// Script Properties mają limit 9 KB na wartość — dziennik i audyt trzymamy w osobnych właściwościach.
 function loadState_() {
-  const raw = PropertiesService.getScriptProperties().getProperty('state');
-  return raw ? JSON.parse(raw) : { pairs: {}, latency24h: [] };
+  const props = PropertiesService.getScriptProperties();
+  const raw = props.getProperty('state');
+  const s = raw ? JSON.parse(raw) : { pairs: {}, latency24h: [] };
+  ['daily', 'recent'].forEach(k => {
+    const v = props.getProperty(k);
+    if (v) s[k] = JSON.parse(v);
+  });
+  return s;
 }
 
 function saveState_(s) {
-  PropertiesService.getScriptProperties().setProperty('state', JSON.stringify(s));
+  const props = PropertiesService.getScriptProperties();
+  const rest = Object.assign({}, s);
+  ['daily', 'recent'].forEach(k => {
+    delete rest[k];
+    if (s[k]) props.setProperty(k, JSON.stringify(s[k])); else props.deleteProperty(k);
+  });
+  props.setProperty('state', JSON.stringify(rest));
 }
 
 function withLock_(fn) {

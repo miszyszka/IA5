@@ -121,7 +121,7 @@ def yahoo_flags(status: dict) -> dict:
     items = [(p, f) for p, v in (status.get("pairs") or {}).items() for f in (v.get("flags") or [])]
     items += [("trójkąt", f) for f in ((status.get("cross") or {}).get("flags") or [])]
     if not items:
-        return check("yahoo_flags", "Flagi jakości Yahoo", "ok", "Ostatnie pobrania przeszły kontrolę świec (OHLC, czas, luki, korekty).")
+        return check("yahoo_flags", "Jakość świec Yahoo", "ok", "Ostatnie pobrania przeszły kontrolę świec (OHLC, czas, luki, korekty).")
     return check(
         "yahoo_flags",
         "Flagi jakości Yahoo",

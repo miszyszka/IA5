@@ -14,7 +14,10 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 - **Dźwignia 30:1** (D-024, zmiana B4 na polecenie Michała), `ENGINE_VERSION` 0.1.0.
 - **Pobieranie Dukascopy (D-025):** niepełne miesiące zapisywane od razu z listą brakujących dni, kolejne przebiegi pobierają tylko brakujące; szybciej (8 dni naraz, 3 próby); mapa publikowana po każdej parze w trakcie długiego pobierania.
 
+- Stats: audyt Yahoo świeca po świecy (3 tygodnie, D-027), kafelek przeglądu z listą problemów, usunięte flagi jako osobna lista; tempo pobierania Dukascopy dobierane do dławienia (D-026).
+
 **Następne (Michał)**
+0. Wkleić nowy `apps_script/Code.gs` do Apps Script — audyt świec i dziennik.
 1. Na Macu `git pull` i `ia5 start` (przerwij działające Ctrl+C) — mapa i przegląd zdrowia pojawią się w Stats po synchronizacji (przy pierwszym pobieraniu od razu, na żywo).
 2. Jeśli jeszcze nie: nowy `apps_script/Code.gs` do Apps Script (dziennik dzień po dniu).
 

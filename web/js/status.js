@@ -84,10 +84,7 @@ function renderFlags() {
     el.title = hv.summary;
     return;
   }
-  const n = flagCount();
-  el.hidden = !n;
-  el.textContent = n ? `${n} ${n === 1 ? 'flaga' : n < 5 ? 'flagi' : 'flag'}` : '';
-  el.title = 'Flagi jakości danych — lista w zakładce Stats';
+  el.hidden = true; // bez przeglądu zdrowia nic nie pokazujemy (flagi Yahoo są w audycie świec, D-027)
 }
 
 function renderPairs() {

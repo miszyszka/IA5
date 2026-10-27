@@ -4,8 +4,8 @@ import { biggestHoles, cellKind, EMPTY, FAILED, INCOMPLETE, FULL, fmtRange, gaps
 import { getJSON, refreshData } from './data.js';
 import { healthView, problemWord, sortChecks } from './health.js';
 import { PAIRS } from './metrics.js';
-import { dailyRows, FLAG_LABEL, parseFlag } from './session.js';
-import { flagCount, heartbeatState } from './status.js';
+import { dailyRows, recentCells } from './session.js';
+import { heartbeatState } from './status.js';
 import { $, dateUTC, esc, h, local, num, store } from './util.js';
 
 const DAYS = 30;
@@ -30,8 +30,17 @@ function summary(s) {
     item('Świece w bazie', num(s.totalBars || 0, 0), `Yahoo H1 w Firestore${run.finishedAt ? `<br>ostatnie pobranie ${local(run.finishedAt)}` : ''}${run.ok === false ? `<br><span class="neg">błąd: ${esc(run.error)}</span>` : ''}`),
     item('Latencja ostatniej świecy', last == null ? '—' : `${num(last, 0)} s`, `${med == null ? '' : `mediana 24 h ${num(med, 0)} s`}${spark(lat)}`),
     item('Przegląd zdrowia', hv.problems ? `<span class="state-${hv.state}">${hv.problems} ${problemWord(hv.problems)}</span>` : '<span class="state-ok">OK</span>',
-      hv.at ? `${hv.checks.length} kontroli · ${local(hv.at)}` : 'jeszcze nie było'),
-    item('Flagi jakości', String(flagCount(s)), 'kontrola D5 — lista niżej'));
+      healthTile(hv)));
+}
+
+/** Kafelek przeglądu: każdy problem z nazwy i jednym zdaniem, a gdy jest dobrze — ile kontroli i kiedy. */
+function healthTile(hv) {
+  if (!hv.at && !hv.problems) return 'jeszcze nie było';
+  const MARK = { warn: '!', bad: '✕' };
+  const probs = sortChecks(hv.checks).filter((c) => c.state !== 'ok');
+  const list = probs.map((c) => `<span class="ht-row"><i class="hk-mark ${c.state}">${MARK[c.state]}</i><b>${esc(c.name)}</b> ${esc(c.text)}</span>`).join('');
+  const when = hv.at ? `${hv.checks.length} kontroli · ${local(hv.at)} · <a href="#/stats" onclick="document.querySelector('.panel.health')?.scrollIntoView({behavior:'smooth'});return false">szczegóły</a>` : '';
+  return probs.length ? `<span class="ht">${list}</span>${when}` : `wszystkie kontrole przeszły · ${when}`;
 }
 
 function headline(hv) {
@@ -69,11 +78,11 @@ function pairsTable(s) {
   return h('section', { class: 'panel' },
     h('div', { class: 'phead' }, h('h3', {}, 'Pary'), h('span', { class: 'hint' }, 'świece Yahoo zapisane w Firestore')),
     h('div', { class: 'tablewrap', html: `<table class="data compact static">
-      <thead><tr><th>Para</th><th>Ostatnia świeca (UTC)</th><th>Czas lokalny</th><th class="r">Latencja s</th><th class="r">Świece</th><th class="r">Flagi</th></tr></thead>
+      <thead><tr><th>Para</th><th>Ostatnia świeca (UTC)</th><th>Czas lokalny</th><th class="r">Latencja s</th><th class="r">Świece</th></tr></thead>
       <tbody>${Object.keys(PAIRS).map((p) => {
-        const x = pairs[p] || {}, fl = x.flags || [];
+        const x = pairs[p] || {};
         return `<tr><td class="txt">${PAIRS[p].label}</td><td>${x.lastTs ? dateUTC(x.lastTs, true) : '—'}</td><td>${x.lastTs ? local(x.lastTs) : '—'}</td>
-          <td class="r">${x.latencySec ?? '—'}</td><td class="r">${num(x.count || 0, 0)}</td><td class="r ${fl.length ? 'warn' : ''}">${fl.length}</td></tr>`;
+          <td class="r">${x.latencySec ?? '—'}</td><td class="r">${num(x.count || 0, 0)}</td></tr>`;
       }).join('')}</tbody></table>` }));
 }
 
@@ -108,20 +117,6 @@ function dailyLog(s) {
     h('p', { class: 'hint' }, 'Liczone wg dnia świecy (UTC). Święta nie są w kalendarzu sesji, więc tego dnia pokażą się jako braki (D-009).'));
 }
 
-function flagsList(s) {
-  const items = [];
-  for (const [p, x] of Object.entries(s.pairs || {})) {
-    for (const f of x.flags || []) items.push({ pair: PAIRS[p]?.label || p, ...parseFlag(f) });
-  }
-  for (const f of (s.cross || {}).flags || []) items.push({ pair: 'trójkąt', kind: f, ts: s.cross.ts });
-  items.sort((a, b) => (b.ts || 0) - (a.ts || 0));
-  return h('section', { class: 'panel' },
-    h('div', { class: 'phead' }, h('h3', {}, 'Flagi jakości'), h('span', { class: 'hint' }, 'zgłaszane, nigdy naprawiane po cichu (D5)')),
-    items.length
-      ? h('ul', { class: 'flaglist' }, ...items.map((f) => h('li', {},
-        h('span', { class: 'mono' }, f.ts ? dateUTC(f.ts, true) : '—'), h('b', {}, f.pair), h('span', {}, FLAG_LABEL[f.kind] || f.kind))))
-      : h('p', { class: 'hint' }, 'Brak flag. Ostatnie pobrania przeszły kontrolę.'));
-}
 
 
 // ---------- mapa pokrycia (D-022) ----------
@@ -250,6 +245,7 @@ function renderCoverage() {
     ...[['dukascopy', 'Dukascopy · backtesty'], ['yahoo', 'Yahoo · monitoring']].map(([v, l]) =>
       h('button', { class: covSrc === v ? 'on' : '', 'aria-pressed': covSrc === v, onclick: () => { covSrc = v; sel = null; renderCoverage(); } }, l)));
   const head = h('div', { class: 'phead' }, h('h3', {}, 'Mapa pokrycia danych'), seg);
+  if (covSrc === 'yahoo') { renderYahooAudit(panel, head); return; }
   const data = currentSource();
   if (!data) {
     const msg = cov === undefined && !covErr ? 'Wczytywanie mapy…'
@@ -304,6 +300,102 @@ function renderCoverage() {
   if (keepScroll) scroll.scrollLeft = keepScroll;
 }
 
+// ---------- audyt Yahoo świeca po świecy (D-027) ----------
+
+const AUDIT_LABEL = { ok: 'jest', late: 'spóźniona (> 20 min po zamknięciu)', flag: 'z flagą jakości (korekta Yahoo albo zła świeca)',
+  missing: 'brak', pending: 'w drodze (zamknięta < 20 min temu)', closed: 'rynek zamknięty' };
+const WDAY = ['nd', 'pn', 'wt', 'śr', 'cz', 'pt', 'sb'];
+let auditSel = null;
+
+function renderYahooAudit(panel, head) {
+  const now = Date.now() / 1000;
+  const cells = recentCells(store.state.status?.recent, now);
+  if (!cells) {
+    panel.replaceChildren(head, h('p', { class: 'hint' },
+      'Audyt świeca po świecy pojawi się po wklejeniu nowego apps_script/Code.gs do Apps Script (najbliższy tick sam go zasieje z bazy).'));
+    return;
+  }
+  const pairs = Object.keys(PAIRS).filter((p) => cells.pairs[p]);
+  const count = (p, k) => cells.pairs[p].filter((x) => x === k).length;
+  const tot = (k) => pairs.reduce((n, p) => n + count(p, k), 0);
+  const present = tot('ok') + tot('late') + tot('flag');
+  const line = [`ostatnie 3 tygodnie: ${num(present, 0)} świec`,
+    tot('missing') ? `<span class="neg">brak ${num(tot('missing'), 0)}</span>` : 'bez braków',
+    tot('late') ? `<span class="warn">spóźnione ${num(tot('late'), 0)}</span>` : 'bez spóźnień',
+    tot('flag') ? `<span class="warn">z flagą ${num(tot('flag'), 0)}</span>` : '',
+    tot('pending') ? `w drodze ${num(tot('pending'), 0)}` : ''].filter(Boolean).join(' · ');
+
+  const scroll = h('div', { class: 'covscroll', onclick: (e) => {
+    const t = e.target.closest('rect');
+    if (!t) return;
+    const s2 = { pair: t.dataset.p, i: +t.dataset.i };
+    auditSel = auditSel && auditSel.pair === s2.pair && auditSel.i === s2.i ? null : s2;
+    renderCoverage();
+  } });
+  const labels = h('div', { class: 'covlabels' });
+  const sums = h('div', { class: 'covsums' }, h('div', { class: 'hint', style: { height: `${AXIS}px` } }, 'brak · spóźn.'),
+    ...pairs.map((p) => h('div', { class: 'mono', style: { height: `${ROW}px` } },
+      h('span', { class: count(p, 'missing') ? 'neg' : 'dimmed' }, String(count(p, 'missing'))), h('span', { class: 'dimmed' }, '\u00a0·\u00a0'),
+      h('span', { class: count(p, 'late') ? 'warn' : 'dimmed' }, String(count(p, 'late'))))));
+  const legend = h('div', { class: 'covlegend' }, ...[['a-ok', 'jest'], ['a-late', 'spóźniona'], ['a-flag', 'z flagą'], ['a-missing', 'brak'],
+    ['a-pending', 'w drodze'], ['a-closed', 'rynek zamknięty']].map(([k, l]) => h('span', {}, h('i', { class: `sw ${k}` }), l)));
+
+  // lista: wybrana świeca albo ostatnie problemy (braki, spóźnienia, flagi), od najnowszych
+  const fmt = (ts) => { const d = new Date(ts * 1000); return `${WDAY[d.getUTCDay()]} ${dateUTC(ts, true).slice(8, 10)}.${dateUTC(ts).slice(5, 7)} ${dateUTC(ts, true).slice(11)} UTC`; };
+  let detail;
+  if (auditSel) {
+    const st = cells.pairs[auditSel.pair][auditSel.i], ts = cells.hours[auditSel.i];
+    detail = [h('div', { class: 'phead' }, h('h3', {}, `${PAIRS[auditSel.pair].label} · świeca ${dateUTC(ts, true)}–${dateUTC(ts + 3600, true).slice(11)} UTC`),
+      h('span', { class: 'hint' }, AUDIT_LABEL[st]))];
+  } else {
+    const probs = [];
+    for (const p of pairs) cells.pairs[p].forEach((st, i) => { if (st === 'missing' || st === 'late' || st === 'flag') probs.push({ p, st, ts: cells.hours[i] }); });
+    probs.sort((a, b) => b.ts - a.ts);
+    detail = [h('div', { class: 'phead' }, h('h3', {}, 'Ostatnie problemy'), h('span', { class: 'hint' }, 'kliknij świecę, żeby zobaczyć jej stan')),
+      probs.length ? h('ul', { class: 'gaplist audit' }, ...probs.slice(0, 40).map((x) => h('li', { class: x.st },
+        h('span', { class: 'mono', title: `u Ciebie ${local(x.ts)}` }, fmt(x.ts)), h('b', {}, PAIRS[x.p].label), h('span', { class: x.st === 'missing' ? 'neg' : 'warn' }, AUDIT_LABEL[x.st]))))
+        : h('p', { class: 'hint' }, 'Każda oczekiwana świeca z ostatnich 3 tygodni dotarła na czas.')];
+  }
+  panel.replaceChildren(head, h('p', { class: 'covsum', html: line }), h('div', { class: 'covmap' }, labels, scroll, sums), legend,
+    h('div', { class: 'covdetail' }, ...detail),
+    h('p', { class: 'hint' }, '1 kafelek = 1 świeca H1, na bieżąco z Apps Script (co 5 min). Brak = świeca w godzinach rynku nie dotarła 20 min po zamknięciu. ',
+      'Yahoo dociąga ostatnie 5 dni przy każdym pobraniu, więc krótkie braki zwykle uzupełniają się same.'));
+
+  // pasy tygodniowe; przerwa przed każdą północą UTC
+  const n = cells.hours.length, W = Math.max(scroll.clientWidth, 240);
+  // tydzień na pas, na wąskim ekranie mniej dni (kafelek min. 4 px, bez przewijania)
+  const perBand = Math.max(24, Math.min(168, Math.floor((W - 12) / (5 * 24 + 3)) * 24));
+  const bands = [];
+  for (let a = 0; a < n; a += perBand) bands.push([a, Math.min(n, a + perBand)]);
+  const cw = Math.max(3, Math.min(12, Math.floor((W - (perBand / 24) * 3) / perBand)));
+  const inner = cw >= 6 ? 2 : 1, bandH = AXIS + pairs.length * ROW;
+  let svg = '', width = 0;
+  bands.forEach(([from, to], bi) => {
+    const top = bi * (bandH + BAND_GAP);
+    let x = 0;
+    for (let i = from; i < to; i++) {
+      const ts = cells.hours[i];
+      if (i > from && ts % 86400 === 0) x += 3;
+      if (ts % 86400 === 0 || i === from) {
+        const d = new Date(ts * 1000);
+        svg += `<text class="covyear" x="${x}" y="${top + 11}">${WDAY[d.getUTCDay()]} ${d.getUTCDate()}.${String(d.getUTCMonth() + 1).padStart(2, '0')}</text>`;
+      }
+      pairs.forEach((p, r) => {
+        const st = cells.pairs[p][i];
+        const y = top + AXIS + r * ROW + (ROW - CELL) / 2;
+        const on = auditSel && auditSel.pair === p && auditSel.i === i;
+        svg += `<rect x="${x + 0.5}" y="${y + 0.5}" width="${cw - inner}" height="${CELL - 1}" class="a-${st}${on ? ' sel' : ''}" data-p="${p}" data-i="${i}"><title>${PAIRS[p].label} · ${dateUTC(ts, true)} UTC · ${AUDIT_LABEL[st]}</title></rect>`;
+      });
+      x += cw;
+    }
+    width = Math.max(width, x);
+  });
+  const height = bands.length * (bandH + BAND_GAP) - BAND_GAP;
+  scroll.innerHTML = `<svg class="covsvg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Audyt świec Yahoo">${svg}</svg>`;
+  labels.replaceChildren(...bands.flatMap((_, bi) => [h('div', { style: { height: `${AXIS + (bi ? BAND_GAP : 0)}px` } }),
+    ...pairs.map((p) => h('div', { class: 'covpair', style: { height: `${ROW}px` } }, PAIRS[p].label))]));
+}
+
 export function renderStats() {
   const root = $('#view-stats');
   const s = store.state.status;
@@ -312,7 +404,7 @@ export function renderStats() {
     return;
   }
   root.replaceChildren(h('div', { class: 'toolbar' }, h('h2', {}, 'Stats')), healthPanel(s), summary(s),
-    h('section', { id: 'covpanel', class: 'panel' }), dailyLog(s), h('div', { class: 'grid2' }, pairsTable(s), flagsList(s)));
+    h('section', { id: 'covpanel', class: 'panel' }), dailyLog(s), pairsTable(s));
   renderCoverage();
   if (cov === undefined) loadCoverage();
 }
@@ -327,6 +419,8 @@ export function initStats() {
     prev = b?.state;
     if (onStats() && (b?.sync || b?.state === 'syncing')) renderCoverage();
   });
+  // audyt Yahoo: co minutę świeca „w drodze” może stać się „brak”
+  setInterval(() => { if (onStats() && covSrc === 'yahoo') renderCoverage(); }, 60000);
   let t;
   window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => { if (onStats()) renderCoverage(); }, 150); });
 }

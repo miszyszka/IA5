@@ -106,3 +106,17 @@ test('mapa pokrycia: miesiąc pobrany częściowo (D-025)', async () => {
   const live = c.mergeLive(null, { start: '2024-01', pairs: { EURUSD: '!' } }, ['EURUSD']);
   assert.equal(c.cellKind(live.pairs.EURUSD.m[0]), 'incomplete');
 });
+
+test('audyt Yahoo świeca po świecy (D-027)', async () => {
+  const { recentCells } = await import('../../web/js/session.js');
+  const start = Date.UTC(2026, 9, 23, 18) / 1000; // pt 18:00
+  const now = start + 6 * 3600 + 60;               // sb 00:01 → zamknięte świece 18…23
+  const r = recentCells({ start, pairs: { EURUSD: '1l....' } }, now);
+  assert.equal(r.hours.length, 6);
+  assert.deepEqual(r.pairs.EURUSD, ['ok', 'late', 'missing', 'closed', 'closed', 'closed']);
+  const fresh = recentCells({ start, pairs: { EURUSD: '1l' } }, start + 3 * 3600 + 120);
+  assert.deepEqual(fresh.pairs.EURUSD, ['ok', 'late', 'pending']); // 20:00 zamknięta 2 min temu
+  const pend = recentCells({ start, pairs: { EURUSD: '1l.' } }, start + 3 * 3600 + 300 + 3600);
+  assert.equal(pend.pairs.EURUSD[2], 'missing');
+  assert.equal(recentCells({ start: start - 3600, pairs: { EURUSD: '11.' } }, start + 2 * 3600 + 600).pairs.EURUSD[2], 'pending');
+});
