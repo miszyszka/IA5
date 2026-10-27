@@ -5,6 +5,12 @@ Najnowsze na górze.
 
 ---
 
+### D-029 · 2026-10-27 · Dukascopy: przebieg szybki + przebieg naprawczy (zamiast czekania na zawieszone pliki)
+- **Obserwacja (log z Maca, 27.10, ~8 h pracy):** EUR/USD gotowe w 99%, USD/JPY w ok. 25%, reszta par nie zaczęta — ok. 15% całości. Czysty miesiąc pobiera się w ~10 s, ale miesiąc z odrzuconymi plikami trwał 5–30 min: każdy zawieszony plik kosztował do ~3 min (3 próby × limit 10 s + 45 s), dzień to 2 pliki, a po błędach tempo spadało do 1 dnia naraz i przerwy 45 s.
+- **Decyzja:** przebieg główny robi **jedną** próbę na plik z krótkim limitem (5 s połączenie, 15 s odczyt) i nie czeka — odrzucony dzień od razu trafia na listę brakujących; tempo spada o połowę i krótka przerwa 15 s tylko, gdy serwer odrzuca > 1/3 dni miesiąca. Po wszystkich parach **przebieg naprawczy** wraca tylko do miesięcy z brakującymi dniami (2 dni naraz, 2 próby, dłuższy limit). Log co 12 miesięcy pokazuje postęp i szacowany czas do końca pary.
+- **Oczekiwany efekt:** czas zależy od czystych miesięcy (~10–15 s), a nie od zawieszonych plików; zostało ok. 1 900 miesięcy → rzędu kilku godzin zamiast kilku dni.
+- **Odrzucone:** dalsze zwiększanie równoległości (serwer dławi mocniej); pobieranie z innego źródła (D7, D-010 — Dukascopy jest jedynym źródłem do backtestów).
+
 ### D-028 · 2026-10-27 · Handel 07:00–17:00 czasu polskiego (B11), święta w kalendarzu, dziury tylko tam, gdzie rynek się ruszał
 - **Decyzja (Michał):** „trading robimy w godzinach 7:00–17:00 czasu polskiego — wtedy są najniższe spready”. Nowa żelazna zasada **B11**: wejście tylko na open świecy otwartej o 07:00…16:00 `Europe/Warsaw` (z czasem letnim). Sygnały poza oknem pomijane i liczone (`poza_godzinami` w raporcie). Benchmark losowych wejść losuje w tym samym oknie — inaczej porównanie byłoby nieuczciwe (W3). `ENGINE_VERSION` 0.2.0. Wyjścia na razie o dowolnej porze — **do decyzji Michała**: czy zamykać pozycje o 17:00.
 - **Święta:** kalendarz sesji (Python, wektorowy w mapie pokrycia, Apps Script, dashboard) nie oczekuje świec 24.12 od 21:00 do 25.12 22:00 UTC i 31.12 od 21:00 do 1.01 22:00 UTC. Rozwiązuje znany problem z D-009.

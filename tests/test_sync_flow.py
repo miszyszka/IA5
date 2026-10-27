@@ -26,7 +26,7 @@ def test_do_sync_live_states_and_coverage(tmp_path, monkeypatch):
 
     monkeypatch.setattr(dt, "datetime", Now)
 
-    def fake_fetch(pair, d):
+    def fake_fetch(pair, d, *a):
         if pair == "USDJPY" and d.month == 2:
             raise RuntimeError("timeout")
         t = int(pd.Timestamp(d, tz="UTC").timestamp()) + 10 * 3600

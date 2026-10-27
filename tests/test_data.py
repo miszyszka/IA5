@@ -104,7 +104,7 @@ def test_sync_saves_partial_month_and_fetches_only_missing_days(tmp_path, monkey
     bad_day = {date(2024, 2, 7)}
     calls = []
 
-    def fake_fetch(pair, d):
+    def fake_fetch(pair, d, *a):
         calls.append(d)
         if d in bad_day:
             raise RuntimeError("Dukascopy: timeout")
@@ -182,15 +182,15 @@ def test_month_written_mid_month_is_refetched(tmp_path, monkeypatch):
     assert dukascopy.months_to_sync(tmp_path, "EURUSD", date(2024, 4, 9)) == [(2024, 4)]
 
 
-def test_sync_retries_throttled_days_in_same_run(tmp_path, monkeypatch):
-    """D-026: dzień odrzucony przez serwer (dławienie) jest ponawiany wolniej w tym samym przebiegu."""
+def test_sync_retries_throttled_days_in_repair_pass(tmp_path, monkeypatch):
+    """D-029: przebieg główny nie czeka na odrzucone dni — trafiają na listę; przebieg naprawczy dociąga tylko je."""
     from ia5 import dukascopy
 
     monkeypatch.setattr(dukascopy, "START", date(2024, 3, 1))
     monkeypatch.setattr(dukascopy, "COOLDOWN", 0)
     seen = set()
 
-    def flaky(pair, d):
+    def flaky(pair, d, *a):
         if d.day % 3 == 0 and d not in seen:  # co trzeci dzień: pierwsza próba odrzucona
             seen.add(d)
             raise RuntimeError("Connection timed out")
@@ -204,4 +204,9 @@ def test_sync_retries_throttled_days_in_same_run(tmp_path, monkeypatch):
     monkeypatch.setattr(dukascopy, "fetch_day", flaky)
     monkeypatch.setattr(dukascopy, "datetime", Today)
     r = dukascopy.sync_pair("EURUSD", tmp_path, log=lambda m: None)
+    assert r["failed"] and list((tmp_path / "m1" / "EURUSD").glob("*.missing.json"))
+    calls = []
+    monkeypatch.setattr(dukascopy, "fetch_day", lambda pair, d, *a: calls.append(d) or flaky(pair, d))
+    r = dukascopy.sync_pair("EURUSD", tmp_path, log=lambda m: None, repair=True)
     assert r["failed"] == [] and not list((tmp_path / "m1" / "EURUSD").glob("*.missing.json"))
+    assert calls and all(d.day % 3 == 0 for d in calls)  # tylko odrzucone wcześniej dni

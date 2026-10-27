@@ -52,15 +52,17 @@ def do_sync(progress=None, live: dict | None = None, beat=None) -> None:
         live.update({"start": f"{start.year}-{start.month:02d}",
                      "pairs": {p: coverage.live_states(DATA, p, until) for p in pairs}})
     beat()
-    log("Dukascopy M1 → lokalnie (pierwszy raz: 1–3 godziny, potem sekundy)…")
+    log("Dukascopy M1 → lokalnie (pierwszy raz kilka godzin — tempo dyktuje serwer Dukascopy; potem sekundy)…")
     h1 = {}
     failed = {}
-    for pi, pair in enumerate(pairs):
-        def prog(i, n, pair=pair, pi=pi):
-            if progress:
-                progress(f"Pobieranie Dukascopy · {pair}", round(100 * (pi + i / max(n, 1)) / len(pairs)))
 
-        def on_month(y, m, code, pair=pair):
+    def build_h1(pair):
+        h1[pair] = m1_to_h1(dukascopy.load_m1(pair, DATA))
+        (DATA / "h1").mkdir(parents=True, exist_ok=True)
+        h1[pair].to_parquet(DATA / "h1" / f"{pair}.parquet", index=False)
+
+    def on_month_for(pair):
+        def on_month(y, m, code):
             if live is None:
                 return
             i = (y - start.year) * 12 + m - start.month
@@ -68,18 +70,36 @@ def do_sync(progress=None, live: dict | None = None, beat=None) -> None:
             if 0 <= i < len(s):
                 s[i] = code
                 live["pairs"][pair] = "".join(s)
+        return on_month
+
+    # D-029: przebieg 1 — wszystkie pary szybko (odrzucone dni na listę), przebieg 2 — naprawa brakujących dni
+    for pi, pair in enumerate(pairs):
+        def prog(i, n, pair=pair, pi=pi):
+            if progress:
+                progress(f"Pobieranie Dukascopy · {pair}", round(100 * (pi + i / max(n, 1)) / len(pairs)))
 
         t0 = time.time()
-        r = dukascopy.sync_pair(pair, DATA, log=lambda m: log(m), progress=prog, on_month=on_month)
-        if r["failed"]:
-            failed[pair] = r["failed"]
-        h1[pair] = m1_to_h1(dukascopy.load_m1(pair, DATA))
-        (DATA / "h1").mkdir(parents=True, exist_ok=True)
-        h1[pair].to_parquet(DATA / "h1" / f"{pair}.parquet", index=False)
+        r1 = dukascopy.sync_pair(pair, DATA, log=lambda m: log(m), progress=prog, on_month=on_month_for(pair))
+        # miesiące, z których nic nie zeszło (brak pliku) — naprawa ich nie dotyka, pobierze je następne uruchomienie
+        nothing = [k for k in r1["failed"] if not (DATA / "m1" / pair / f"{k}.parquet").exists()]
+        if nothing:
+            failed[pair] = nothing
+        build_h1(pair)
         f = quality.bar_flags(h1[pair])
         log(f"  {pair} H1: {len(h1[pair]):,} świec · luki {f['gaps']} · OHLC {f['ohlc']} · ts {f['ts']}")
         if time.time() - t0 > 120 and pi < len(pairs) - 1:  # długie pobieranie: mapa w Stats aktualna po każdej parze (D-025)
             publish_partial_coverage(h1, until)
+        beat()
+
+    log("Przebieg naprawczy: dni odrzucone przez serwer…")
+    for pair in pairs:
+        if progress:
+            progress(f"Naprawa brakujących dni · {pair}", 100)
+        r = dukascopy.sync_pair(pair, DATA, log=lambda m: log(m), on_month=on_month_for(pair), repair=True)
+        if r["todo"]:
+            build_h1(pair)
+        if r["failed"] or failed.get(pair):
+            failed[pair] = sorted(set(failed.get(pair, [])) | set(r["failed"]))
         beat()
 
     if failed:

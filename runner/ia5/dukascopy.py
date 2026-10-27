@@ -25,7 +25,7 @@ REC = struct.Struct(">5if")
 START = date(2003, 5, 1)
 WORKERS = 6      # jednoczesne dni na start (każdy dzień = 2 pliki: BID i ASK); dalej tempo dobiera się samo (D-026)
 MIN_WORKERS, MAX_WORKERS = 1, 8
-COOLDOWN = 45    # s przerwy, gdy serwer zaczyna odrzucać połączenia (dławienie po stronie Dukascopy)
+COOLDOWN = 15    # s przerwy, gdy serwer odrzuca > 1/3 dni miesiąca (dławienie po stronie Dukascopy)
 TRIES = 3        # próby na plik, przerwy 2, 4 s — dzień, który się nie pobrał, zostaje zapisany jako brakujący
                  # i jest dociągany przy następnym uruchomieniu (D-025), więc nie warto czekać minutami
 COLS = ["ts", "bo", "bh", "bl", "bc", "bv", "ao", "ah", "al", "ac", "av"]
@@ -66,12 +66,16 @@ def _session():
     return s
 
 
-def _get(url: str, tries: int = TRIES) -> bytes:
-    """Plik bi5; 404 = brak danych tego dnia (b""). Po TRIES nieudanych próbach — RuntimeError."""
+FAST = {"tries": 1, "timeout": (5, 15)}     # D-029: przebieg główny — jedna krótka próba, nieudany dzień idzie na listę
+REPAIR = {"tries": 2, "timeout": (10, 30)}  # przebieg naprawczy — tylko brakujące dni, wolniej i cierpliwiej
+
+
+def _get(url: str, tries: int = TRIES, timeout=(10, 45)) -> bytes:
+    """Plik bi5; 404 = brak danych tego dnia (b""). Po `tries` nieudanych próbach — RuntimeError."""
     err: object = None
     for i in range(tries):
         try:
-            r = _session().get(url, timeout=(10, 45))
+            r = _session().get(url, timeout=timeout)
             if r.status_code == 404:
                 return b""
             if r.status_code == 200:
@@ -84,12 +88,12 @@ def _get(url: str, tries: int = TRIES) -> bytes:
     raise RuntimeError(f"Dukascopy: {url}: {err}")
 
 
-def fetch_day(pair: str, d: date) -> pd.DataFrame:
+def fetch_day(pair: str, d: date, tries: int = TRIES, timeout=(10, 45)) -> pd.DataFrame:
     """Jeden dzień M1 z bid i ask w jednej tabeli (tylko minuty obecne w obu stronach)."""
     start = int(datetime(d.year, d.month, d.day, tzinfo=timezone.utc).timestamp())
     pt = point(pair)
-    bid = decode_bi5(_get(day_url(pair, d, "BID")), start, pt)
-    ask = decode_bi5(_get(day_url(pair, d, "ASK")), start, pt)
+    bid = decode_bi5(_get(day_url(pair, d, "BID"), tries, timeout), start, pt)
+    ask = decode_bi5(_get(day_url(pair, d, "ASK"), tries, timeout), start, pt)
     if not len(bid) or not len(ask):
         return pd.DataFrame(columns=COLS)
     b = pd.DataFrame(bid, columns=["ts", "bo", "bh", "bl", "bc", "bv"])
@@ -189,7 +193,7 @@ def months_to_sync(root: Path, pair: str, until: date) -> list[tuple[int, int]]:
     return out
 
 
-def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress=None, on_month=None) -> dict:
+def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress=None, on_month=None, repair: bool = False) -> dict:
     """Dociąga brakujące dane do root/m1/{PARA}/{RRRR-MM}.parquet (D-025).
 
     Pobierane są tylko brakujące dni: cały miesiąc, gdy pliku nie ma; inaczej dni z listy brakujących
@@ -199,20 +203,28 @@ def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress
     Błąd sieci nigdy nie przerywa całej synchronizacji.
     progress(i, n) — wołane po każdym miesiącu.
     on_month(y, m, code) — stan miesiąca dla mapy na żywo: "o" pełny, "~" bieżący, "!" niepełny, "x" nic, "-" brak u Dukascopy.
+
+    D-029: przebieg główny (repair=False) robi jedną krótką próbę na plik i nie czeka — dzień odrzucony przez serwer
+    od razu trafia na listę brakujących. Przebieg naprawczy (repair=True) wraca tylko do miesięcy z brakującymi
+    dniami, wolniej i z dwiema próbami. Dawniej jeden zawieszony plik kosztował do 3 min (3 próby × 55 s).
     """
     folder = root / "m1" / pair
     folder.mkdir(parents=True, exist_ok=True)
     yesterday = datetime.now(UTC).date() - timedelta(days=1)
     todo = months_to_sync(root, pair, yesterday)
+    if repair:
+        todo = [(y, m) for y, m in todo if missing_path(folder / f"{y}-{m:02d}.parquet").exists()]
     written, failed = 0, []
+    opts = REPAIR if repair else FAST
+    t0 = time.time()
 
     def safe_day(d):
         try:
-            return fetch_day(pair, d)
+            return fetch_day(pair, d, opts["tries"], opts["timeout"])
         except Exception as e:  # noqa: BLE001
             return e
 
-    pace = workers
+    pace = 2 if repair else workers
 
     def fetch(days, n):
         with ThreadPoolExecutor(max(1, n)) as ex:
@@ -223,19 +235,12 @@ def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress
         days = days_to_fetch(path, y, m, yesterday)
         res = fetch(days, pace)
         bad_i = [i for i, r in enumerate(res) if isinstance(r, Exception)]
-        if bad_i:
-            # D-026: błędy to prawie zawsze dławienie serwera — zwalniamy, czekamy i od razu ponawiamy te dni
-            # wolniej (zamiast zostawiać je na następne uruchomienie)
-            pace = max(MIN_WORKERS, pace // 2)
-            if len(bad_i) > len(days) // 4:
-                log(f"  {pair} {y}-{m:02d}: serwer odrzuca połączenia ({len(bad_i)} z {len(days)} dni) — przerwa {COOLDOWN} s, "
-                    f"dalej {pace} naraz")
-                time.sleep(COOLDOWN)
-            retry = fetch([days[i] for i in bad_i], max(1, pace // 2))
-            for i, r in zip(bad_i, retry):
-                res[i] = r
-        elif pace < MAX_WORKERS:
-            pace += 1  # czysty miesiąc — ostrożnie przyspieszamy
+        if bad_i and len(bad_i) > len(days) // 3:
+            # serwer dławi — zwalniamy i krótko odpoczywamy; odrzucone dni czekają na przebieg naprawczy
+            pace = max(MIN_WORKERS + 1, pace // 2)
+            time.sleep(COOLDOWN)
+        elif not bad_i and pace < MAX_WORKERS:
+            pace += 1  # czysty miesiąc — przyspieszamy
         bad = [d for d, r in zip(days, res) if isinstance(r, Exception)]
         frames = [r for r in res if not isinstance(r, Exception) and len(r)]
         missing = sorted((set(read_missing(path)) - {d.isoformat() for d in days}) | {d.isoformat() for d in bad})
@@ -255,7 +260,7 @@ def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress
                 mp.write_text(json.dumps(missing))
                 failed.append(f"{y}-{m:02d}")
                 log(f"  {pair} {y}-{m:02d}: {len(df):,} minut, brakuje {len(missing)} dni ({', '.join(x[8:] for x in missing[:6])}"
-                    f"{'…' if len(missing) > 6 else ''}) — dociągnę przy następnym uruchomieniu")
+                    f"{'…' if len(missing) > 6 else ''}) — {'na następne uruchomienie' if repair else 'wrócę w naprawie'}")
                 code = "!"
             else:
                 mp.unlink(missing_ok=True)
@@ -264,6 +269,9 @@ def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress
             written += 1
         if on_month:
             on_month(y, m, code)
+        if k % 12 == 0 and k < len(todo):  # co rok: postęp i szacowany czas do końca pary
+            left = (time.time() - t0) / k * (len(todo) - k)
+            log(f"  {pair}: {k}/{len(todo)} mies.{' (naprawa)' if repair else ''} · zostało ok. {left / 60:.0f} min")
         if progress:
             progress(k, len(todo))
     return {"written": written, "failed": failed, "todo": len(todo)}
