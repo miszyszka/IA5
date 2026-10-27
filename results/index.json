@@ -1,6 +1,29 @@
 {
  "strategies": [
   {
+   "id": "3JIF1vMloW2HVlObaegX",
+   "name": "Strategia 2 (jedna pozycja)",
+   "run_id": "20261027-175940",
+   "created": 1793123980,
+   "verdict": "red",
+   "verdict_note": "brak przewagi",
+   "n_variants": 1,
+   "hypothesis": "Wersja porównawcza do „RSI 70/30 w silnym trendzie — dokładanie”: te same wejścia (pierwsze przebicie\nRSI14 70/30 przeciw wyraźnemu trendowi EMA200) i te same wyjścia, ale jedna pozycja na parę i stała stawka.\nRóżnica w wynikach pokaże, ile wnosi (albo kosztuje) dokładanie.",
+   "pairs": [
+    "EURUSD"
+   ],
+   "data_from": 1052082000,
+   "data_to": 1793055600,
+   "source": "dukascopy",
+   "engine_version": "0.6.0",
+   "best_exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_mean_r": 0.225606,
+   "oos_mean_r": -0.513904,
+   "oos_mean_pips": -8.154552,
+   "oos_trades": 73,
+   "demo": false
+  },
+  {
    "id": "x2UmqDLUr9zsvgT0iITE",
    "name": "Strategia 1 - dokładanie",
    "run_id": "20261027-175920",

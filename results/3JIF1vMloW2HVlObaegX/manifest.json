@@ -1,0 +1,54 @@
+{
+ "id": "3JIF1vMloW2HVlObaegX",
+ "name": "Strategia 2 (jedna pozycja)",
+ "run_id": "20261027-175940",
+ "engine_version": "0.6.0",
+ "code_hash": "cca483791d82ca77",
+ "data_hash": "5d2ac9e95dedc57f",
+ "data_source": "dukascopy",
+ "m1_resolver": true,
+ "candles": "wycinki ±24 świec wokół transakcji 10 najlepszych wariantów",
+ "pairs": [
+  "EURUSD"
+ ],
+ "params": [
+  {}
+ ],
+ "n_variants": 1,
+ "n_exits": 1,
+ "oos_cutoff": 1607812200,
+ "sizing": [
+  5.0,
+  10.0,
+  15.0,
+  20.0,
+  30.0
+ ],
+ "pyramid": 1,
+ "hours": "bez okna",
+ "data_from": 1052082000,
+ "data_to": 1793055600,
+ "data_clean": {
+  "EURUSD": {
+   "version": "2",
+   "filled": 8,
+   "gaps": 6,
+   "gap_hours": 3147,
+   "months": 276,
+   "months_total": 282
+  }
+ },
+ "skipped": {
+  "B8": 29,
+  "brak_danych": 0,
+  "rozgrzewka": 0,
+  "poza_godzinami": 0,
+  "luka_danych": 0,
+  "swieca_uzupelniona": 0
+ },
+ "hypothesis": "Wersja porównawcza do „RSI 70/30 w silnym trendzie — dokładanie”: te same wejścia (pierwsze przebicie\nRSI14 70/30 przeciw wyraźnemu trendowi EMA200) i te same wyjścia, ale jedna pozycja na parę i stała stawka.\nRóżnica w wynikach pokaże, ile wnosi (albo kosztuje) dokładanie.",
+ "trades_rows": 282,
+ "created": 1793123980,
+ "seconds": 3.3,
+ "verdict": "red"
+}
