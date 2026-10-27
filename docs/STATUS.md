@@ -38,6 +38,9 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 - Strategia 4 (🔴): trend-following IS +0,04 R, OOS −0,11 R, korelacja IS–OOS −0,19 — EUR/USD trendował do ~2014, potem nie.
 - **D-036:** badanie na niezależnych danych (`research/`): jedyny efekt, który przeszedł filtr na 8 parach — EUR/USD słabnie w porannej sesji Europy. Strategia `eurusd_europe_morning.py` (3 × 6 = 18 wariantów); na danych badania (nie niezależny test) 🟡 4/5.
 
+- Strategia 5 (sezon EUR/USD, Dukascopy): 🟡 4/5 — percentyl 100, PBO 0,07, OOS +0,7 pips; lata 2003–2011 (niewidziane w badaniu) w 7/9 dodatnie. DSR 0,60 — przewaga na transakcję mała (+1,7 pips), słabnie od 2020.
+- **D-037:** `ia5 scan` — skaner hipotez (5,7 tys. / z `--duzy` 160 tys. reguł na parę), FDR + potwierdzenie, OOS pominięty; `df.attrs["pair"]` w strategiach.
+
 **Następne (Michał)**
 0. Wkleić nowy `apps_script/Code.gs` do Apps Script, zapisać i **raz uruchomić `installTrigger()`** (wyzwalacz co 1 min zamiast co 5).
 1. Na Macu: przerwij działające `ia5 start` (Ctrl+C), `git pull`. Potem **dwa terminale**: w pierwszym `ia5 fetch` (pobiera, działa bez końca), w drugim `ia5 start` (liczy).

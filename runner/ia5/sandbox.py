@@ -180,6 +180,7 @@ def worker_main(code_path: str, h1_dir: str, out_dir: str) -> None:
             pair = f.stem
             raw = pd.read_parquet(f)
             df = raw.set_index(pd.to_datetime(raw["ts"], unit="s", utc=True))[["open", "high", "low", "close"]]
+            df.attrs["pair"] = pair   # D-037: strategia może zależeć od pary (df.attrs["pair"], np. "EURUSD")
             for pid, p in enumerate(params):
                 bad = lookahead_cuts(fn, df, p, ind)
                 if bad:

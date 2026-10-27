@@ -52,6 +52,7 @@ def signals(df, p, ind):       # WYMAGANE — dokładnie ta nazwa i te trzy argu
 | Element | Szczegóły |
 |---|---|
 | `df` | Świece H1 **jednej** pary: kolumny `open`, `high`, `low`, `close` (ceny mid z Dukascopy). Indeks `DatetimeIndex` w UTC = czas **otwarcia** świecy. Tylko zamknięte świece. Funkcja jest wołana osobno dla każdej z 8 par. |
+| `df.attrs["pair"]` | Nazwa pary, np. `"EURUSD"` — gdy reguła dotyczy tylko niektórych par albo ma inny kierunek dla każdej (D-037). |
 | `p` | Słownik z jedną kombinacją `PARAMS` (np. `{"level": 25, "n": 20}`); `{}` gdy brak `PARAMS`. |
 | `ind` | Biblioteka wskaźników (sekcja 3). Własnych RSI/ATR/EMA nie piszemy (B9). |
 | wynik | `pd.Series` na tym samym indeksie (albo tablica tej samej długości) z wartościami `-1`, `0`, `1`; `True/False` też działa (`.astype("int8")`). `NaN` = 0. Liczba = kierunek × **waga** (0,1–10, np. `-1.6`): waga mnoży depozyt w symulacji kapitału; pipsy i R są na pozycję (D-034). |

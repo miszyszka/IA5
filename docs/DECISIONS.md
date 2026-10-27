@@ -5,6 +5,16 @@ Najnowsze na górze.
 
 ---
 
+### D-037 · 2026-10-27 · Skaner hipotez `ia5 scan` — szeroko na Macu, z kontrolą wielokrotnych prób
+- **Decyzja (Michał):** „Skorzystaj z tego, że MAC może policzyć bardzo długo miliony różnych opcji.”
+- **Problem:** miliony wariantów w zwykłym liczeniu strategii = miliony szans na przypadkowego zwycięzcę (DSR/PBO to wyłapią i strategia i tak będzie 🔴), a do tego miliardy wierszy transakcji, których nie da się zapisać ani opublikować.
+- **Rozwiązanie:** osobny etap przed strategią. `ia5 scan` liczy proste reguły (sezon: godzina × długość × dzień × miesiąc × kierunek; impuls: ruch k świec ponad próg × za/przeciw × długość × sesja/godzina; trend: D dni × godzina × długość × za/przeciw) na **wszystkich parach** z zatwierdzonymi miesiącami — tylko statystyki, bez zapisu transakcji. Standardowo ~5,7 tys. reguł na parę (sekundy), `--duzy` ~160 tys. na parę (~1,3 mln na 8 par, minuty).
+- **Kontrola:** odkrycie na pierwszych 50% historii z korektą Benjaminiego–Hochberga (FDR 5%) na wszystkie reguły naraz; potwierdzenie na 50–75% (ten sam znak, t ≥ 2); sąsiedzi w siatce (płaskowyż). **Ostatnie 25% (OOS silnika) skaner pomija całkowicie** — wybór reguł nie widzi okresu, na którym silnik je potem ocenia. Koszt: spread z tabeli raz na transakcję; transakcje na przerwach w danych i świecach uzupełnionych pomijane (B12); transakcje jednej reguły się nie nakładają.
+- **Wynik skanu to hipotezy, nie werdykt.** Werdykt daje zwykłe liczenie strategii zbudowanej z najlepszych reguł (OOS, benchmark losowy, DSR, PBO).
+- Skan liczy wszystkie pary (dane do liczenia budowane osobno w `data/h1_scan/`, te same zasady D8 poza listą par); silnik nadal tylko `COMPUTE_PAIRS` (D8 zmienia tylko Michał).
+- Strategia widzi nazwę pary: `df.attrs["pair"]` — reguły z różnych par można złożyć w jedną strategię.
+- **Odrzucone:** miliony wariantów w silniku (pamięć, publikacja, kara za próby); losowe przeszukiwanie (genetyczne, optymalizatory) — trudno policzyć, ile prób naprawdę wykonano, więc nie da się uczciwie skorygować wyniku; Romano–Wolf z bootstrapem na milionie reguł (pamięć macierzy dzień × reguła) — może później dla zawężonej listy.
+
 ### D-036 · 2026-10-27 · Badanie przed strategią na niezależnych danych (research/)
 - **Powód:** cztery strategie pisane „z głowy” i oceniane na tych samych danych dały 🔴 — każda kolejna poprawka była dopasowaniem do historii EUR/USD. Michał: „postaraj się bardziej”.
 - **Decyzja:** hipotezę szukamy na innym źródle niż to, na którym Mac ją ocenia. Odkrycie: H1 brokera MT (8 par, 2012–2022, publiczne repo `ejtraderLabs/historical-data`), z podziałem na połowę odkrycia (≤ 2017) i potwierdzenia (≥ 2018). Ocena: Dukascopy na Macu (2003–2026) — inne źródło cen i 9 lat, których badanie nie widziało. Skrypty w `research/`, dane tylko lokalnie (nie w repo, nie do backtestów — D7 bez zmian).

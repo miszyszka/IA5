@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.18 · 2026-10-27 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
+Wersja 0.19 · 2026-10-27 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
 
 ---
 
@@ -240,6 +240,7 @@ Dane Dukascopy (M1 i zbudowane z nich H1) zostają na Macu: są za duże na GitH
   6. Heartbeat co 30 s do `runner/heartbeat`; uruchamia `caffeinate -i`, żeby Mac nie usnął w trakcie liczenia.
   7. Nasłuchuje `strategies` ze statusem `do_policzenia`; kolejka FIFO, jedna strategia na raz.
   8. `Ctrl+C` → heartbeat `offline`, czyste wyjście.
+- `ia5 scan [--duzy] [--pary …]` — **skaner hipotez** (D-037): tysiące–miliony prostych reguł na wszystkich parach, FDR 5% w odkryciu (pierwsze 50%), potwierdzenie (50–75%), ostatnie 25% pominięte; wynik `~/.ia5/scans/{run}/` i gałąź `data` `scans/{run}/`. To hipotezy do zbudowania strategii, nie werdykt.
 - Pozostałe komendy: `ia5 health` (opisowy raport zdrowia w terminalu + zapis na dashboard), `ia5 status`, `ia5 sync` (jeden obieg pobierania + przygotowanie), `ia5 run <plik.py>` (liczenie lokalne, bez dashboardu; wyniki w `~/.ia5/results/{nazwa}/{run}/`).
 - Dashboard pokazuje „połączony", gdy `teraz − lastSeen < 90 s`.
 - Co 6 h działający `ia5 start` dociąga nowe dane i przelicza strategie zamrożone (forward test, W4).
@@ -407,6 +408,7 @@ IA5/
 │           dukascopy.py  bars.py  quality.py  coverage.py  health.py  cloud.py  publish.py   # dane (E2)
 │           indicators.py  engine.py  sandbox.py  backtest.py  report.py # silnik (E3)
 │           validate.py  portfolio.py  check.py                           # walidacja, kapitał, kontrola (E5)
+│           scan.py                                                       # skaner hipotez (D-037)
 ├─ tests/                    # wskaźniki vs TA-Lib, złote scenariusze, zgodność z backtesting.py, walidacja,
 │                            #   strategie, publikacja, przykłady, web/ (Node)
 ├─ strategies/examples/

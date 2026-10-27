@@ -159,6 +159,23 @@ def publish_result(res_dir: Path, log=print) -> str:
     return sha
 
 
+def publish_scan(folder: Path, run_id: str, log=print) -> str:
+    """Wynik skanu (D-037) na gałąź data: scans/{run_id}/ (scan.md, scan.json, summary.csv, survivors.csv)."""
+    import shutil
+
+    ensure_repo()
+    dst = DATA_REPO / "scans" / run_id
+    if dst.exists():
+        shutil.rmtree(dst)
+    shutil.copytree(folder, dst)
+    _git("add", "-A")
+    _git("commit", "-q", "-m", f"skan hipotez {run_id}")
+    _git("push", "-q", "origin", "data")
+    sha = _git("rev-parse", "HEAD")
+    log(f"  opublikowano scans/{run_id} ({sha[:7]})")
+    return sha
+
+
 def delete_result(strategy_id: str, log=print) -> str | None:
     """Usuwa wynik strategii z gałęzi data i z indeksu (historia gita zostaje — G4)."""
     import shutil

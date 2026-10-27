@@ -403,6 +403,41 @@ def cmd_check(args) -> int:
     return 0 if res["ok"] else 1
 
 
+def cmd_scan(args) -> int:
+    """Skaner hipotez (D-037): szerokie przeszukanie prostych reguł na wszystkich parach z zatwierdzonymi miesiącami.
+    Ostatnie 25% historii jest pomijane (zostaje na OOS silnika). Wynik: ~/.ia5/scans/{run}/ + gałąź data scans/{run}/."""
+    from datetime import UTC, datetime, timedelta
+
+    import pandas as pd
+
+    from . import ready, scan
+
+    until = datetime.now(UTC).date() - timedelta(days=1)
+    pairs = [p.upper() for p in args.pary] if args.pary else list(PAIRS)
+    folder = DATA / "h1_scan"
+    log(f"Dane do skanu (tylko zatwierdzone miesiące): {', '.join(pairs)}…")
+    ready.build(DATA, folder, pairs=pairs, until=until, log=log)
+    frames = {f.stem: pd.read_parquet(f) for f in sorted(folder.glob("*.parquet"))}
+    frames = {p: df for p, df in frames.items() if len(df) > 24 * 365}
+    if not frames:
+        print("Brak danych do skanu — najpierw `ia5 fetch`.")
+        return 1
+    log(f"Skan: {len(frames)} par, siatka {'duża (~160 tys. reguł na parę)' if args.duzy else 'standardowa'}…")
+    out = scan.run(frames, big=args.duzy, log=log)
+    run_id = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    dst = scan.save(out, HOME / "scans" / run_id)
+    print(scan.report(out, top=15))
+    log(f"Zapisano: {dst}")
+    if not args.lokalnie:
+        try:
+            from . import publish
+
+            publish.publish_scan(dst, run_id, log=log)
+        except Exception as e:  # noqa: BLE001 — skan jest lokalnie, publikacja się nie udała
+            log(f"  publikacja nieudana ({e}) — wynik jest lokalnie w {dst}")
+    return 0
+
+
 def cmd_status(_args) -> int:
     print(f"IA5 runner · silnik {ENGINE_VERSION}")
     print("Pary:", ", ".join(PAIRS))
@@ -428,6 +463,11 @@ def main(argv=None) -> int:
     p_chk.add_argument("file")
     p_chk.add_argument("--h1")
     p_chk.set_defaults(func=cmd_check)
+    p_scan = sub.add_parser("scan", help="skaner hipotez: tysiące–miliony prostych reguł z kontrolą FDR (D-037)")
+    p_scan.add_argument("--duzy", action="store_true", help="duża siatka: ~160 tys. reguł na parę (~1,3 mln na 8 par)")
+    p_scan.add_argument("--pary", nargs="*", help="np. EURUSD GBPUSD (domyślnie wszystkie z zatwierdzonymi miesiącami)")
+    p_scan.add_argument("--lokalnie", action="store_true", help="bez publikacji na gałąź data")
+    p_scan.set_defaults(func=cmd_scan)
     sub.add_parser("status").set_defaults(func=cmd_status)
     sub.add_parser("health", help="opisowy przegląd zdrowia danych i projektu").set_defaults(func=cmd_health)
     args = parser.parse_args(argv)
