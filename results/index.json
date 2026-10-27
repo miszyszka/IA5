@@ -24,29 +24,6 @@
    "demo": false
   },
   {
-   "id": "Yf99XxcCNef88FlxJzgR",
-   "name": "Strategia 4",
-   "run_id": "20261027-183217",
-   "created": 1793125937,
-   "verdict": "red",
-   "verdict_note": "brak przewagi",
-   "n_variants": 96,
-   "hypothesis": "Kursy walut mają trendy trwające tygodnie (przepływy kapitału, polityka banków centralnych zmienia się\npowoli), a rynek reaguje na nie z opóźnieniem. Wybicie ceny z kanału kilku dni w kierunku trendu dziennego\nłapie początek takiego ruchu. Przegrywamy często, ale mało (stop w ATR), wygrywamy rzadko, ale dużo —\nprzewaga jest w asymetrii, nie w trafności.",
-   "pairs": [
-    "EURUSD"
-   ],
-   "data_from": 1052082000,
-   "data_to": 1793055600,
-   "source": "dukascopy",
-   "engine_version": "0.7.0",
-   "best_exit": "sygnał przeciwny, SL 2×ATR14, max 480",
-   "is_mean_r": 0.276589,
-   "oos_mean_r": -0.278991,
-   "oos_mean_pips": -7.723119,
-   "oos_trades": 253,
-   "demo": false
-  },
-  {
    "id": "eIxqXZ5hlh0yDzW6Wmus",
    "name": "strategia 3",
    "run_id": "20261027-181812",
