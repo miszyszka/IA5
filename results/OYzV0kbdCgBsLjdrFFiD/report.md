@@ -1,6 +1,6 @@
 # Raport strategii: RSI 70/30 w silnym trendzie
 
-Run `20261027-172058` · silnik 0.4.0 · kod `fbf7758d38a524b0` · dane `366110eecfd32a09`
+Run `20261027-174235` · silnik 0.4.0 · kod `fbf7758d38a524b0` · dane `366110eecfd32a09`
 
 ## Werdykt: 🔴 CZERWONY — brak przewagi
 
