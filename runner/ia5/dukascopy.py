@@ -161,13 +161,14 @@ def months_to_sync(root: Path, pair: str, until: date) -> list[tuple[int, int]]:
     return out
 
 
-def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress=None) -> dict:
+def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress=None, on_month=None) -> dict:
     """Dociąga brakujące miesiące do root/m1/{PARA}/{RRRR-MM}.parquet.
 
     Zamknięty miesiąc zapisujemy raz i nie ruszamy (D4). Bieżący miesiąc nadpisujemy przy każdym sync.
     Miesiąc, w którym choć jeden dzień się nie pobrał, NIE jest zapisywany — dociągnie się przy następnym
     uruchomieniu (inaczej zostałaby trwała luka). Błąd sieci nigdy nie przerywa całej synchronizacji.
     progress(i, n) — wołane po każdym miesiącu.
+    on_month(y, m, ok, rows) — wynik miesiąca (mapa pokrycia na żywo w dashboardzie).
     """
     folder = root / "m1" / pair
     folder.mkdir(parents=True, exist_ok=True)
@@ -189,12 +190,16 @@ def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress
         if errs:
             failed.append(f"{y}-{m:02d}")
             log(f"  {pair} {y}-{m:02d}: {len(errs)} dni nie pobrano ({str(errs[0])[-80:]}) — ponowię przy następnym uruchomieniu")
+            if on_month:
+                on_month(y, m, False, 0)
         else:
             frames = [f for f in res if len(f)]
             df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=COLS)
             df.to_parquet(folder / f"{y}-{m:02d}.parquet", index=False)
             written += 1
             log(f"  {pair} {y}-{m:02d}: {len(df):,} minut")
+            if on_month:
+                on_month(y, m, True, len(df))
         if progress:
             progress(k, len(todo))
     return {"written": written, "failed": failed, "todo": len(todo)}

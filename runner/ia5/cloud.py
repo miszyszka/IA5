@@ -69,16 +69,21 @@ def sync_yahoo(folder, log=print) -> dict[str, pd.DataFrame]:
     return out
 
 
-def heartbeat(state: str, job: dict | None = None) -> None:
+def heartbeat(state: str, job: dict | None = None, sync: dict | None = None) -> None:
+    """sync = {"start": "2003-05", "pairs": {PARA: "oo~.x…"}} — tylko w trakcie pobierania Dukascopy (mapa na żywo,
+    ok. 2,3 KB; Z4: 0 dodatkowych zapisów, jedzie w heartbeacie co 30 s)."""
     from firebase_admin import firestore
 
-    db().collection("runner").document("heartbeat").set({
+    doc = {
         "lastSeen": firestore.SERVER_TIMESTAMP,
         "state": state,
         "job": job or {},
         "version": ENGINE_VERSION,
         "host": socket.gethostname(),
-    })
+    }
+    if sync:
+        doc["sync"] = sync
+    db().collection("runner").document("heartbeat").set(doc)
 
 
 def set_data_sha(sha: str) -> None:

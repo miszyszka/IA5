@@ -31,25 +31,45 @@ def keep_awake():
     return None
 
 
-def do_sync(progress=None) -> None:
-    """progress(nazwa, procent) — postęp dla heartbeatu (kafel Mac w dashboardzie)."""
-    from . import cloud, dukascopy, publish, quality
+def do_sync(progress=None, live: dict | None = None, beat=None) -> None:
+    """progress(nazwa, procent) — postęp dla heartbeatu (kafel Mac w dashboardzie).
+    live — słownik uzupełniany statusami miesięcy na bieżąco (heartbeat.sync → mapa pokrycia na żywo).
+    beat() — natychmiastowy heartbeat (domyślnie sam stan „syncing”)."""
+    from datetime import UTC, datetime, timedelta
+
+    from . import cloud, coverage, dukascopy, publish, quality
     from .bars import m1_to_h1
 
+    beat = beat or (lambda: cloud.heartbeat("syncing"))
     log("Stan bazy (Firestore)…")
     st = cloud.read_status()
     log(f"  świece Yahoo w bazie: {st.get('totalBars', 0):,}")
 
-    cloud.heartbeat("syncing")
+    pairs = list(PAIRS)
+    until = datetime.now(UTC).date() - timedelta(days=1)
+    start = dukascopy.START
+    if live is not None:  # pełny obraz od razu: co już jest na dysku, co zostało
+        live.update({"start": f"{start.year}-{start.month:02d}",
+                     "pairs": {p: coverage.live_states(DATA, p, until) for p in pairs}})
+    beat()
     log("Dukascopy M1 → lokalnie (pierwszy raz: 1–3 godziny, potem sekundy)…")
     h1 = {}
     failed = {}
-    pairs = list(PAIRS)
     for pi, pair in enumerate(pairs):
         def prog(i, n, pair=pair, pi=pi):
             if progress:
                 progress(f"Pobieranie Dukascopy · {pair}", round(100 * (pi + i / max(n, 1)) / len(pairs)))
-        r = dukascopy.sync_pair(pair, DATA, log=lambda m: log(m), progress=prog)
+
+        def on_month(y, m, ok, rows, pair=pair):
+            if live is None:
+                return
+            i = (y - start.year) * 12 + m - start.month
+            s = list(live["pairs"][pair])
+            if 0 <= i < len(s):
+                s[i] = "x" if not ok else "-" if not rows else "~" if (y, m) == (until.year, until.month) else "o"
+                live["pairs"][pair] = "".join(s)
+
+        r = dukascopy.sync_pair(pair, DATA, log=lambda m: log(m), progress=prog, on_month=on_month)
         if r["failed"]:
             failed[pair] = r["failed"]
         h1[pair] = m1_to_h1(dukascopy.load_m1(pair, DATA))
@@ -57,11 +77,11 @@ def do_sync(progress=None) -> None:
         h1[pair].to_parquet(DATA / "h1" / f"{pair}.parquet", index=False)
         f = quality.bar_flags(h1[pair])
         log(f"  {pair} H1: {len(h1[pair]):,} świec · luki {f['gaps']} · OHLC {f['ohlc']} · ts {f['ts']}")
-        cloud.heartbeat("syncing")
+        beat()
 
     if failed:
         log(f"Uwaga: nie pobrano {sum(map(len, failed.values()))} miesięcy ({', '.join(f'{p} {len(v)}' for p, v in failed.items())}) "
-            "— dociągną się przy następnym `ia5 start`. Na razie są lukami w danych (widać je w kontroli jakości).")
+            "— dociągną się przy następnym `ia5 start`. Na razie są lukami w danych (mapa w Stats pokazuje je na czerwono).")
     if progress:
         progress("Kontrola danych", 100)
     log("Yahoo z Firestore…")
@@ -76,8 +96,16 @@ def do_sync(progress=None) -> None:
         if c and c.get("n"):
             log(f"  {pair}: mediana {c['median']:.2f} pips, p99 {c['p99']:.2f} pips ({c['n']:,} wspólnych)")
 
-    log("Publikacja świec (Yahoo) na gałąź data…")
+    log("Mapa pokrycia (luki wobec kalendarza sesji)…")
+    cov = coverage.build(DATA, h1, yahoo, failed=failed, until=until)
+    for pair, d in cov["sources"]["dukascopy"]["pairs"].items():
+        holes = sum(m[3] for m in d["m"])
+        left = sum(1 for m in d["m"] if m[0] in (coverage.NONE, coverage.FAILED))
+        log(f"  {pair}: dziury {holes} h · brakujące miesiące {left}")
+
+    log("Publikacja na gałąź data…")
     sha = publish.publish_candles(yahoo, source="yahoo", log=lambda m: log(m))
+    sha = publish.publish_coverage(cov, log=lambda m: log(m)) or sha
     if sha:
         cloud.set_data_sha(sha)
 
@@ -89,10 +117,13 @@ def cmd_start(_args) -> int:
     caff = keep_awake()
     stop = threading.Event()
 
+    def beat_now():
+        cloud.heartbeat(state["now"], state.get("job"), state.get("sync"))
+
     def beat():
         while not stop.wait(30):
             try:
-                cloud.heartbeat(state["now"], state.get("job"))
+                beat_now()
             except Exception as e:  # noqa: BLE001
                 log(f"heartbeat: {e}")
 
@@ -117,8 +148,10 @@ def cmd_start(_args) -> int:
     def sync_progress(name, pct):
         state["job"] = {"id": "sync", "name": name, "progress": pct}
 
-    do_sync(progress=sync_progress)
+    state["sync"] = {}
+    do_sync(progress=sync_progress, live=state["sync"], beat=beat_now)
     state["job"] = None
+    state["sync"] = None
 
     owner = config().get("owner_uid")
     jobs: queue.Queue = queue.Queue()
@@ -148,8 +181,10 @@ def cmd_start(_args) -> int:
         except queue.Empty:
             if time.time() - last_sync > RESYNC_SECONDS:  # nowe świece → forward test zamrożonych (W4)
                 state["now"] = "syncing"
-                do_sync(progress=sync_progress)
+                state["sync"] = {}
+                do_sync(progress=sync_progress, live=state["sync"], beat=beat_now)
                 state["job"] = None
+                state["sync"] = None
                 last_sync = time.time()
                 state["now"] = "idle"
                 enqueue_frozen(jobs, owner)

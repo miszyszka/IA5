@@ -87,6 +87,31 @@ def publish_candles(h1: dict[str, pd.DataFrame], source: str, log=print) -> str 
     return sha
 
 
+def publish_coverage(cov: dict, log=print) -> str | None:
+    """coverage/coverage.json na gałęzi data (D-022): same liczniki i zakresy luk, bez cen (D-010).
+    Push tylko, gdy treść (bez znacznika czasu) się zmieniła. Zwraca SHA lub None."""
+    from .coverage import content_hash
+
+    ensure_repo()
+    path = DATA_REPO / "coverage" / "coverage.json"
+    h = content_hash(cov)
+    if path.exists():
+        try:
+            if content_hash(json.loads(path.read_text())) == h:
+                log("  mapa pokrycia: bez zmian")
+                return None
+        except ValueError:
+            pass
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(cov, separators=(",", ":")))
+    _git("add", "-A")
+    _git("commit", "-q", "-m", f"dane: mapa pokrycia ({h})")
+    _git("push", "-q", "origin", "data")
+    sha = _git("rev-parse", "HEAD")
+    log(f"  mapa pokrycia: opublikowana, {sha[:7]}")
+    return sha
+
+
 # ---------- wyniki strategii (results/{id}/ + results/index.json) ----------
 
 def index_entry(res_dir: Path) -> dict:

@@ -45,3 +45,13 @@ def test_publish_then_delete(repo, tmp_path):
     idx = json.loads((publish.DATA_REPO / "results" / "index.json").read_text())
     assert [e["id"] for e in idx["strategies"]] == ["b"]
     assert publish.delete_result("nie-ma", log=lambda m: None) is None
+
+
+def test_publish_coverage_only_when_changed(repo):
+    cov = {"v": 1, "generated": 1, "sources": {"dukascopy": {"pairs": {"EURUSD": {"m": [[1, 120, 118, 2, 0, 0]], "gaps": []}}}}}
+    assert publish.publish_coverage(cov, log=lambda m: None)
+    assert "coverage/coverage.json" in ls_remote_files(repo)
+    # inny znacznik czasu, ta sama treść → bez nowego commitu
+    assert publish.publish_coverage({**cov, "generated": 2}, log=lambda m: None) is None
+    cov["sources"]["dukascopy"]["pairs"]["EURUSD"]["m"][0][2] = 120
+    assert publish.publish_coverage(cov, log=lambda m: None)
