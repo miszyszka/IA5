@@ -147,7 +147,11 @@ EXITS = [
     {"kind": "opposite", "n": 14, "sl": 2.0, "cap": 120},                # sygnał przeciwny z signals()
     {"kind": "rsi_streak", "n": 14, "tp": 1.5, "run": 6, "level": 70, "cap": 120},
     # ↑ TP 1,5×ATR14; RSI14 6 zamknięć z rzędu > 70 (short) / < 30 (long) → wyjście na open następnej (D-034)
+    {"kind": "trail", "n": 14, "sl": 2.0, "trail": 3.0, "cap": 480},
+    # ↑ stop początkowy 2×ATR14, potem 3×ATR14 od najwyższego high poprzednich świec (long); bez TP (D-035)
 ]
+
+Limit czasu `cap`: 1–480 świec (B7).
 ```
 
 Każde wyjście musi mieć SL albo limit czasu (B7).
@@ -169,7 +173,7 @@ Każde wyjście musi mieć SL albo limit czasu (B7).
 
 ## 7. Przykłady (każdy sprawdzany w CI)
 
-`strategies/examples/`: `rsi_trend_pyramid.py` (dokładanie z wagami, `PYRAMID`, `HOURS`, wyjście `rsi_streak`), `rsi_trend_single.py` (to samo, 1 pozycja), `sma200_rsi_pullback.py`, `donchian_breakout.py`, `bollinger_reversion.py`, `macd_trend_adx.py`, `asia_range_breakout.py` (poziomy sesji bez look-ahead), `stoch_session_reversal.py` (filtry czasu).
+`strategies/examples/`: `donchian_d1_trend.py` (wybicie z kanału + trend D1, wyjścia ATR/SMA/przeciwny), `donchian_d1_trail.py` (to samo ze stopem kroczącym), `trend_pullback_v2.py` (powrót RSI w trendzie, stop w ATR), `rsi_trend_pyramid.py` (dokładanie z wagami, `PYRAMID`, `HOURS`, wyjście `rsi_streak`), `rsi_trend_single.py` (to samo, 1 pozycja), `sma200_rsi_pullback.py`, `donchian_breakout.py`, `bollinger_reversion.py`, `macd_trend_adx.py`, `asia_range_breakout.py` (poziomy sesji bez look-ahead), `stoch_session_reversal.py` (filtry czasu).
 
 ---
 

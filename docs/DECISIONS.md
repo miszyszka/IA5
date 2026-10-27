@@ -5,6 +5,14 @@ Najnowsze na górze.
 
 ---
 
+### D-035 · 2026-10-27 · Stop kroczący i limit czasu do 480 świec
+- **Decyzja (Michał):** „Zrób oba jako dwie strategie” — strategia 4 (wybicie z kanału Donchiana, trend D1, wyjścia z obecnej siatki) i strategia 5 (to samo wejście, nowy stop kroczący).
+- **Nowe wyjście `trail`** (`n`, `sl`, `trail`, opcjonalnie `tp`, `cap`): stop w świecy j = max(stop początkowy `sl`×ATR, najwyższe high świec przed j − `trail`×ATR) dla long, lustrzanie dla short. ATR ze świecy sygnału, stały przez całą transakcję. High bieżącej świecy nie przesuwa stopu w tej samej świecy — nie wiemy, czy padło przed dołkiem (pesymistycznie, jak B5). Luka za stopem → wyjście po open (B6). Powód wyjścia „stop kroczący”, gdy stop był już wyżej niż początkowy; R względem stopu początkowego.
+- **B7 / limit czasu:** `cap` w `EXITS` do **480 świec** (ok. 20 dni handlu; było 120) — strategie trendowe trzymają pozycje tygodniami. Domyślna siatka bez zmian.
+- Dashboard: rodzina wyjść „stop kroczący” w filtrze rankingu.
+- `ENGINE_VERSION` 0.7.0.
+- **Odrzucone:** stop kroczący od zamknięć (mniej czuły, zostawia więcej zysku — można dodać jako wariant później); ATR przeliczany co świecę (stop „oddychałby” z rynkiem, ale trudniej go sprawdzić ręcznie); TP w tych strategiach (ucina właśnie te duże ruchy, z których żyje strategia trendowa).
+
 ### D-034 · 2026-10-27 · Dokładanie pozycji, wagi, wyjście „seria RSI”, strategia bez okna godzin
 - **Decyzja (Michał), przy strategii „RSI 70/30 w silnym trendzie”:** „do 5 pozycji na wybicie: kolejna, gdy RSI na zamknięciu pobije rekord z ostatniego wejścia; waga = 1 + (odległość RSI od progu) / 5, maksymalnie 3”; „zamknięcie wszystkiego, gdy RSI 6 świec z rzędu > 70 przy short (< 30 przy long), wyjście na open następnej świecy”; „bez okna godzin”; „dla porównania druga wersja: 1 pozycja, stała stawka”.
 - **B8:** domyślnie bez zmian (1 pozycja na parę). Strategia może ustawić `PYRAMID = k` (1–10): do k pozycji naraz w parze, tylko w jednym kierunku; pozycja zajmuje miejsce do swojej świecy wyjścia włącznie. Każda pozycja ma własne TP (od własnej ceny wejścia, ATR ze swojej świecy sygnału) i własny limit czasu.

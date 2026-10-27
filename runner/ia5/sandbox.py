@@ -26,7 +26,7 @@ DENSE_BARS = 2000
 WARMUP = 300
 MIN_WEIGHT, MAX_WEIGHT = 0.1, 10.0   # D-034: |sygnał| = waga pozycji
 MAX_PYRAMID = 10
-W_MAX = 120
+W_MAX = 480   # D-035: do 20 dni handlu — strategie trendowe trzymają pozycje tygodniami
 
 
 class StrategyError(Exception):
@@ -106,10 +106,12 @@ def read_settings(ns: dict) -> dict:
                 ex = Exit(**e)
             except TypeError as err:
                 raise StrategyError(f"EXITS: {e} — {err}") from err
-            if ex.kind not in ("time", "atr", "rsi50", "sma", "opposite", "rsi_streak"):
+            if ex.kind not in ("time", "atr", "rsi50", "sma", "opposite", "rsi_streak", "trail"):
                 raise StrategyError(f"EXITS: nieznany rodzaj wyjścia „{ex.kind}”")
             if not 1 <= ex.cap <= W_MAX:
                 raise StrategyError(f"EXITS: limit czasu cap 1–{W_MAX} świec (B7)")
+            if ex.kind == "trail" and not (ex.sl > 0 and ex.trail > 0):
+                raise StrategyError("EXITS trail: sl > 0 (stop początkowy) i trail > 0 (odległość stopu kroczącego)")
             if ex.kind == "rsi_streak" and not (ex.run >= 1 and 50 < ex.level < 100):
                 raise StrategyError("EXITS rsi_streak: run ≥ 1 i level między 50 a 100 (np. 70)")
     return out

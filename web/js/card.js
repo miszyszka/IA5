@@ -211,7 +211,7 @@ function renderRank() {
   const fam = S.f.family;
   const tools = $('.rank-tools');
   tools.replaceChildren(h('span', { class: 'flabel' }, 'Rodzina wyjść'),
-    h('div', { class: 'seg' }, ...[['all', 'wszystkie'], ['czas', 'czas'], ['ATR', 'ATR'], ['wskaźnik', 'wskaźnik']].map(([v, l]) =>
+    h('div', { class: 'seg' }, ...[['all', 'wszystkie'], ['czas', 'czas'], ['ATR', 'ATR'], ['stop kroczący', 'kroczący'], ['wskaźnik', 'wskaźnik']].map(([v, l]) =>
       h('button', { class: fam === v ? 'on' : '', onclick: () => { S.f.family = v; S.rankLimit = PAGE; renderRank(); } }, l))));
   const { key, desc } = S.rankSort;
   const rows = S.variants.filter((v) => fam === 'all' || v.family === fam)

@@ -9,6 +9,8 @@ Model wykonania:
 - B8: jedna pozycja na parę na wariant; nowe wejście tylko na świecy późniejszej niż świeca wyjścia.
   Strategia może pozwolić na dokładanie (PYRAMID = k, D-034): do k pozycji naraz w parze, tylko w jednym kierunku.
 - Waga pozycji (D-034): |sygnał| (domyślnie 1) mnoży depozyt w symulacji kapitału; pipsy i R są na pozycję.
+- Stop kroczący (D-035): stop w świecy j = max(SL początkowy, najwyższe high świec przed j − trail × ATR);
+  liczony tylko z zamkniętych świec, więc nigdy nie zakłada, że szczyt świecy padł przed jej dołkiem.
 - Wyjście „seria RSI” (D-034): RSI14 przez `run` kolejnych zamknięć po złej stronie poziomu → wyjście na open następnej.
 - Transakcje, którym zabrakło danych do wyjścia, są odrzucane i liczone.
 
@@ -32,23 +34,27 @@ H = 3600
 
 @dataclass(frozen=True)
 class Exit:
-    kind: str          # time | atr | rsi50 | sma | opposite | rsi_streak
+    kind: str          # time | atr | rsi50 | sma | opposite | rsi_streak | trail
     n: int = 14        # time: N świec; atr: okres ATR
     tp: float = 0.0    # × ATR (tylko atr)
     sl: float = 0.0    # × ATR(n) dla atr, × ATR(14) dla wskaźnikowych; 0 = bez SL
     cap: int = W       # limit czasu w świecach (B7)
     run: int = 0       # rsi_streak: ile kolejnych zamknięć RSI14 po złej stronie poziomu zamyka pozycję
     level: float = 0.0  # rsi_streak: poziom dla short (np. 70); dla long lustrzany 100 − level (30)
+    trail: float = 0.0  # trail: odległość stopu kroczącego od najwyższego high (long) w × ATR(n)
 
     @property
     def family(self) -> str:
-        return {"time": "czas", "atr": "ATR"}.get(self.kind, "wskaźnik")
+        return {"time": "czas", "atr": "ATR", "trail": "stop kroczący"}.get(self.kind, "wskaźnik")
 
     def label(self) -> str:
         if self.kind == "time":
             return f"po {self.n} świecach"
         if self.kind == "atr":
             return f"ATR{self.n} TP {self.tp:g}× SL {self.sl:g}× max {self.cap}"
+        if self.kind == "trail":
+            tp = f" TP {self.tp:g}×," if self.tp > 0 else ""
+            return f"ATR{self.n} SL {self.sl:g}× kroczący {self.trail:g}×{tp} max {self.cap}"
         if self.kind == "rsi_streak":
             tp = f"TP {self.tp:g}×ATR{self.n}, " if self.tp > 0 else ""
             sl = f"SL {self.sl:g}×ATR14, " if self.sl > 0 else ""
@@ -165,17 +171,24 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     cap = ex.cap
     w = _windows(P, e, d, cap + 1)
     En = ent["entry_px"].to_numpy() * d
-    atr = ent[f"atr{ex.n}" if ex.kind in ("atr", "rsi_streak") else "atr14"].to_numpy()
+    atr = ent[f"atr{ex.n}" if ex.kind in ("atr", "rsi_streak", "trail") else "atr14"].to_numpy()
 
     # opcjonalny limit świec dla każdego wejścia osobno (kolumna max_bars); domyślnie limit wariantu
     cap_r = np.clip(ent["max_bars"].to_numpy(np.int64), 1, cap) if "max_bars" in ent else np.full(m, cap)
     beyond = np.arange(cap)[None, :] >= cap_r[:, None]
-    tp = En + ex.tp * atr if ex.kind == "atr" or (ex.kind == "rsi_streak" and ex.tp > 0) else np.full(m, np.inf)
+    tp = En + ex.tp * atr if ex.kind == "atr" or (ex.kind in ("rsi_streak", "trail") and ex.tp > 0) else np.full(m, np.inf)
     sl = En - ex.sl * atr if ex.sl > 0 else np.full(m, -np.inf)
     Hw, Lw, Ow = w["H"][:, :cap], w["L"][:, :cap], w["O"][:, :cap]
-    hit_sl = Lw <= sl[:, None]
+    if ex.kind == "trail":
+        # najwyższe high świec PRZED świecą j (w świecy wejścia: cena wejścia)
+        hh = np.fmax.accumulate(np.where(np.isnan(Hw), -np.inf, Hw), axis=1)
+        prev = np.maximum(np.concatenate([En[:, None], hh[:, :-1]], axis=1), En[:, None])
+        SLm = np.maximum(sl[:, None], prev - ex.trail * atr[:, None])
+    else:
+        SLm = np.broadcast_to(sl[:, None], (m, cap))
+    hit_sl = Lw <= SLm
     hit_tp = Hw >= tp[:, None]
-    gap_sl = Ow <= sl[:, None]
+    gap_sl = Ow <= SLm
     gap_tp = Ow >= tp[:, None]
     gap_sl[:, 0] = gap_tp[:, 0] = False
     hit_sl &= ~beyond
@@ -227,7 +240,7 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
         res = None
         if resolver is not None:
             bar_ts = int(P["ts"][w["idx"][k, j[k]]])
-            res = resolver(pair, bar_ts, int(d[k]), float(tp[k] * d[k]), float(sl[k] * d[k]))
+            res = resolver(pair, bar_ts, int(d[k]), float(tp[k] * d[k]), float(SLm[k, j[k]] * d[k]))
         if res == "tp":
             hs[k] = False
         else:
@@ -235,9 +248,11 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
             amb[k] = res is None
     is_sl = stop & (gs | (hs & ~gt))
     is_tp = stop & ~is_sl
-    exit_n = np.where(is_sl, np.where(gs, Ow[rows, j], sl), exit_n)
+    sl_j = SLm[rows, j]
+    exit_n = np.where(is_sl, np.where(gs, Ow[rows, j], sl_j), exit_n)
     exit_n = np.where(is_tp, tp, exit_n)
     reason[is_sl] = "SL"
+    reason[is_sl & (sl_j > sl + 1e-12)] = "stop kroczący"
     reason[is_tp] = "TP"
     exit_j = np.where(stop, j, exit_j)
 

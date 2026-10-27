@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+from ia5 import ENGINE_VERSION
 from ia5.backtest import run_file
 from ia5.engine import Exit, find_entries, no_overlap, prepare, run, simulate
 from ia5.portfolio import simulate_equity
@@ -113,7 +114,7 @@ def test_full_run_example(tmp_path, name):
     code = (Path(__file__).parent.parent / "strategies" / "examples" / f"{name}.py").read_text()
     out = run_file(code, name, rw_h1(tmp_path / "h1"), tmp_path / "res", log=lambda m: None)
     m = json.loads((out / "manifest.json").read_text())
-    assert m["engine_version"] == "0.6.0" and m["hours"] == "bez okna" and m["n_variants"] == 1
+    assert m["engine_version"] == ENGINE_VERSION and m["hours"] == "bez okna" and m["n_variants"] == 1
     assert m["skipped"]["poza_godzinami"] == 0
     t = pd.read_parquet(out / "trades.parquet")
     assert set(t["reason"]) <= {"TP", "seria RSI", "czas"}

@@ -32,6 +32,9 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
 - Analiza „RSI 70/30 w silnym trendzie” (obie wersje 🔴): straty z braku stopu cenowego (do −332 pips), wejście w chwili przebicia łapie początki odwróceń, dokładanie powiększa obsunięcie (−25% przy 5% depozytu), OOS 2021–2024 ujemny, tylko EUR/USD. Nowa strategia `strategies/examples/trend_pullback_v2.py`: 32 wejścia × 39 wyjść (każde z SL) = 1248 wariantów, ok. 70 s na 23 latach EUR/USD.
 
+- Strategia 3 (🔴): stopy zadziałały (max obsunięcie −2,5% przy 5%), ale brak przewagi w całej siatce (średnio −0,04 R, 27% wariantów dodatnich, korelacja IS–OOS 0,12, PBO 0,79). Filtr H4 (EMA50) dublował EMA200 H1 — identyczne wyniki; poprawione w nowych strategiach na D1.
+- **D-035:** stop kroczący (`trail`), limit czasu w `EXITS` do 480 świec, `ENGINE_VERSION` 0.7.0. Strategie 4 i 5: `donchian_d1_trend.py` (8 × 12 = 96 wariantów), `donchian_d1_trail.py` (8 × 6 = 48).
+
 **Następne (Michał)**
 0. Wkleić nowy `apps_script/Code.gs` do Apps Script, zapisać i **raz uruchomić `installTrigger()`** (wyzwalacz co 1 min zamiast co 5).
 1. Na Macu: przerwij działające `ia5 start` (Ctrl+C), `git pull`. Potem **dwa terminale**: w pierwszym `ia5 fetch` (pobiera, działa bez końca), w drugim `ia5 start` (liczy).

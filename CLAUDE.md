@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.16 · 2026-10-27 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
+Wersja 0.17 · 2026-10-27 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
 
 ---
 
@@ -286,7 +286,7 @@ Domyślnie open świecy `t+1`, tylko w oknie 07:00–17:00 czasu polskiego (B11)
 ### 8.2 Domyślna siatka wyjść (~230 wariantów)
 - **Czasowe:** wyjście po N świecach, N ∈ {1, 2, 3, 4, 6, 8, 12, 16, 24, 36, 48, 72, 96, 120}.
 - **ATR:** ATR(n), n ∈ {5, 14}, liczony na świecach przed wejściem; TP ∈ {0,5; 0,75; 1; 1,5; 2; 3; 4} × ATR; SL ∈ {0,5; 1; 1,5; 2; 3} × ATR; limit czasu ∈ {24, 72, 120} świec.
-- **Na życzenie strategii (`EXITS`):** `rsi_streak` — RSI14 przez N zamknięć z rzędu po złej stronie poziomu → wyjście na open następnej (D-034).
+- **Na życzenie strategii (`EXITS`):** `rsi_streak` — RSI14 przez N zamknięć z rzędu po złej stronie poziomu → wyjście na open następnej (D-034); `trail` — stop kroczący `trail`×ATR od najwyższego high poprzednich świec, ze stopem początkowym (D-035). Limit czasu w `EXITS` do 480 świec.
 - **Wskaźnikowe:** RSI(14) dochodzi do 50 (long ≥ 50, short ≤ 50); przecięcie SMA; sygnał przeciwny. Każde z SL ∈ {1, 2, 3} × ATR(14) i limitem 120 świec.
 
 ### 8.3 Liczenie
