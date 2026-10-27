@@ -1,8 +1,10 @@
-// Zakładka Stats: baza świec, latencja, dziennik dzień po dniu, flagi jakości.
-// Wszystko z meta/status, który nagłówek i tak nasłuchuje — 0 dodatkowych odczytów Firestore (Z2, Z4).
+// Zakładka Stats: baza świec, latencja, mapa pokrycia danych, dziennik dzień po dniu, flagi jakości.
+// meta/status i runner/heartbeat nagłówek i tak nasłuchuje; mapa pokrycia z gałęzi data — 0 dodatkowych odczytów Firestore (Z2, Z4).
+import { biggestHoles, cellKind, EMPTY, FAILED, FULL, fmtRange, gapsInMonth, layoutBands, mergeLive, NONE, PARTIAL, STATUS_LABEL, summarize } from './coverage.js';
+import { getJSON, refreshData } from './data.js';
 import { PAIRS } from './metrics.js';
 import { dailyRows, FLAG_LABEL, parseFlag } from './session.js';
-import { flagCount } from './status.js';
+import { flagCount, heartbeatState } from './status.js';
 import { $, dateUTC, esc, h, local, num, store } from './util.js';
 
 const DAYS = 30;
@@ -90,6 +92,186 @@ function flagsList(s) {
       : h('p', { class: 'hint' }, 'Brak flag. Ostatnie pobrania przeszły kontrolę.'));
 }
 
+
+// ---------- mapa pokrycia (D-022) ----------
+
+let cov; // undefined = jeszcze nie wczytano, null = Mac jeszcze nie opublikował
+let covErr = null, covSrc = 'dukascopy', sel = null, covLoading = false;
+const ROW = 18, CELL = 12, AXIS = 18;
+const KIND_LABEL = { p: 'tylko ta para', w: 'wspólna' };
+const MONTHS = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru'];
+const monthName = (key) => `${MONTHS[+key.slice(5, 7) - 1]} ${key.slice(0, 4)}`;
+const hours = (n) => `${num(n, 0)} h`;
+
+async function loadCoverage() {
+  if (covLoading) return;
+  covLoading = true;
+  try { cov = await getJSON('coverage/coverage.json'); covErr = null; } catch (e) { covErr = e.message || String(e); cov = cov ?? null; }
+  covLoading = false;
+  renderCoverage();
+}
+
+/** Źródło do narysowania: opublikowana mapa + statusy na żywo, gdy Mac właśnie pobiera Dukascopy. */
+function currentSource() {
+  const pairs = Object.keys(PAIRS);
+  const src = cov?.sources?.[covSrc];
+  const beat = store.state.beat;
+  const syncing = covSrc === 'dukascopy' && heartbeatState(beat).online && beat?.state === 'syncing' && beat?.sync?.pairs;
+  const merged = mergeLive(src, syncing ? beat.sync : null, pairs);
+  return merged && { ...merged, meta: src || {} };
+}
+
+function cellTitle(pair, key, r) {
+  const parts = [`${PAIRS[pair].label} · ${monthName(key)}`, STATUS_LABEL[r[0]]];
+  if (r[3] != null && r[0] !== EMPTY) {
+    parts.push(`${num(r[2], 0)} z ${num(r[1], 0)} h`);
+    if (r[3]) parts.push(`dziury ${hours(r[3])}`);
+    if (r[4]) parts.push(`wspólne luki ${hours(r[4])}`);
+    if (r[5]) parts.push(`cienkie ${num(r[5], 0)}`);
+  } else if (r[0] === FULL || r[0] === PARTIAL) parts.push('luki policzone po synchronizacji');
+  return parts.join(' · ');
+}
+
+const BAND_GAP = 14;
+
+function drawMap(box, data, lay) {
+  const pairs = Object.keys(PAIRS);
+  const { cw } = lay;
+  const yg = cw >= 6 ? 3 : 2, inner = cw >= 6 ? 2 : 1;
+  const bandH = AXIS + pairs.length * ROW;
+  let width = 0, svg = '';
+  lay.bands.forEach(([from, to], bi) => {
+    const top = bi * (bandH + BAND_GAP);
+    let x = 0, lastLabel = -99;
+    const xs = {};
+    for (let i = from; i < to; i++) {
+      const k = data.keys[i];
+      if (i > from && k.endsWith('-01')) x += yg;
+      xs[i] = x;
+      if ((i === from || k.endsWith('-01')) && x - lastLabel >= 34) { svg += `<text class="covyear" x="${x}" y="${top + 11}">${k.slice(0, 4)}</text>`; lastLabel = x; }
+      x += cw;
+    }
+    width = Math.max(width, x);
+    pairs.forEach((p, r) => {
+      const y = top + AXIS + r * ROW + (ROW - CELL) / 2;
+      for (let i = from; i < to; i++) {
+        const row = data.pairs[p].m[i];
+        const on = sel && sel.pair === p && sel.i === i;
+        svg += `<rect x="${xs[i] + 0.5}" y="${y + 0.5}" width="${cw - inner}" height="${CELL - 1}" class="c-${cellKind(row)}${on ? ' sel' : ''}" data-p="${p}" data-i="${i}"><title>${esc(cellTitle(p, data.keys[i], row))}</title></rect>`;
+      }
+    });
+  });
+  const height = lay.bands.length * (bandH + BAND_GAP) - BAND_GAP;
+  box.innerHTML = `<svg class="covsvg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Mapa pokrycia: pary × miesiące">${svg}</svg>`;
+}
+
+function gapRow(g, pair, other) {
+  const [a, b, n, kind, conf] = g;
+  const confText = conf < 0 ? `${other}: poza zakresem` : `${other} ma ${conf} z ${n} h`;
+  return h('li', { class: `gap ${kind}` },
+    h('span', { class: 'mono' }, fmtRange(a, b)),
+    pair ? h('b', {}, PAIRS[pair]?.label || pair) : '',
+    h('span', { class: 'mono r' }, hours(n)),
+    h('span', {}, KIND_LABEL[kind]),
+    h('span', { class: conf > 0 && kind === 'p' ? 'warn' : 'dimmed' }, confText));
+}
+
+function covDetail(data) {
+  const other = data.meta.other || 'drugie źródło';
+  const title = (t, sub) => h('div', { class: 'phead' }, h('h3', {}, t), sub ? h('span', { class: 'hint' }, sub) : '');
+  if (sel && sel.i != null) {
+    const key = data.keys[sel.i], row = data.pairs[sel.pair].m[sel.i];
+    const gaps = gapsInMonth(data.pairs[sel.pair].gaps, key);
+    let note;
+    if (row[0] === NONE) note = 'Jeszcze nie pobrany — ia5 start na Macu dociągnie go przy najbliższym uruchomieniu.';
+    else if (row[0] === FAILED) note = 'Pobieranie nie powiodło się (sieć albo serwer Dukascopy). Ponowi się przy następnym ia5 start.';
+    else if (row[0] === EMPTY) note = 'Dukascopy nie ma notowań tej pary w tym miesiącu — to nie jest luka do uzupełnienia.';
+    else if (row[3] == null) note = 'Pobrany przed chwilą — luki policzy Mac po zakończeniu synchronizacji.';
+    else if (!gaps.length) note = 'Wszystkie godziny sesji są na miejscu.';
+    const facts = row[3] != null && row[0] !== EMPTY
+      ? `${STATUS_LABEL[row[0]]} · ${num(row[2], 0)} z ${num(row[1], 0)} godzin sesji · dziury ${hours(row[3])} · wspólne ${hours(row[4])}${data.meta.thin ? ` · cienkie ${num(row[5], 0)}` : ''}`
+      : STATUS_LABEL[row[0]];
+    return [title(`${PAIRS[sel.pair].label} · ${monthName(key)}`, facts),
+      note ? h('p', { class: 'hint' }, note) : '',
+      gaps.length ? h('ul', { class: 'gaplist' }, ...gaps.map((g) => gapRow(g, null, other))) : ''];
+  }
+  if (sel) {
+    const gaps = data.pairs[sel.pair].gaps;
+    const holes = gaps.filter((g) => g[3] === 'p').sort((x, y) => y[0] - x[0]);
+    const common = gaps.filter((g) => g[3] === 'w');
+    const s = summarize(data.pairs[sel.pair].m);
+    return [title(`${PAIRS[sel.pair].label} · wszystkie dziury`, `${holes.length} dziur, ${hours(s.holes)} · wspólne luki: ${common.length}, ${hours(s.common)}`),
+      holes.length ? h('ul', { class: 'gaplist' }, ...holes.slice(0, 200).map((g) => gapRow(g, null, other)))
+        : h('p', { class: 'hint' }, 'Ta para nie ma dziur w pobranych miesiącach.')];
+  }
+  const top = biggestHoles(data.pairs);
+  return [title('Największe dziury', 'tylko jednej pary — kliknij miesiąc albo parę, żeby zobaczyć szczegóły'),
+    top.length ? h('ul', { class: 'gaplist' }, ...top.map(({ pair, g }) => gapRow(g, pair, other)))
+      : h('p', { class: 'hint' }, 'Brak dziur w pobranych miesiącach.')];
+}
+
+function renderCoverage() {
+  const panel = $('#covpanel');
+  if (!panel) return;
+  const keepScroll = $('.covscroll', panel)?.scrollLeft;
+  const seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Źródło danych' },
+    ...[['dukascopy', 'Dukascopy · backtesty'], ['yahoo', 'Yahoo · monitoring']].map(([v, l]) =>
+      h('button', { class: covSrc === v ? 'on' : '', 'aria-pressed': covSrc === v, onclick: () => { covSrc = v; sel = null; renderCoverage(); } }, l)));
+  const head = h('div', { class: 'phead' }, h('h3', {}, 'Mapa pokrycia danych'), seg);
+  const data = currentSource();
+  if (!data) {
+    const msg = cov === undefined && !covErr ? 'Wczytywanie mapy…'
+      : covErr ? `Nie udało się wczytać mapy z GitHub: ${covErr}`
+        : 'Mapy jeszcze nie ma. Policzy ją i opublikuje Mac przy najbliższym ia5 start (po git pull). W trakcie pierwszego pobierania wypełnia się na żywo.';
+    panel.replaceChildren(head, h('p', { class: 'hint' }, msg));
+    return;
+  }
+  const pairs = Object.keys(PAIRS);
+  const per = Object.fromEntries(pairs.map((p) => [p, summarize(data.pairs[p].m)]));
+  const all = summarize(pairs.flatMap((p) => data.pairs[p].m));
+  const line = [
+    `${covSrc === 'yahoo' ? 'w bazie' : 'pobrane'} ${num(all.done, 0)} z ${num(all.months, 0)} miesięcy`,
+    all.left ? `brakuje ${num(all.left, 0)} mies. (${hours(all.leftHours)} sesji)` : 'niczego nie brakuje',
+    all.failed ? `<span class="neg">błędy ${num(all.failed, 0)}</span>` : '',
+    `dziury ${hours(all.holes)} w ${num(all.holeMonths, 0)} mies.`,
+    `wspólne luki ${hours(all.common)}`,
+    data.meta.thin ? `cienkie godziny ${num(all.thin, 0)}` : '',
+  ].filter(Boolean).join(' · ');
+  const live = data.live ? h('p', { class: 'covlive' }, h('i', { class: 'dot ok' }), 'Mac pobiera teraz — mapa wypełnia się na żywo',
+    all.uncounted ? h('span', { class: 'dimmed' }, ` · ${num(all.uncounted, 0)} świeżo pobranych miesięcy czeka na policzenie luk`) : '') : '';
+  const gen = cov?.generated ? h('span', { class: 'hint' }, `policzone ${local(cov.generated)}`) : '';
+
+  const labels = h('div', { class: 'covlabels' });
+  const labelBlock = (bi) => [h('div', { style: { height: `${AXIS + (bi ? BAND_GAP : 0)}px` } }),
+    ...pairs.map((p) => h('button', { class: `covpair ${sel?.pair === p && sel.i == null ? 'on' : ''}`, style: { height: `${ROW}px` },
+      title: `Wszystkie dziury ${PAIRS[p].label}`, onclick: () => { sel = sel?.pair === p && sel.i == null ? null : { pair: p }; renderCoverage(); } }, PAIRS[p].label))];
+  const sums = h('div', { class: 'covsums' }, h('div', { class: 'hint', style: { height: `${AXIS}px` } }, 'pokrycie · dziury'),
+    ...pairs.map((p) => h('div', { class: 'mono', style: { height: `${ROW}px` }, title: per[p].left ? `brakuje ${per[p].left} miesięcy` : '' },
+      per[p].pct == null ? '—' : `${num(per[p].pct * 100, per[p].pct > 0.999 && per[p].pct < 1 ? 2 : 1)}%`,
+      h('span', { class: 'dimmed' }, '\u00a0·\u00a0'), h('span', { class: per[p].holes ? 'warn' : 'dimmed' }, hours(per[p].holes)))));
+  const scroll = h('div', { class: 'covscroll', onclick: (e) => {
+    const t = e.target.closest('rect');
+    if (!t) return;
+    const s2 = { pair: t.dataset.p, i: +t.dataset.i };
+    sel = sel && sel.pair === s2.pair && sel.i === s2.i ? null : s2;
+    renderCoverage();
+  } });
+  const legend = h('div', { class: 'covlegend' },
+    ...[['full', 'pełny'], ...(data.live ? [['fresh', 'pobrany przed chwilą']] : []), ['holes1', 'dziury 1–5 h'], ['holes2', '6–47 h'], ['holes3', '≥ 48 h'], ['partial', 'w toku'],
+      ['none', 'nie pobrany'], ['failed', 'błąd'], ...(covSrc === 'dukascopy' ? [['empty', 'Dukascopy nie ma']] : [])]
+      .map(([k, l]) => h('span', {}, h('i', { class: `sw c-${k}` }), l)));
+  panel.replaceChildren(head, h('p', { class: 'covsum', html: line }), live,
+    h('div', { class: 'covmap' }, labels, scroll, sums), legend,
+    h('div', { class: 'covdetail' }, ...covDetail(data)),
+    h('p', { class: 'hint' }, 'Liczone na Macu z surowych danych wobec kalendarza sesji. Dziura = brakuje godziny tylko tej parze. ',
+      'Wspólna luka = brakuje jej co najmniej połowie par (święto, krótka sesja albo przerwa źródła). ',
+      data.meta.thin ? `Cienka godzina = świeca z mniej niż ${cov?.thin_minutes ?? 30} minut z notowaniami. ` : '', gen));
+  const lay = layoutBands(data.keys, scroll.clientWidth);
+  labels.replaceChildren(...lay.bands.flatMap((_, bi) => labelBlock(bi)));
+  drawMap(scroll, data, lay);
+  if (keepScroll) scroll.scrollLeft = keepScroll;
+}
+
 export function renderStats() {
   const root = $('#view-stats');
   const s = store.state.status;
@@ -97,9 +279,22 @@ export function renderStats() {
     root.replaceChildren(h('div', { class: 'empty' }, store.state.statusError ? `Firestore: ${store.state.statusError}` : 'Wczytywanie stanu…'));
     return;
   }
-  root.replaceChildren(h('div', { class: 'toolbar' }, h('h2', {}, 'Stats')), summary(s), dailyLog(s), h('div', { class: 'grid2' }, pairsTable(s), flagsList(s)));
+  root.replaceChildren(h('div', { class: 'toolbar' }, h('h2', {}, 'Stats')), summary(s),
+    h('section', { id: 'covpanel', class: 'panel' }), dailyLog(s), h('div', { class: 'grid2' }, pairsTable(s), flagsList(s)));
+  renderCoverage();
+  if (cov === undefined) loadCoverage();
 }
 
 export function initStats() {
-  for (const k of ['status', 'statusError']) store.on(k, () => { if (store.state.route?.view === 'stats') renderStats(); });
+  const onStats = () => store.state.route?.view === 'stats';
+  for (const k of ['status', 'statusError']) store.on(k, () => { if (onStats()) renderStats(); });
+  // heartbeat: statusy na żywo w trakcie pobierania; po końcu synchronizacji Mac publikuje nową mapę
+  let prev = null;
+  store.on('beat', (b) => {
+    if (prev === 'syncing' && b?.state !== 'syncing') { refreshData(); cov = undefined; if (onStats()) loadCoverage(); }
+    prev = b?.state;
+    if (onStats() && (b?.sync || b?.state === 'syncing')) renderCoverage();
+  });
+  let t;
+  window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => { if (onStats()) renderCoverage(); }, 150); });
 }

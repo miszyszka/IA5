@@ -5,6 +5,14 @@ Najnowsze na górze.
 
 ---
 
+### D-022 · 2026-10-27 · Mapa pokrycia danych w Stats
+- **Decyzja (Michał: „mapa wszystkich par, ile brakuje, gdzie są luki”):** Mac liczy z surowych danych (pliki M1 Dukascopy i zbudowane z nich H1, kopia Yahoo) pokrycie para × miesiąc wobec kalendarza sesji (`ia5/coverage.py`, ten sam kalendarz co `is_expected_bar`, wektorowo) i publikuje `coverage/coverage.json` na gałęzi `data` po każdej synchronizacji (tylko gdy treść się zmieniła). W trakcie pobierania statusy miesięcy idą w `runner/heartbeat.sync` (1 znak = 1 miesiąc), więc mapa wypełnia się na żywo.
+- **Rozróżnienia:** status pliku (nie pobrany / błąd / pełny / w toku / Dukascopy nie ma) oddzielnie od luk. Luka = godzina sesji bez świecy. *Dziura* — brakuje jej tylko tej parze (lub mniej niż połowie par mających ten okres); *wspólna* — brakuje jej ≥ połowie z co najmniej 3 par (święto, krótka sesja albo przerwa źródła — nie twierdzimy, że to na pewno święto). Każda luka ma liczbę jej godzin obecnych w drugim źródle (Yahoo dla Dukascopy i odwrotnie): jeśli Yahoo ją ma, dziura jest po naszej stronie. Cienka godzina = świeca z < 30 minut z notowaniami. Pokrycie % = obecne / (oczekiwane − wspólne), z niepobranymi miesiącami w mianowniku — to jest „ile brakuje”.
+- **D-010:** plik zawiera tylko liczniki i znaczniki czasu luk, żadnych cen Dukascopy — publikacja zgodna z zakazem redystrybucji.
+- **Z4:** Firestore 0 dodatkowych zapisów i odczytów (heartbeat i tak co 30 s; pole `sync` ok. 2,3 KB i tylko w trakcie pobierania). Dashboard czyta mapę z gałęzi `data` (Z2), ok. 80 KB.
+- **Sprawdzenie:** test porównuje kalendarz wektorowy z `is_expected_bar` dla każdej godziny 2003–2026; podłożone dziury, luka przez weekend, wspólna luka, błąd pobierania, miesiąc bez danych i cienka godzina są wykrywane co do godziny; przepływ `do_sync` (statusy na żywo + publikacja) testowany bez sieci.
+- **Odrzucone:** dokument `meta/coverage` w Firestore (zmiana Z2, odczyty przy każdej zmianie); jeden pasek 282 miesięcy w poprzek (komórki 3 px — nie da się kliknąć; zamiast tego pasy po latach); kolorowanie wspólnych luk (każdy grudzień byłby bursztynowy i zagłuszałby prawdziwe dziury).
+
 ### D-021 · 2026-10-26 · Dukascopy: miesiąc zapisany w trakcie jest dociągany po jego końcu
 - **Problem:** `months_to_sync` pomijał każdy miesiąc, który miał już plik. Miesiąc zapisany np. 20-go (bo wtedy działał `ia5 start`) po przejściu na nowy miesiąc zostawał z trwałą luką od 20-go do końca miesiąca — kontrola jakości by ją zgłosiła, ale nic by jej nie uzupełniło.
 - **Decyzja:** miesiąc jest pełny, gdy ma dane z ostatniego dnia handlowego (pn–pt) albo plik zapisano ≥ 2 dni po końcu miesiąca (wtedy zawiera wszystko, co Dukascopy ma — np. przy święcie bez notowań). Niepełny → pobierany ponownie przy najbliższym `ia5 start`. Pusty plik = brak notowań w Dukascopy → pełny.

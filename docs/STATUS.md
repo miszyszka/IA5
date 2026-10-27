@@ -2,6 +2,20 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-10-27 — sesja 3
+
+**Zrobione**
+- Stats: **mapa pokrycia danych** (D-022) — 8 par × miesiące, Dukascopy od 2003 i Yahoo 730 dni; statusy miesięcy, dziury tylko jednej pary vs luki wspólne, potwierdzenie z drugiego źródła, cienkie godziny, lista luk co do godziny po kliknięciu, „największe dziury”, pokrycie % i ile miesięcy / godzin jeszcze brakuje. W trakcie pierwszego pobierania wypełnia się na żywo.
+- Mac: `ia5/coverage.py`, publikacja `coverage/coverage.json` na gałąź `data`, `heartbeat.sync`; naprawione kasowanie `job` w heartbeacie po każdej parze.
+- Testy: kalendarz wektorowy vs `is_expected_bar` (każda godzina 2003–2026), podłożone luki, przepływ `do_sync` bez sieci, publikacja tylko przy zmianie, logika mapy w Node. Zrzuty w headless Chromium 1440 / 390 px (spoczynek, pobieranie na żywo, klik w miesiąc, klik w parę, Yahoo).
+
+**Następne (Michał)**
+1. Na Macu `git pull` i `ia5 start` — mapa pojawi się w Stats po synchronizacji (przy pierwszym pobieraniu od razu, na żywo).
+2. Jeśli jeszcze nie: nowy `apps_script/Code.gs` do Apps Script (dziennik dzień po dniu).
+
+**Znane problemy**
+- Próg „wspólnej” luki (≥ połowa par) to założenie; do kalibracji na prawdziwych danych Dukascopy (np. Boże Narodzenie w parach z JPY).
+
 ## 2026-10-26 — sesja 2
 
 **Zrobione**

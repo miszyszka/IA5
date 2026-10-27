@@ -55,3 +55,31 @@ test('dziennik świec: oczekiwane wg kalendarza sesji, braki, dzień w toku i so
   assert.equal(rows[3].missing, 0); // nadmiar jednej pary nie znosi braków — tu brak braków
   assert.deepEqual(parseFlag('luka@1793016000'), { kind: 'luka', ts: 1793016000 });
 });
+
+test('mapa pokrycia: statusy na żywo, podsumowanie, luki w miesiącu', async () => {
+  const c = await import('../../web/js/coverage.js');
+  assert.deepEqual(c.monthKeys('2003-11', 3), ['2003-11', '2003-12', '2004-01']);
+  assert.equal(c.monthIndex('2003-05', '2004-02'), 9);
+  const src = { start: '2024-01', pairs: { EURUSD: { m: [[1, 500, 495, 2, 3, 1], [0, 480, 0, 0, 0, 0], [2, 100, 100, 0, 0, 0]],
+    gaps: [[Date.UTC(2024, 0, 31, 22) / 1000, Date.UTC(2024, 1, 1, 2) / 1000, 4, 'p', -1]] } } };
+  // bez heartbeatu: opublikowana mapa
+  let m = c.mergeLive(src, null, ['EURUSD']);
+  assert.deepEqual(m.keys, ['2024-01', '2024-02', '2024-03']);
+  assert.equal(c.cellKind(m.pairs.EURUSD.m[0]), 'holes1');
+  // heartbeat: luty właśnie pobrany (jeszcze bez liczb), marzec w toku, a dla USDJPY jest tylko heartbeat
+  m = c.mergeLive(src, { start: '2024-01', pairs: { EURUSD: 'oo~', USDJPY: 'x.~' } }, ['EURUSD', 'USDJPY']);
+  assert.equal(m.live, true);
+  assert.equal(c.cellKind(m.pairs.EURUSD.m[1]), 'fresh');
+  assert.deepEqual(m.pairs.EURUSD.m[2], [2, 100, 100, 0, 0, 0]);
+  assert.equal(c.cellKind(m.pairs.USDJPY.m[0]), 'failed');
+  const s = c.summarize(m.pairs.EURUSD.m);
+  assert.equal(s.done, 3); assert.equal(s.left, 0); assert.equal(s.uncounted, 1);
+  assert.equal(s.exp, 600); assert.equal(s.pres, 595); assert.equal(s.holes, 2);
+  const s0 = c.summarize(src.pairs.EURUSD.m); // bez heartbeatu: luty niepobrany = brakuje 480 h
+  assert.equal(s0.left, 1); assert.equal(s0.leftHours, 480); assert.ok(Math.abs(s0.pct - 595 / (1080 - 3)) < 1e-12); // wspólne luki nie obniżają pokrycia
+  // luka przez północ 31.01→01.02 należy do obu miesięcy
+  assert.equal(c.gapsInMonth(src.pairs.EURUSD.gaps, '2024-01').length, 1);
+  assert.equal(c.gapsInMonth(src.pairs.EURUSD.gaps, '2024-02').length, 1);
+  assert.equal(c.gapsInMonth(src.pairs.EURUSD.gaps, '2024-03').length, 0);
+  assert.equal(c.biggestHoles(src.pairs)[0].pair, 'EURUSD');
+});

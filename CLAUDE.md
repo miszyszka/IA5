@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.6 · 2026-10-26 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
+Wersja 0.7 · 2026-10-27 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
 
 ---
 
@@ -154,6 +154,7 @@ meta/status
 runner/heartbeat
   lastSeen, state: idle|syncing|computing|offline,
   job: { id, progress, eta }, version, host
+  sync?: { start: "2003-05", pairs: { EURUSD: "oo~.x…" } }   # tylko w trakcie pobierania: 1 znak = status miesiąca (D-022)
 
 strategies/{id}
   name, hypothesis, code, status, createdAt, createdBy,
@@ -176,6 +177,7 @@ Apps Script i Mac działają na uprawnieniach administracyjnych (OAuth właścic
 ```
 candles/{PARA}/{RRRR}.parquet        # H1 z Yahoo (D-010): ts, open, high, low, close; zmienia się tylko bieżący rok
 candles/manifest.json                # hash, liczba świec, zakres per para
+coverage/coverage.json               # mapa pokrycia (D-022): para × miesiąc, luki jako zakresy — same liczniki, bez cen
 results/{strategyId}/{runId}/
   manifest.json     # hash danych, hash kodu, ENGINE_VERSION, siatka, czasy
   entries.parquet   # 1 wiersz = 1 sygnał wejścia (wspólny dla wszystkich wariantów)
@@ -225,7 +227,7 @@ Dane Dukascopy (M1 i zbudowane z nich H1) zostają na Macu: są za duże na GitH
   1. Sprawdza połączenie i stan bazy (`meta/status`).
   2. Dociąga z Dukascopy brakujące dni M1 (bid i ask; za pierwszym razem całą historię, od ok. 2003) i składa z nich świece H1.
   3. Synchronizuje świece Yahoo z Firestore, robi kontrolę jakości (D5) i porównuje Yahoo z Dukascopy na wspólnym okresie; pokazuje różnice.
-  4. Pushuje świece H1 z Yahoo na gałąź `data` (jeśli coś się zmieniło).
+  4. Liczy mapę pokrycia (luki wobec kalendarza sesji, D-022) i pushuje na gałąź `data` świece H1 z Yahoo oraz `coverage/coverage.json` (każde tylko, jeśli coś się zmieniło).
   5. Heartbeat co 30 s do `runner/heartbeat`; uruchamia `caffeinate -i`, żeby Mac nie usnął w trakcie liczenia.
   6. Nasłuchuje `strategies` ze statusem `do_policzenia`; kolejka FIFO, jedna strategia na raz.
   7. `Ctrl+C` → heartbeat `offline`, czyste wyjście.
@@ -330,7 +332,8 @@ Rozbicia: para, rok, kierunek, sesja (Azja 00–07, Europa 07–13, USA 13–21 
 ### 10.2 Zakładki
 **Strategie** | **Stats** | **Inwestorzy** (pusta, „wkrótce").
 
-**Stats** (wszystko z `meta/status`, 0 dodatkowych odczytów): świece w bazie i ostatnie pobranie, latencja (ostatnia, mediana 24 h, mini-wykres), kontrola krzyżowa, liczba flag; **dziennik dzień po dniu** — z ostatnich 30 dni, ile świec przybyło każdego dnia (wg dnia świecy, UTC) wobec oczekiwanych z kalendarza sesji, per para, z brakami na kolor; tabela par; lista flag.
+**Stats** (`meta/status` + `runner/heartbeat` + `coverage/coverage.json` z gałęzi `data`, 0 dodatkowych odczytów Firestore): świece w bazie i ostatnie pobranie, latencja (ostatnia, mediana 24 h, mini-wykres), kontrola krzyżowa, liczba flag;
+**mapa pokrycia** (D-022) — 8 par × miesiące, Dukascopy od 2003 / Yahoo 730 dni, każdy miesiąc wobec kalendarza sesji: nie pobrany / błąd / pełny / z dziurami (natężenie) / w toku / Dukascopy nie ma; luki rozdzielone na *dziury* (brak tylko w tej parze) i *wspólne* (brak w ≥ połowie par: święto, krótka sesja, przerwa źródła), z potwierdzeniem z drugiego źródła; cienkie godziny (< 30 minut z notowaniami); klik miesiąc → lista luk co do godziny, klik para → wszystkie jej dziury; w trakcie pobierania mapa wypełnia się na żywo z heartbeatu; **dziennik dzień po dniu** — z ostatnich 30 dni, ile świec przybyło każdego dnia (wg dnia świecy, UTC) wobec oczekiwanych z kalendarza sesji, per para, z brakami na kolor; tabela par; lista flag.
 
 ### 10.3 Lista strategii
 Nazwa, status (do policzenia / liczy się x% / policzona / błąd / zamrożona), data, werdykt, kluczowe liczby najlepszego wariantu IS obok OOS.
@@ -383,13 +386,13 @@ IA5/
 │  ├─ STRATEGIE.md           # jak pisać strategie + reguła „zrób mi strategię” (K1–K3)
 │  └─ SETUP.md               # kroki do kliknięcia
 ├─ web/                      # dashboard (GitHub Pages): index.html, css/, js/ (app, list, card, charts, editor,
-│                            #   status, stats, session, data, fb, metrics, util, config), vendor/
+│                            #   status, stats, session, coverage, data, fb, metrics, util, config), vendor/
 ├─ scripts/                  # check_strategy.py (kontrola kodu bez danych Michała), demo.py
 ├─ apps_script/              # Code.gs + appsscript.json (clasp)
 ├─ runner/                   # program na Maca
 │  ├─ pyproject.toml
 │  └─ ia5/  cli.py  config.py  session.py  store.py
-│           dukascopy.py  bars.py  quality.py  cloud.py  publish.py      # dane (E2)
+│           dukascopy.py  bars.py  quality.py  coverage.py  cloud.py  publish.py   # dane (E2)
 │           indicators.py  engine.py  sandbox.py  backtest.py  report.py # silnik (E3)
 │           validate.py  portfolio.py  check.py                           # walidacja, kapitał, kontrola (E5)
 ├─ tests/                    # wskaźniki vs TA-Lib, złote scenariusze, zgodność z backtesting.py, walidacja,
