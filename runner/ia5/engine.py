@@ -108,6 +108,23 @@ def _windows(P: dict, e: np.ndarray, d: np.ndarray, width: int) -> dict:
     }
 
 
+def deadline_bars(P: dict, e: np.ndarray, hours=None) -> np.ndarray:
+    """B11 (D-030): ile świec od wejścia do 23:00 czasu polskiego tego samego dnia.
+
+    Pozycja trwa najwyżej do zamknięcia świecy kończącej się o 23:00 (= świeca 22:00 czasu polskiego).
+    hours=False → bez limitu (testy zgodności z backtesting.py).
+    """
+    from .config import CLOSE_BY_HOUR, TRADING_TZ
+
+    if hours is False or len(e) == 0:
+        return np.full(len(e), 10**9)
+    loc = pd.to_datetime(P["ts"][e], unit="s", utc=True).tz_convert(TRADING_TZ)
+    dl = (loc.normalize() + pd.Timedelta(hours=CLOSE_BY_HOUR)).tz_convert("UTC")
+    dl_ts = np.asarray((dl - pd.Timestamp(0, tz="UTC")) // pd.Timedelta(seconds=1), dtype=np.int64)  # niezależnie od jednostki indeksu
+    k = np.searchsorted(P["ts"], dl_ts, side="left") - e  # pierwsza świeca otwarta o 23:00 lub później
+    return np.maximum(k, 1)
+
+
 def _first(mask: np.ndarray) -> np.ndarray:
     """Indeks pierwszego True w wierszu; brak = szerokość."""
     has = mask.any(axis=1)
@@ -129,6 +146,9 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     En = ent["entry_px"].to_numpy() * d
     atr = ent[f"atr{ex.n}" if ex.kind == "atr" else "atr14"].to_numpy()
 
+    # B11 (D-030): limit 23:00 czasu polskiego — efektywny limit świec dla każdego wejścia osobno
+    cap_r = np.clip(ent["max_bars"].to_numpy(np.int64), 1, cap) if "max_bars" in ent else np.full(m, cap)
+    beyond = np.arange(cap)[None, :] >= cap_r[:, None]
     tp = En + ex.tp * atr if ex.kind == "atr" else np.full(m, np.inf)
     sl = En - ex.sl * atr if ex.sl > 0 else np.full(m, -np.inf)
     Hw, Lw, Ow = w["H"][:, :cap], w["L"][:, :cap], w["O"][:, :cap]
@@ -137,6 +157,10 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     gap_sl = Ow <= sl[:, None]
     gap_tp = Ow >= tp[:, None]
     gap_sl[:, 0] = gap_tp[:, 0] = False
+    hit_sl &= ~beyond
+    hit_tp &= ~beyond
+    gap_sl &= ~beyond
+    gap_tp &= ~beyond
 
     # warunek wyjścia wskaźnikowego na zamknięciu świecy j → wyjście na open j+1
     xs = np.zeros((m, cap), bool)
@@ -149,7 +173,8 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
         o_sig = np.nan_to_num(opp[w["idx"][:, :cap]]).astype(int)
         xs = (o_sig == -d[:, None]) & w["ok"][:, :cap]
     if cap > 0:
-        xs[:, cap - 1] = False  # na ostatniej świecy i tak kończy limit czasu
+        xs = xs & ~beyond
+        xs[np.arange(m), cap_r - 1] = False  # na ostatniej świecy i tak kończy limit czasu
 
     f_hit = _first(hit_sl | hit_tp)
     f_x = _first(xs)
@@ -187,7 +212,7 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     exit_j = np.where(stop, j, exit_j)
 
     # 2) wyjście wskaźnikowe na open następnej świecy
-    xw = ~stop & (f_x < cap - 1)
+    xw = ~stop & (f_x < cap_r - 1)
     jx = np.minimum(f_x + 1, cap)
     exit_n = np.where(xw, w["O"][rows, jx], exit_n)
     exit_j = np.where(xw, jx, exit_j)
@@ -196,9 +221,10 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
 
     # 3) limit czasu: zamknięcie świecy cap-1
     tw = ~stop & ~xw
-    exit_n = np.where(tw, w["C"][:, cap - 1], exit_n)
-    exit_j = np.where(tw, cap - 1, exit_j)
-    reason[tw] = "czas"
+    exit_n = np.where(tw, w["C"][rows, cap_r - 1], exit_n)
+    exit_j = np.where(tw, cap_r - 1, exit_j)
+    reason[tw & (cap_r >= cap)] = "czas"
+    reason[tw & (cap_r < cap)] = "23:00"
 
     done = ~np.isnan(exit_n)
     # MAE/MFE: świece przed świecą wyjścia + cena wyjścia
@@ -210,8 +236,9 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     # świeca wyjścia wewnątrz-świecowego/czasowego sama też należy do przebiegu pozycji
     in_bar = ~exit_at_open
     jb = np.clip(exit_j, 0, cap)
-    bar_max = np.where(in_bar & (reason == "czas"), w["H"][rows, jb], -np.inf)
-    bar_min = np.where(in_bar & (reason == "czas"), w["L"][rows, jb], np.inf)
+    timed = (reason == "czas") | (reason == "23:00")
+    bar_max = np.where(in_bar & timed, w["H"][rows, jb], -np.inf)
+    bar_min = np.where(in_bar & timed, w["L"][rows, jb], np.inf)
     mfe = np.maximum.reduce([prev_max, bar_max, exit_n, En]) - En
     mae = En - np.minimum.reduce([prev_min, bar_min, exit_n, En])
 
@@ -274,6 +301,7 @@ def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray],
         outside = ~in_trading_hours(ent["entry_ts"].to_numpy(), hours) & ~warm.to_numpy()
         skipped["poza_godzinami"] += int(outside.sum())
         ent = ent[~warm.to_numpy() & ~outside].reset_index(drop=True)
+        ent["max_bars"] = deadline_bars(P, ent["entry_i"].to_numpy(), hours)  # B11: zamknięcie najpóźniej 23:00
         if ent.empty:
             continue
         ent.insert(0, "entry_id", np.arange(eid, eid + len(ent)))

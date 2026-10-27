@@ -20,8 +20,9 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
 - **Pobieranie Dukascopy (D-029):** przebieg szybki + naprawczy, krótkie limity, postęp i szacowany czas w logu. Stan 27.10 13:11 UTC: EUR/USD 99%, USD/JPY ~25%, pozostałe 6 par 0%.
 
+- **B11 (D-030):** zamknięcie najpóźniej 23:00 czasu polskiego, `ENGINE_VERSION` 0.3.0; Dukascopy czeka przy pełnej blokadzie serwera (503).
+
 **Następne (Michał)**
-0. Decyzja: zamykać pozycje o 17:00 czasu polskiego czy wyjścia o dowolnej porze?
 0. Wkleić nowy `apps_script/Code.gs` do Apps Script — audyt świec i dziennik.
 1. Na Macu `git pull` i `ia5 start` (przerwij działające Ctrl+C) — mapa i przegląd zdrowia pojawią się w Stats po synchronizacji (przy pierwszym pobieraniu od razu, na żywo).
 2. Jeśli jeszcze nie: nowy `apps_script/Code.gs` do Apps Script (dziennik dzień po dniu).

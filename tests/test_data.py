@@ -101,6 +101,7 @@ def test_sync_saves_partial_month_and_fetches_only_missing_days(tmp_path, monkey
 
     monkeypatch.setattr(dukascopy, "START", date(2024, 1, 1))
     monkeypatch.setattr(dukascopy, "COOLDOWN", 0)
+    monkeypatch.setattr(dukascopy, "BLOCK_PAUSE", (0, 0))
     bad_day = {date(2024, 2, 7)}
     calls = []
 
@@ -161,6 +162,7 @@ def test_month_written_mid_month_is_refetched(tmp_path, monkeypatch):
 
     monkeypatch.setattr(dukascopy, "START", date(2024, 1, 1))
     monkeypatch.setattr(dukascopy, "COOLDOWN", 0)
+    monkeypatch.setattr(dukascopy, "BLOCK_PAUSE", (0, 0))
     folder = tmp_path / "m1" / "EURUSD"
     folder.mkdir(parents=True)
 
@@ -188,6 +190,7 @@ def test_sync_retries_throttled_days_in_repair_pass(tmp_path, monkeypatch):
 
     monkeypatch.setattr(dukascopy, "START", date(2024, 3, 1))
     monkeypatch.setattr(dukascopy, "COOLDOWN", 0)
+    monkeypatch.setattr(dukascopy, "BLOCK_PAUSE", (0, 0))
     seen = set()
 
     def flaky(pair, d, *a):
@@ -210,3 +213,36 @@ def test_sync_retries_throttled_days_in_repair_pass(tmp_path, monkeypatch):
     r = dukascopy.sync_pair("EURUSD", tmp_path, log=lambda m: None, repair=True)
     assert r["failed"] == [] and not list((tmp_path / "m1" / "EURUSD").glob("*.missing.json"))
     assert calls and all(d.day % 3 == 0 for d in calls)  # tylko odrzucone wcześniej dni
+
+
+def test_full_block_waits_and_retries_same_month(tmp_path, monkeypatch):
+    """D-030: gdy serwer odrzuca cały miesiąc (503), czekamy i ponawiamy ten sam miesiąc zamiast go pomijać."""
+    from ia5 import dukascopy
+
+    monkeypatch.setattr(dukascopy, "START", date(2024, 3, 1))
+    monkeypatch.setattr(dukascopy, "COOLDOWN", 0)
+    pauses = []
+    monkeypatch.setattr(dukascopy, "BLOCK_PAUSE", (60, 600))
+    monkeypatch.setattr(dukascopy.time, "sleep", lambda s: pauses.append(s))
+    state = {"blocked": True}
+
+    def fetch(pair, d, *a):
+        if state["blocked"]:
+            raise RuntimeError("HTTP 503")
+        return pd.DataFrame([[int(pd.Timestamp(d).timestamp()), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], columns=dukascopy.COLS)
+
+    class Today(dukascopy.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return dukascopy.datetime(2024, 4, 2, tzinfo=tz)
+
+    def sleep(s):
+        pauses.append(s)
+        state["blocked"] = False  # blokada mija w trakcie przerwy
+
+    monkeypatch.setattr(dukascopy.time, "sleep", sleep)
+    monkeypatch.setattr(dukascopy, "fetch_day", fetch)
+    monkeypatch.setattr(dukascopy, "datetime", Today)
+    r = dukascopy.sync_pair("EURUSD", tmp_path, log=lambda m: None)
+    assert pauses == [60] and r["failed"] == []
+    assert len(pd.read_parquet(tmp_path / "m1" / "EURUSD" / "2024-03.parquet")) == len(dukascopy.month_days(2024, 3, date(2024, 4, 1)))

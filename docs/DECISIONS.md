@@ -5,6 +5,11 @@ Najnowsze na górze.
 
 ---
 
+### D-030 · 2026-10-27 · Zamknięcie pozycji najpóźniej o 23:00 czasu polskiego; Dukascopy: czekanie przy pełnej blokadzie
+- **Decyzja (Michał):** „Nie zamykaj o 17. Zamykaj najpóźniej o 23:00.” B11 rozszerzone: każda pozycja (każdy wariant wyjścia) kończy się najpóźniej na zamknięciu świecy 22:00 czasu polskiego, czyli o 23:00 (zimą 22:00 UTC, latem 21:00 UTC); powód wyjścia `23:00`. TP/SL i wyjścia wskaźnikowe działają normalnie do tego momentu. Benchmark losowych wejść ma ten sam limit. `ENGINE_VERSION` 0.3.0.
+- **Skutek:** pozycje nie przechodzą przez noc, więc problem swapów (O5) w praktyce znika; wyjścia czasowe dłuższe niż czas do 23:00 (np. 24–120 świec) kończą się o 23:00 — ich wyniki będą do siebie podobne i to widać w rankingu.
+- **Dukascopy (log 27.10 17:02–17:48):** serwer zaczął odpowiadać HTTP 503 / brakiem odpowiedzi na całe miesiące; przebieg szybki przelatywał przez kolejne „nic nie pobrano”, co tylko przedłużało blokadę. Teraz: miesiąc odrzucony w całości → przerwa 60 s, podwajana do 10 min, i ponowienie tego samego miesiąca; start od 4 dni naraz, maks. 6.
+
 ### D-029 · 2026-10-27 · Dukascopy: przebieg szybki + przebieg naprawczy (zamiast czekania na zawieszone pliki)
 - **Obserwacja (log z Maca, 27.10, ~8 h pracy):** EUR/USD gotowe w 99%, USD/JPY w ok. 25%, reszta par nie zaczęta — ok. 15% całości. Czysty miesiąc pobiera się w ~10 s, ale miesiąc z odrzuconymi plikami trwał 5–30 min: każdy zawieszony plik kosztował do ~3 min (3 próby × limit 10 s + 45 s), dzień to 2 pliki, a po błędach tempo spadało do 1 dnia naraz i przerwy 45 s.
 - **Decyzja:** przebieg główny robi **jedną** próbę na plik z krótkim limitem (5 s połączenie, 15 s odczyt) i nie czeka — odrzucony dzień od razu trafia na listę brakujących; tempo spada o połowę i krótka przerwa 15 s tylko, gdy serwer odrzuca > 1/3 dni miesiąca. Po wszystkich parach **przebieg naprawczy** wraca tylko do miesięcy z brakującymi dniami (2 dni naraz, 2 próby, dłuższy limit). Log co 12 miesięcy pokazuje postęp i szacowany czas do końca pary.

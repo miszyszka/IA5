@@ -23,8 +23,9 @@ import pandas as pd
 BASE = "https://datafeed.dukascopy.com/datafeed"
 REC = struct.Struct(">5if")
 START = date(2003, 5, 1)
-WORKERS = 6      # jednoczesne dni na start (każdy dzień = 2 pliki: BID i ASK); dalej tempo dobiera się samo (D-026)
-MIN_WORKERS, MAX_WORKERS = 1, 8
+WORKERS = 4      # jednoczesne dni na start (każdy dzień = 2 pliki: BID i ASK); dalej tempo dobiera się samo (D-026)
+MIN_WORKERS, MAX_WORKERS = 1, 6
+BLOCK_PAUSE = (60, 600)  # D-030: serwer odrzuca cały miesiąc (HTTP 503) — przerwa 60 s, podwajana do 10 min
 COOLDOWN = 15    # s przerwy, gdy serwer odrzuca > 1/3 dni miesiąca (dławienie po stronie Dukascopy)
 TRIES = 3        # próby na plik, przerwy 2, 4 s — dzień, który się nie pobrał, zostaje zapisany jako brakujący
                  # i jest dociągany przy następnym uruchomieniu (D-025), więc nie warto czekać minutami
@@ -225,6 +226,7 @@ def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress
             return e
 
     pace = 2 if repair else workers
+    blocked = 0
 
     def fetch(days, n):
         with ThreadPoolExecutor(max(1, n)) as ex:
@@ -235,6 +237,19 @@ def sync_pair(pair: str, root: Path, log=print, workers: int = WORKERS, progress
         days = days_to_fetch(path, y, m, yesterday)
         res = fetch(days, pace)
         bad_i = [i for i, r in enumerate(res) if isinstance(r, Exception)]
+        if days and len(bad_i) == len(days):
+            # D-030: serwer zablokował nas w całości (503 / brak odpowiedzi) — dalsze pytania przedłużają blokadę;
+            # czekamy coraz dłużej i ponawiamy ten sam miesiąc, zamiast przelatywać przez kolejne „nic nie pobrano”
+            blocked += 1
+            pause = min(BLOCK_PAUSE[1], BLOCK_PAUSE[0] * 2 ** (blocked - 1))
+            if blocked <= 6:
+                log(f"  {pair} {y}-{m:02d}: serwer Dukascopy blokuje pobieranie ({str(res[0])[-40:]}) — przerwa {pause} s, potem ponawiam")
+                time.sleep(pause)
+                pace = MIN_WORKERS + 1
+                res = fetch(days, pace)
+                bad_i = [i for i, r in enumerate(res) if isinstance(r, Exception)]
+        if len(bad_i) < len(days):
+            blocked = 0
         if bad_i and len(bad_i) > len(days) // 3:
             # serwer dławi — zwalniamy i krótko odpoczywamy; odrzucone dni czekają na przebieg naprawczy
             pace = max(MIN_WORKERS + 1, pace // 2)

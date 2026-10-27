@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.11 · 2026-10-27 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
+Wersja 0.12 · 2026-10-27 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
 
 ---
 
@@ -39,7 +39,7 @@ Zakładka **Inwestorzy** istnieje, ale jest pusta („wkrótce"). Nie budujemy j
 - **B8.** Jedna pozycja na parę na wariant. Sygnał przy otwartej pozycji w tej parze jest pomijany (licznik pominiętych w raporcie).
 - **B9.** Wskaźniki tylko z modułu `ia5.indicators`, zweryfikowanego testami zgodności z TA-Lib. Strategie nie piszą własnych RSI/ATR.
 - **B10.** Zmiana logiki silnika = podbicie `ENGINE_VERSION`. Wyniki starszej wersji dashboard oznacza jako nieaktualne.
-- **B11.** Handlujemy tylko **07:00–17:00 czasu polskiego** (`Europe/Warsaw`, z czasem letnim; zimą 06–16 UTC, latem 05–15 UTC) — wtedy spready są najniższe (D-028). Wejście wyłącznie na open świecy otwartej o 07:00…16:00 czasu polskiego; sygnały poza oknem są pomijane i liczone w raporcie. Benchmark losowych wejść (W3) losuje w tym samym oknie.
+- **B11.** Handlujemy tylko **07:00–17:00 czasu polskiego** (`Europe/Warsaw`, z czasem letnim; zimą 06–16 UTC, latem 05–15 UTC) — wtedy spready są najniższe (D-028). Wejście wyłącznie na open świecy otwartej o 07:00…16:00 czasu polskiego; sygnały poza oknem są pomijane i liczone w raporcie. **Każda pozycja jest zamykana najpóźniej o 23:00 czasu polskiego** (zamknięcie świecy 22:00; powód wyjścia `23:00`) — limit działa na wszystkie warianty wyjścia (D-030). Benchmark losowych wejść (W3) losuje w tym samym oknie i z tym samym limitem.
 
 ### Walidacja (bez niej wynik to anegdota)
 - **W1.** Ostatnie **25%** historii to out-of-sample (OOS). Ranking i wybór wariantów tylko na in-sample (IS). OOS pokazujemy obok, nigdy nie służy do wyboru.
@@ -89,7 +89,7 @@ Zakładka **Inwestorzy** istnieje, ale jest pusta („wkrótce"). Nie budujemy j
 
 \* Nazwy potwierdzić testem przy implementacji (E1, E2).
 
-- Godziny handlu: **07:00–17:00 czasu polskiego** (B11, D-028). Dźwignia **30:1** (B4, D-024). Waluta konta: **USD**. Kapitał startowy: **10 000 USD**.
+- Godziny handlu: wejścia **07:00–17:00**, zamknięcie najpóźniej **23:00** czasu polskiego (B11, D-028, D-030). Dźwignia **30:1** (B4, D-024). Waluta konta: **USD**. Kapitał startowy: **10 000 USD**.
 - Wynik w walucie kwotowanej przeliczany na walutę konta po kursie z zamknięcia świecy wyjścia, z naszych własnych danych (JPY przez USD/JPY, GBP przez GBP/USD, CHF przez USD/CHF, CAD przez USD/CAD).
 - Swap / rolowanie: domyślnie 0 (decyzja O5). Raport pokazuje, ile nocy przez 21:00 UTC trzymano pozycje, żeby było widać skalę pominiętego kosztu.
 

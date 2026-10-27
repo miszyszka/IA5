@@ -158,3 +158,20 @@ def test_trading_window_polish_time_with_dst():
     assert list(in_trading_hours(winter)) == [False, True, True, False]
     assert list(in_trading_hours(summer)) == [False, True, True, False]
     assert in_trading_hours(winter, hours=False).all()
+
+
+def test_forced_close_at_23_polish_time():
+    """B11 (D-030): pozycja zamknięta najpóźniej o 23:00 czasu polskiego — zimą 22:00 UTC, latem 21:00 UTC."""
+    from datetime import UTC, datetime
+
+    for month, last_utc in ((1, 21), (7, 20)):  # ostatnia świeca pozycji: 21:00 UTC zimą, 20:00 UTC latem
+        t0 = int(datetime(2024, month, 9, 0, tzinfo=UTC).timestamp())
+        n = 60
+        c = 1.1 + np.arange(n) * 1e-5
+        df = pd.DataFrame({"ts": t0 + 3600 * np.arange(n), "open": c, "high": c + 1e-4, "low": c - 1e-4, "close": c})
+        sig = np.zeros(n, np.int8)
+        sig[32] = 1  # 10.xx 08:00 UTC → wejście 09:00 UTC (10:00 lub 11:00 czasu polskiego), po rozgrzewce ATR
+        res = run({"EURUSD": df}, {(0, "EURUSD"): sig}, [{}], exits=[Exit("time", n=24, cap=24)])
+        t = res["outcomes"].iloc[0]
+        exit_hour = datetime.fromtimestamp(int(t["exit_ts"]), UTC).hour
+        assert t["reason"] == "23:00" and exit_hour == last_utc + 1, (month, t["reason"], exit_hour)

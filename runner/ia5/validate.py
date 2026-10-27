@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 from .config import PAIRS
-from .engine import Exit, simulate
+from .engine import Exit, deadline_bars, simulate
 from .session import in_trading_hours
 
 N01 = NormalDist()
@@ -51,7 +51,8 @@ def random_benchmark(preps: dict, trades: pd.DataFrame, ex: Exit, signals: dict 
             i, d = i.ravel(), d.ravel()
             e = np.minimum(i + 1, n - 1)
             ent = pd.DataFrame({"entry_i": e, "dir": d.astype(np.int8), "entry_px": P["o"][e],
-                                "atr5": P["atr5"][i], "atr14": P["atr14"][i]})
+                                "atr5": P["atr5"][i], "atr14": P["atr14"][i],
+                                "max_bars": deadline_bars(P, e, hours)})  # B11: te same reguły co strategia
             opp = signals.get(pair) if signals else None
             res = simulate(P, ent, ex, pair, opp=opp)
             net = (res["pips_gross"] - spread).to_numpy().reshape(s1 - s0, k)
