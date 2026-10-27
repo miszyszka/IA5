@@ -23,7 +23,7 @@ IDLE = 3600               # wszystko pobrane — sprawdzenie nowych dni co godzi
 
 
 def order() -> list[str]:
-    return list(COMPUTE_PAIRS) + [p for p in PAIRS if p not in COMPUTE_PAIRS]
+    return [p for p in COMPUTE_PAIRS if p in PAIRS] + [p for p in PAIRS if p not in COMPUTE_PAIRS]
 
 
 def build_raw_h1(root: Path, pair: str):

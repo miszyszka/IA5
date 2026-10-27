@@ -80,7 +80,7 @@ def prepare(df: pd.DataFrame, pair: str) -> dict:
     return {
         "pair": pair, "ts": ts, "o": df["open"].to_numpy(float), "c": df["close"].to_numpy(float),
         "hour": np.asarray(lon.hour), "wd": np.asarray(lon.dayofweek), "month": np.asarray(lon.month),
-        "day": np.asarray(lon.normalize().asi8 // 10**9), "atr": ind.atr(df, 14).to_numpy(),
+        "day": np.asarray(lon.normalize().asi8 // 10**9), "year": np.asarray(lon.year), "atr": ind.atr(df, 14).to_numpy(),
         "filled": filled, "gapcum": np.concatenate([[0], np.cumsum(gap)]),
         "pip": PAIRS[pair].pip, "spread": PAIRS[pair].spread_pips,
     }
@@ -137,11 +137,25 @@ def _emit(rows, P, family, params, e, gross, direction, cuts):
     net = direction * gross - P["spread"]
     t = P["ts"][e]
     d = net[t < cuts[0]]
-    v = net[(t >= cuts[0]) & (t < cuts[1])]
+    vm = (t >= cuts[0]) & (t < cuts[1])
+    v = net[vm]
     nd, md, td = stats(d)
     nv, mv, tv = stats(v)
+    # lata dodatnie (odkrycie + potwierdzenie): odporne na skupienie transakcji w kilku okresach (np. jeden miesiąc w roku)
+    inn = t < cuts[1]
+    yr = P["year"][e[inn]]
+    if len(yr):
+        y0 = yr - yr.min()
+        cnt = np.bincount(y0)
+        tot = np.bincount(y0, weights=net[inn])
+        has = cnt >= 5
+        yp = int(((tot > 0) & has).sum())
+        yn = int(has.sum())
+    else:
+        yp = yn = 0
     rows.append({"pair": P["pair"], "family": family, **params, "dir": int(direction),
-                 "n_disc": nd, "mean_disc": md, "t_disc": td, "n_val": nv, "mean_val": mv, "t_val": tv})
+                 "n_disc": nd, "mean_disc": md, "t_disc": td, "n_val": nv, "mean_val": mv, "t_val": tv,
+                 "years_pos": yp, "years": yn})
 
 
 def scan_season(P, g, cuts, rows):
@@ -210,8 +224,9 @@ def run(frames: dict[str, pd.DataFrame], big: bool = False, log=print, min_disc:
     t0 = min(int(df["ts"].iloc[0]) for df in frames.values())
     t1 = max(int(df["ts"].iloc[-1]) for df in frames.values())
     cuts = (t0 + DISC * (t1 - t0), t0 + VAL * (t1 - t0))
-    parts = []
+    parts, info = [], {}
     for pair, df in frames.items():
+        info[pair] = {"bars": int(len(df)), "from": int(df["ts"].iloc[0]), "to": int(df["ts"].iloc[-1])}
         P = prepare(df, pair)
         rows: list[dict] = []
         scan_season(P, g["sezon"], cuts, rows)
@@ -228,12 +243,14 @@ def run(frames: dict[str, pd.DataFrame], big: bool = False, log=print, min_disc:
     res["potwierdzona"] = res.odkryta & (res.mean_val > 0) & (res.t_val >= T_VAL)
     res["sasiedzi"] = neighbours(res)
     res["robust"] = res[["t_disc", "t_val"]].min(axis=1)
+    res["years_share"] = res.years_pos / res.years.where(res.years > 0)
     surv = res[res.potwierdzona].sort_values("robust", ascending=False)
+    near = res[~res.potwierdzona & (res.mean_disc > 0) & (res.mean_val > 0)].sort_values("robust", ascending=False)
     t_bh = float(np.sqrt(2) * _erfcinv(2 * thr)) if thr > 0 else float("nan")
     return {"tested": tested, "eligible": int(len(res)), "discovered": int(res.odkryta.sum()),
             "confirmed": int(len(surv)), "p_threshold": thr, "t_threshold": t_bh, "cuts": [int(x) for x in cuts],
-            "t0": t0, "t1": t1, "pairs": sorted(frames), "big": big, "seconds": round(time.time() - t_start, 1),
-            "survivors": surv, "all": res}
+            "t0": t0, "t1": t1, "pairs": sorted(frames), "pair_info": info, "big": big, "seconds": round(time.time() - t_start, 1),
+            "survivors": surv, "near": near.head(300), "all": res}
 
 
 def _erfcinv(y: float) -> float:
@@ -257,7 +274,8 @@ def neighbours(res: pd.DataFrame) -> pd.Series:
         if sub.empty:
             continue
         fixed = [c for c in sub.columns if c not in cols and c not in
-                 ("n_disc", "mean_disc", "t_disc", "n_val", "mean_val", "t_val", "p_disc", "odkryta", "potwierdzona")]
+                 ("n_disc", "mean_disc", "t_disc", "n_val", "mean_val", "t_val", "p_disc", "odkryta", "potwierdzona",
+                  "years_pos", "years")]
         fixed = [c for c in fixed if sub[c].notna().all()]
         good = ((sub.mean_disc > 0) & (sub.mean_val > 0))
         index = {tuple(r): g for r, g in zip(sub[fixed + cols].itertuples(index=False, name=None), good)}
@@ -309,6 +327,7 @@ def report(out: dict, top: int = 40) -> str:
         "# Skan hipotez (D-037)", "",
         f"Pary: {', '.join(out['pairs'])} · historia {dt(out['t0'])} – {dt(out['t1'])} · siatka {'duża' if out['big'] else 'standardowa'}"
         f" · {out['seconds']} s", "",
+        "- Dane: " + "; ".join(f"{p} {v['bars']:,} świec od {dt(v['from'])}" for p, v in out.get("pair_info", {}).items()) + ".",
         f"- Odkrycie: {dt(out['t0'])} – {dt(out['cuts'][0])}; potwierdzenie: do {dt(out['cuts'][1])}; "
         "**ostatnie 25% (OOS silnika) nie było liczone**.",
         f"- **Przetestowane reguły: {out['tested']:,}** (z wystarczającą liczbą transakcji: {out['eligible']:,}).",
@@ -316,23 +335,35 @@ def report(out: dict, top: int = 40) -> str:
         f"(t ≥ {out['t_threshold']:.2f}); odkrytych: {out['discovered']:,}.",
         f"- Potwierdzone w drugim okresie (średnia > 0, t ≥ {T_VAL:g}): **{out['confirmed']:,}**.", "",
     ]
+    near = out.get("near")
+    near_lines = []
+    if near is not None and len(near):
+        near_lines = ["", "## Najbliżej progu (nie przeszły — dodatnie w obu okresach, za słabe po korekcie)", "",
+                      "To NIE są odkrycia. Lista pokazuje, czego szukać przy większej liczbie par albo węższej siatce.", ""]
+        near_lines += _table(near.head(15))
     if s.empty:
         lines += ["Żadna reguła nie przeszła obu progów. To też wynik: w tej rodzinie reguł nie ma przewagi, "
-                  "która przetrwałaby uczciwe liczenie."]
+                  "która przetrwałaby uczciwe liczenie."] + near_lines
         return "\n".join(lines)
-    lines += ["## Potwierdzone reguły (ranking: mniejsze z t odkrycia i t potwierdzenia)", "",
-              "| # | reguła | n odkr. | pips netto odkr. | t odkr. | n potw. | pips netto potw. | t potw. | sąsiedzi + |",
-              "|---|---|---|---|---|---|---|---|---|"]
-    for i, (_, r) in enumerate(s.head(top).iterrows(), 1):
-        nb = "—" if pd.isna(r.sasiedzi) else f"{r.sasiedzi:.0%}"
-        lines.append(f"| {i} | {describe(r)} | {int(r.n_disc)} | {r.mean_disc:+.2f} | {r.t_disc:.1f} | {int(r.n_val)} | "
-                     f"{r.mean_val:+.2f} | {r.t_val:.1f} | {nb} |")
+    lines += ["## Potwierdzone reguły (ranking: mniejsze z t odkrycia i t potwierdzenia)", ""] + _table(s.head(top))
     by = s.groupby(["pair", "family"]).size().rename("liczba").reset_index()
     lines += ["", "## Potwierdzone według pary i rodziny", "", "| para | rodzina | reguł |", "|---|---|---|"]
     lines += [f"| {r.pair} | {r.family} | {r.liczba} |" for r in by.itertuples()]
+    lines += near_lines
     lines += ["", "Następny krok: najlepsze reguły (z sąsiadami ≥ 60%) zamienić w strategię i policzyć silnikiem — "
               "dopiero tam liczy się OOS, benchmark losowy, DSR i PBO."]
     return "\n".join(lines)
+
+
+def _table(df: pd.DataFrame) -> list[str]:
+    out = ["| # | reguła | n odkr. | pips netto odkr. | t odkr. | n potw. | pips netto potw. | t potw. | lata + | sąsiedzi + |",
+           "|---|---|---|---|---|---|---|---|---|---|"]
+    for i, (_, r) in enumerate(df.iterrows(), 1):
+        nb = "—" if pd.isna(r.sasiedzi) else f"{r.sasiedzi:.0%}"
+        yrs = f"{int(r.years_pos)}/{int(r.years)}"
+        out.append(f"| {i} | {describe(r)} | {int(r.n_disc)} | {r.mean_disc:+.2f} | {r.t_disc:.1f} | {int(r.n_val)} | "
+                   f"{r.mean_val:+.2f} | {r.t_val:.1f} | {yrs} | {nb} |")
+    return out
 
 
 def save(out: dict, folder: Path) -> Path:
@@ -340,7 +371,8 @@ def save(out: dict, folder: Path) -> Path:
     (folder / "scan.md").write_text(report(out), encoding="utf-8")
     cols = [c for c in out["survivors"].columns if c != "potwierdzona"]
     out["survivors"][cols].to_csv(folder / "survivors.csv", index=False)
-    meta = {k: v for k, v in out.items() if k not in ("survivors", "all")}
+    out["near"][cols].to_csv(folder / "near.csv", index=False)
+    meta = {k: v for k, v in out.items() if k not in ("survivors", "near", "all")}
     (folder / "scan.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
     fam = out["all"].groupby(["pair", "family"]).agg(reguly=("t_disc", "size"), odkryte=("odkryta", "sum"),
                                                      potwierdzone=("potwierdzona", "sum"))

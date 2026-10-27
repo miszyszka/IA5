@@ -8,7 +8,6 @@ DEFAULT_SIZING = (5, 10, 15, 20, 30)  # % kapitału jako depozyt (B4)
 OOS_FRACTION = 0.25  # W1
 TRADING_TZ = "Europe/Warsaw"   # B11, D-028: handel tylko 07:00–17:00 czasu polskiego (najniższe spready)
 TRADING_HOURS = (7, 17)        # wejście na open świecy otwartej o 07:00 … 16:00 czasu polskiego
-COMPUTE_PAIRS = ("EURUSD",)    # D-031: na razie strategie liczymy tylko na EUR/USD; ta para jest też pobierana pierwsza
 
 
 @dataclass(frozen=True)
@@ -34,6 +33,11 @@ PAIRS = {
         Pair("EURJPY", "EURJPY=X", "EURJPY", 0.01, 2.1, "JPY"),
     )
 }
+
+
+# D-038 (zmiana D8 przez Michała 2026-10-27): strategie liczymy na wszystkich parach, które mają zatwierdzone miesiące;
+# para bez zatwierdzonych miesięcy jest pomijana (ready.build). Kolejność = kolejność pobierania (EUR/USD pierwsza).
+COMPUTE_PAIRS = tuple(PAIRS)
 
 
 def spread_price(pair: str) -> float:

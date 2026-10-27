@@ -63,4 +63,5 @@ def test_do_sync_live_states_and_coverage(tmp_path, monkeypatch):
     assert [m[0] for m in d["USDJPY"]["m"]] == [1, 0, 2]   # luty bez pliku — „nie pobrany”, dociągnie następny obieg
     assert ctx["ready"]["EURUSD"]["months"] == 3          # EUR/USD: wszystkie miesiące zatwierdzone → do liczenia
     assert (tmp_path / "h1_ready" / "EURUSD.parquet").exists()
-    assert not (tmp_path / "h1_ready" / "USDJPY.parquet").exists()
+    # D-038: USD/JPY też jest liczona — ale tylko z zatwierdzonych miesięcy (luty bez pliku, marzec niepełny → poza)
+    assert ctx["ready"]["USDJPY"]["months"] < 3

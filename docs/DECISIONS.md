@@ -5,6 +5,13 @@ Najnowsze na górze.
 
 ---
 
+### D-038 · 2026-10-27 · Strategie liczone na wszystkich parach (zmiana D8)
+- **Decyzja (Michał):** „Zgadzam się” — na pytanie, czy po skanie liczyć strategie na wszystkich parach z kompletem zatwierdzonych danych.
+- **D8:** `COMPUTE_PAIRS` = wszystkie 8 par. Para bez zatwierdzonych miesięcy jest pomijana (bez zmian w zasadach zatwierdzania i czyszczenia). Do wyniku trafiają tylko pary, które mają dane do liczenia; raport podaje ich listę.
+- Skutek uboczny: `ia5 fetch` pobiera w kolejności tabeli z sekcji 2 (EUR/USD pierwsza) — bez zmian dla EUR/USD.
+- **Skaner (D-037) po pierwszym przebiegu:** dane miały tylko EUR/USD i USD/JPY (reszta w trakcie pobierania); siatka duża 312 tys. reguł → próg t ≥ 4,23; potwierdzona 1 reguła (EUR/USD long w grudniu 01–08 Londynu — 12 grudni, słaba podstawa). Dodane: „lata dodatnie” (odporne na skupienie transakcji w kilku okresach), lista „najbliżej progu” (`near.csv`), opis danych per para.
+- **Odrzucone:** ręczne obniżenie progu FDR, żeby „coś przeszło” — to byłoby dokładnie to przeuczenie, przed którym skaner chroni.
+
 ### D-037 · 2026-10-27 · Skaner hipotez `ia5 scan` — szeroko na Macu, z kontrolą wielokrotnych prób
 - **Decyzja (Michał):** „Skorzystaj z tego, że MAC może policzyć bardzo długo miliony różnych opcji.”
 - **Problem:** miliony wariantów w zwykłym liczeniu strategii = miliony szans na przypadkowego zwycięzcę (DSR/PBO to wyłapią i strategia i tak będzie 🔴), a do tego miliardy wierszy transakcji, których nie da się zapisać ani opublikować.

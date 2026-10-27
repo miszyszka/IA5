@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.19 · 2026-10-27 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
+Wersja 0.20 · 2026-10-27 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
 
 ---
 
@@ -27,7 +27,7 @@ Zakładka **Inwestorzy** istnieje, ale jest pusta („wkrótce"). Nie budujemy j
 - **D5.** Każda świeca przechodzi kontrolę jakości (kalendarz sesji bez weekendów i świąt 24/25.12 i 31.12/1.01 — D-028): `high ≥ max(open, close)`, `low ≤ min(open, close)`, ceny > 0, `ts % 3600 == 0`, brak luk w sesji (tydzień FX: niedziela ~21/22:00 → piątek ~21/22:00 UTC, zależnie od czasu letniego w USA), test krzyżowy par (EUR/JPY ≈ EUR/USD × USD/JPY; EUR/GBP ≈ EUR/USD ÷ GBP/USD). Naruszenie = flaga w statusie, **nigdy cicha naprawa**.
 - **D6.** Każdy wynik backtestu zapisuje hash danych, hash kodu strategii i `ENGINE_VERSION`. Wynik bez tych trzech pól nie istnieje.
 - **D7.** Dwa źródła, dwie role, bez sklejania. **Dukascopy M1 bid/ask** = jedyne źródło danych do backtestów i forward testów. **Yahoo → Firestore** = bieżący monitoring (status, latencja) i niezależna kontrola danych. Nigdy nie łączymy dwóch źródeł w jednej serii cen.
-- **D8.** Backtest liczy wyłącznie na **zatwierdzonych** miesiącach (plik jest, żaden dzień nie czeka na dociągnięcie; dzień odrzucany przez 6 rund i starszy niż tydzień jest uznany za niedostępny) i tylko na parach z `COMPUTE_PAIRS` (teraz **EUR/USD**). Warstwa czyszczenia (`ia5/clean.py`, D-031, D-032): **przerwa w dostępie do danych** (dzień uznany za niedostępny, miesiąc niezatwierdzony) zostaje dziurą (`gap_before`); dziura w pobranym dniu **≤ 3 godziny sesji** bez notowań → uzupełniona liniowo od zamknięcia przed nią do otwarcia po niej, znacznik `filled`; dłuższa godzina bez notowań, weekend i święto — nic (następna świeca jest kolejną). Uzupełnianie dzieje się tylko w kopii do liczenia (`data/h1_ready/`), nigdy w danych surowych, i jest podane w raporcie.
+- **D8.** Backtest liczy wyłącznie na **zatwierdzonych** miesiącach (plik jest, żaden dzień nie czeka na dociągnięcie; dzień odrzucany przez 6 rund i starszy niż tydzień jest uznany za niedostępny) i tylko na parach z `COMPUTE_PAIRS` (od D-038 **wszystkie 8 par**; para bez zatwierdzonych miesięcy jest pomijana). Warstwa czyszczenia (`ia5/clean.py`, D-031, D-032): **przerwa w dostępie do danych** (dzień uznany za niedostępny, miesiąc niezatwierdzony) zostaje dziurą (`gap_before`); dziura w pobranym dniu **≤ 3 godziny sesji** bez notowań → uzupełniona liniowo od zamknięcia przed nią do otwarcia po niej, znacznik `filled`; dłuższa godzina bez notowań, weekend i święto — nic (następna świeca jest kolejną). Uzupełnianie dzieje się tylko w kopii do liczenia (`data/h1_ready/`), nigdy w danych surowych, i jest podane w raporcie.
 
 ### Backtest (model wykonania)
 - **B1.** Sygnał liczony na zamknięciu świecy `t`, wejście na **open świecy `t+1`**. Nigdy po cenie, której w danej chwili nie dało się znać.

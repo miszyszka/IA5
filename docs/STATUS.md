@@ -41,6 +41,9 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 - Strategia 5 (sezon EUR/USD, Dukascopy): 🟡 4/5 — percentyl 100, PBO 0,07, OOS +0,7 pips; lata 2003–2011 (niewidziane w badaniu) w 7/9 dodatnie. DSR 0,60 — przewaga na transakcję mała (+1,7 pips), słabnie od 2020.
 - **D-037:** `ia5 scan` — skaner hipotez (5,7 tys. / z `--duzy` 160 tys. reguł na parę), FDR + potwierdzenie, OOS pominięty; `df.attrs["pair"]` w strategiach.
 
+- **Skan 2026-10-27 22:06** (`--duzy`, tylko EUR/USD + USD/JPY z danymi): 312 tys. reguł, próg t ≥ 4,23, 7 odkrytych, 1 potwierdzona (EUR/USD long w grudniu 01–08 Londynu). Poranny short EUR/USD nie przeszedł progu duże siatki — za dużo słabych reguł podnosi poprzeczkę.
+- **D-038:** silnik liczy wszystkie pary z zatwierdzonymi miesiącami (zmiana D8 za zgodą Michała). Skaner: lata dodatnie, „najbliżej progu”, opis danych per para.
+
 **Następne (Michał)**
 0. Wkleić nowy `apps_script/Code.gs` do Apps Script, zapisać i **raz uruchomić `installTrigger()`** (wyzwalacz co 1 min zamiast co 5).
 1. Na Macu: przerwij działające `ia5 start` (Ctrl+C), `git pull`. Potem **dwa terminale**: w pierwszym `ia5 fetch` (pobiera, działa bez końca), w drugim `ia5 start` (liczy).
