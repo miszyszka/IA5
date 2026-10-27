@@ -63,6 +63,7 @@ def test_initial_stop_and_time_cap():
 
 def test_trail_settings_validation():
     assert read_settings({"EXITS": [{"kind": "trail", "n": 14, "sl": 2, "trail": 3, "cap": 480}]})["pyramid"] == 1
-    for bad in ({"kind": "trail", "sl": 0, "trail": 3}, {"kind": "trail", "sl": 2, "trail": 0}, {"kind": "trail", "sl": 2, "trail": 3, "cap": 481}):
+    for bad in ({"kind": "trail", "sl": 0, "trail": 3}, {"kind": "trail", "sl": 2, "trail": 0},
+                {"kind": "trail", "sl": 2, "trail": 3, "cap": 481}):
         with pytest.raises(StrategyError):
             read_settings({"EXITS": [bad]})
