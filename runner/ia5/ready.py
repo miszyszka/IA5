@@ -29,6 +29,32 @@ def signature(root: Path, pair: str, months: list[str]) -> str:
     return h.hexdigest()[:16]
 
 
+def unavailable_ranges(root: Path, pair: str, ready: list[str]) -> list[list[int]]:
+    """D-032: czas bez dostępu do danych — niezatwierdzone miesiące między pierwszym a ostatnim zatwierdzonym
+    i dni uznane za niedostępne w zatwierdzonych. Tylko te przerwy anulują transakcje."""
+    if not ready:
+        return []
+    out = []
+    ready_set = set(ready)
+
+    def ts(y, m, d=1):
+        return int(datetime(y, m, d, tzinfo=UTC).timestamp())
+
+    y, m = int(ready[0][:4]), int(ready[0][5:])
+    ly, lm = int(ready[-1][:4]), int(ready[-1][5:])
+    while (y, m) <= (ly, lm):
+        ny, nm = (y + 1, 1) if m == 12 else (y, m + 1)
+        key = f"{y}-{m:02d}"
+        if key not in ready_set:
+            out.append([ts(y, m), ts(ny, nm)])
+        else:
+            for d in dukascopy.read_given_up(root / "m1" / pair / f"{key}.parquet"):
+                a = ts(int(d[:4]), int(d[5:7]), int(d[8:10]))
+                out.append([a, a + 86400])
+        y, m = ny, nm
+    return out
+
+
 def build(root: Path, out_dir: Path, pairs=COMPUTE_PAIRS, until: date | None = None, log=print) -> dict:
     """Przebudowuje świece do liczenia dla `pairs`; pliki innych par usuwa z out_dir (to kopia pochodna, nie dane)."""
     until = until or datetime.now(UTC).date() - timedelta(days=1)
@@ -57,7 +83,7 @@ def build(root: Path, out_dir: Path, pairs=COMPUTE_PAIRS, until: date | None = N
             continue
         t0 = time.time()
         raw = m1_to_h1(dukascopy.load_m1(pair, root, months=st["ready"]))
-        df, info = clean_h1(raw)
+        df, info = clean_h1(raw, unavailable_ranges(root, pair, st["ready"]))
         tmp = pf.with_suffix(".tmp")
         df.to_parquet(tmp, index=False)
         tmp.replace(pf)
@@ -67,6 +93,6 @@ def build(root: Path, out_dir: Path, pairs=COMPUTE_PAIRS, until: date | None = N
         jf.write_text(json.dumps(info))
         out[pair] = {**info, "rebuilt": True}
         log(f"  {pair} do liczenia: {info['bars']:,} świec z {info['months']}/{info['months_total']} zatwierdzonych mies.; "
-            f"uzupełnione {info['filled']} (≤ 3 h), długie luki {info['gaps_n']} ({info['gap_hours']} h) "
+            f"uzupełnione {info['filled']} (≤ 3 h), przerwy w dostępie do danych {info['gaps_n']} ({info['gap_hours']} h) "
             f"— {time.time() - t0:.0f} s")
     return out

@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.13 · 2026-10-27 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
+Wersja 0.14 · 2026-10-27 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
 
 ---
 
@@ -27,7 +27,7 @@ Zakładka **Inwestorzy** istnieje, ale jest pusta („wkrótce"). Nie budujemy j
 - **D5.** Każda świeca przechodzi kontrolę jakości (kalendarz sesji bez weekendów i świąt 24/25.12 i 31.12/1.01 — D-028): `high ≥ max(open, close)`, `low ≤ min(open, close)`, ceny > 0, `ts % 3600 == 0`, brak luk w sesji (tydzień FX: niedziela ~21/22:00 → piątek ~21/22:00 UTC, zależnie od czasu letniego w USA), test krzyżowy par (EUR/JPY ≈ EUR/USD × USD/JPY; EUR/GBP ≈ EUR/USD ÷ GBP/USD). Naruszenie = flaga w statusie, **nigdy cicha naprawa**.
 - **D6.** Każdy wynik backtestu zapisuje hash danych, hash kodu strategii i `ENGINE_VERSION`. Wynik bez tych trzech pól nie istnieje.
 - **D7.** Dwa źródła, dwie role, bez sklejania. **Dukascopy M1 bid/ask** = jedyne źródło danych do backtestów i forward testów. **Yahoo → Firestore** = bieżący monitoring (status, latencja) i niezależna kontrola danych. Nigdy nie łączymy dwóch źródeł w jednej serii cen.
-- **D8.** Backtest liczy wyłącznie na **zatwierdzonych** miesiącach (plik jest, żaden dzień nie czeka na dociągnięcie; dzień odrzucany przez 6 rund i starszy niż tydzień jest uznany za niedostępny) i tylko na parach z `COMPUTE_PAIRS` (teraz **EUR/USD**). Warstwa czyszczenia (`ia5/clean.py`, D-031): luka w sesji **≤ 3 świece** → uzupełniona liniowo od zamknięcia przed luką do otwarcia po niej, każda taka świeca ma znacznik `filled`; dłuższa luka zostaje dziurą (`gap_before`). Uzupełnianie dzieje się tylko w kopii do liczenia (`data/h1_ready/`), nigdy w danych surowych, i jest podane w raporcie.
+- **D8.** Backtest liczy wyłącznie na **zatwierdzonych** miesiącach (plik jest, żaden dzień nie czeka na dociągnięcie; dzień odrzucany przez 6 rund i starszy niż tydzień jest uznany za niedostępny) i tylko na parach z `COMPUTE_PAIRS` (teraz **EUR/USD**). Warstwa czyszczenia (`ia5/clean.py`, D-031, D-032): **przerwa w dostępie do danych** (dzień uznany za niedostępny, miesiąc niezatwierdzony) zostaje dziurą (`gap_before`); dziura w pobranym dniu **≤ 3 godziny sesji** bez notowań → uzupełniona liniowo od zamknięcia przed nią do otwarcia po niej, znacznik `filled`; dłuższa godzina bez notowań, weekend i święto — nic (następna świeca jest kolejną). Uzupełnianie dzieje się tylko w kopii do liczenia (`data/h1_ready/`), nigdy w danych surowych, i jest podane w raporcie.
 
 ### Backtest (model wykonania)
 - **B1.** Sygnał liczony na zamknięciu świecy `t`, wejście na **open świecy `t+1`**. Nigdy po cenie, której w danej chwili nie dało się znać.
@@ -40,8 +40,8 @@ Zakładka **Inwestorzy** istnieje, ale jest pusta („wkrótce"). Nie budujemy j
 - **B8.** Jedna pozycja na parę na wariant. Sygnał przy otwartej pozycji w tej parze jest pomijany (licznik pominiętych w raporcie).
 - **B9.** Wskaźniki tylko z modułu `ia5.indicators`, zweryfikowanego testami zgodności z TA-Lib. Strategie nie piszą własnych RSI/ATR.
 - **B10.** Zmiana logiki silnika = podbicie `ENGINE_VERSION`. Wyniki starszej wersji dashboard oznacza jako nieaktualne.
-- **B11.** Handlujemy tylko **07:00–17:00 czasu polskiego** (`Europe/Warsaw`, z czasem letnim; zimą 06–16 UTC, latem 05–15 UTC) — wtedy spready są najniższe (D-028). Wejście wyłącznie na open świecy otwartej o 07:00…16:00 czasu polskiego; sygnały poza oknem są pomijane i liczone w raporcie. **Każda pozycja jest zamykana najpóźniej o 23:00 czasu polskiego** (zamknięcie świecy 22:00; powód wyjścia `23:00`) — limit działa na wszystkie warianty wyjścia (D-030). Benchmark losowych wejść (W3) losuje w tym samym oknie i z tym samym limitem.
-- **B12.** Transakcja nachodząca na **długą lukę w danych** (od świecy wejścia do świecy wyjścia, także luka między sygnałem a wejściem) albo mająca świecę sygnału, wejścia lub wyjścia **uzupełnioną** jest **anulowana** — jakby jej nie było; liczba anulowanych w raporcie. Benchmark losowy anuluje tak samo (D-031).
+- **B11.** Handlujemy tylko **07:00–17:00 czasu polskiego** (`Europe/Warsaw`, z czasem letnim; zimą 06–16 UTC, latem 05–15 UTC) — wtedy spready są najniższe (D-028). Wejście wyłącznie na open świecy otwartej o 07:00…16:00 czasu polskiego; sygnały poza oknem są pomijane i liczone w raporcie. **Wyjście na dowolnej świecy** — według wariantu wyjścia, także w nocy i po weekendzie; bez limitu 23:00 (D-032 zastępuje D-030). Benchmark losowych wejść (W3) losuje w tym samym oknie.
+- **B12.** Transakcja nachodząca na **przerwę w dostępie do danych** (od świecy wejścia do świecy wyjścia, także przerwa między sygnałem a wejściem) albo mająca świecę sygnału, wejścia lub wyjścia **uzupełnioną** jest **anulowana** — jakby jej nie było; liczby anulowanych (osobno) w raporcie. **Weekend, święto i godziny bez notowań nie są przerwą:** po ostatniej piątkowej świecy następna jest pierwsza niedzielna/poniedziałkowa. Benchmark losowy anuluje tak samo (D-031, D-032).
 
 ### Walidacja (bez niej wynik to anegdota)
 - **W1.** Ostatnie **25%** historii to out-of-sample (OOS). Ranking i wybór wariantów tylko na in-sample (IS). OOS pokazujemy obok, nigdy nie służy do wyboru.
@@ -91,7 +91,7 @@ Zakładka **Inwestorzy** istnieje, ale jest pusta („wkrótce"). Nie budujemy j
 
 \* Nazwy potwierdzić testem przy implementacji (E1, E2).
 
-- Godziny handlu: wejścia **07:00–17:00**, zamknięcie najpóźniej **23:00** czasu polskiego (B11, D-028, D-030). Dźwignia **30:1** (B4, D-024). Waluta konta: **USD**. Kapitał startowy: **10 000 USD**.
+- Godziny handlu: wejścia **07:00–17:00** czasu polskiego, wyjście na dowolnej świecy (B11, D-028, D-032). Dźwignia **30:1** (B4, D-024). Waluta konta: **USD**. Kapitał startowy: **10 000 USD**.
 - Wynik w walucie kwotowanej przeliczany na walutę konta po kursie z zamknięcia świecy wyjścia, z naszych własnych danych (JPY przez USD/JPY, GBP przez GBP/USD, CHF przez USD/CHF, CAD przez USD/CAD).
 - Swap / rolowanie: domyślnie 0 (decyzja O5). Raport pokazuje, ile nocy przez 21:00 UTC trzymano pozycje, żeby było widać skalę pominiętego kosztu.
 
@@ -124,7 +124,7 @@ flowchart LR
 
 ### Przepływ
 
-1. **Apps Script — co 5 minut, nie co godzinę.** Najpierw sprawdza w Script Properties, czy oczekiwana nowa świeca jest już zapisana. Jeśli tak — kończy bez żadnego zapytania. Jeśli nie — pyta Yahoo o ostatnie dni (interwał 1h), zapisuje zamknięte świece (upsert), aktualizuje `meta/status`.
+1. **Apps Script — co minutę (D-033), nie co godzinę.** Najpierw sprawdza w Script Properties, czy oczekiwana nowa świeca jest już zapisana. Jeśli tak — kończy bez żadnego zapytania. Jeśli nie — pyta Yahoo o ostatnie dni (interwał 1h), zapisuje zamknięte świece (upsert), aktualizuje `meta/status`.
    *Dlaczego:* wyzwalacz godzinowy Apps Script odpala się w dowolnej minucie godziny, więc pomiar „ile sekund zajęło pobranie świecy" byłby szumem rzędu 0–60 min.
 2. **Mac — dwa procesy (D-031).** `ia5 fetch` (osobny terminal) dociąga M1 z Dukascopy para po parze do końca (najpierw EUR/USD) i składa świece H1. `ia5 start` nic nie pobiera: z zatwierdzonych miesięcy buduje świece do liczenia (`data/h1_ready/`) → synchronizuje świece Yahoo z Firestore → kontrola jakości, w tym porównanie Yahoo z Dukascopy na wspólnym okresie → Parquet lokalnie → jeśli dane się zmieniły, push świec H1 na gałąź `data` i zapis jej SHA w `meta/status.dataSha`.
 3. **Dashboard.** Status z `meta/status` i `runner/heartbeat`. Świece i wyniki z gałęzi `data` przez `raw.githubusercontent.com/miszyszka/IA5/<SHA>/...` — adres z konkretnym SHA, więc bez problemu z cache.
@@ -217,7 +217,7 @@ Dane Dukascopy (M1 i zbudowane z nich H1) zostają na Macu: są za duże na GitH
 - Kod w repo `apps_script/`, synchronizowany narzędziem `clasp`. Nie edytujemy tylko w przeglądarce.
 - Funkcje:
   - `backfill()` — jednorazowo. Yahoo udostępnia świece 1h tylko z ostatnich **730 dni**, więc to jest „cała dostępna historia" z tego źródła (do monitoringu i kontroli; długą historię do backtestów daje Dukascopy, D7). Zapis porcjami po miesiącu.
-  - `tick()` — wyzwalacz co 5 min (przepływ, sekcja 3).
+  - `tick()` — wyzwalacz **co 1 min** (D-033). Gdy wszystko jest — koniec bez zapytań. Tuż po pełnej godzinie czeka na zamknięcie świecy (D2) i ponawia brakujące pary co 15 s przez 10 min (najwyżej 100 s na uruchomienie); status zapisuje po każdej rundzie z nową świecą. Po wklejeniu nowej wersji uruchom raz `installTrigger()`.
   - `healthcheck()` — ręczna diagnostyka.
 - Yahoo: nieoficjalny endpoint `v8/finance/chart`, `interval=1h`. Ponawianie z rosnącym odstępem, maks. 3 próby, nigdy pętla bez końca. Odpowiedź, która nie jest JSON-em → błąd w `meta/status`, nie awaria.
 - Odrzucamy ostatnią, niezamkniętą świecę (D2). Nadpisujemy 3 ostatnie zamknięte (Yahoo czasem je koryguje). Korekta > 0,5 pipsa → flaga `revised`.
@@ -332,7 +332,7 @@ Rozbicia: para, rok, kierunek, sesja (Azja 00–07, Europa 07–13, USA 13–21 
 
 ### 10.1 Stan systemu (zawsze widoczny, w nagłówku obok zakładek)
 - **Dane** i **Mac** — dwa wskaźniki tuż obok siebie, każdy z kropką stanu (jedyne świecące elementy strony; przy działającym systemie kropka lekko „oddycha”).
-  - Dane: działa / opóźnienie / stoi / rynek zamknięty (weekend to nie awaria); obok ostatnia świeca i odliczanie do następnej. Progi w godzinach rynku: OPÓŹNIENIE gdy świecy brak > 20 min po zamknięciu, STOI gdy > 75 min.
+  - Dane: działa / opóźnienie / stoi / rynek zamknięty (weekend to nie awaria); obok ostatnia świeca i odliczanie do następnej. Gdy wybije pełna godzina — **czerwony zegar** (ile par czeka, od pełnej godziny), aż wszystkie pary mają nową świecę (D-033). Progi w godzinach rynku: OPÓŹNIENIE gdy świecy brak > 20 min po zamknięciu, STOI gdy > 75 min.
   - Mac: połączony / przygotowuje dane / liczy (nazwa, postęp %) / rozłączony (od kiedy).
   - Pobieranie (`ia5 fetch`, D-031): para i % zatwierdzonych miesięcy / dociąga braki / przerwa (ile minut) / komplet / wyłączone.
 - **Problemy** — liczba kontroli przeglądu zdrowia, które nie są OK (bursztyn: uwagi, czerwień: błąd); pojawia się tylko, gdy są (klik → Stats).
@@ -343,7 +343,7 @@ Rozbicia: para, rok, kierunek, sesja (Azja 00–07, Europa 07–13, USA 13–21 
 **Strategie** | **Stats** | **Inwestorzy** (pusta, „wkrótce").
 
 **Stats** (`meta/status` + `runner/heartbeat` + `coverage/coverage.json` z gałęzi `data`, 0 dodatkowych odczytów Firestore): **Stan systemu** (D-023) — jedno zdanie o stanie, opis bazy i projektu (ile świec w którym źródle, zakresy, strategie, gałąź `data`) i lista nazwanych kontroli (✓ / ! / ✕) z opisem, szczegółami i „co zrobić”; gdy przegląd jest starszy niż 2 h, strona mówi to wprost; świece w bazie i ostatnie pobranie, latencja (ostatnia, mediana 24 h, mini-wykres), kafelek przeglądu z listą wszystkich problemów (nazwa + zdanie);
-**mapa pokrycia** (D-022) — Dukascopy: 8 par × miesiące od 2003; Yahoo: **audyt świeca po świecy** z ostatnich 3 tygodni (1 kafelek = 1 świeca H1: jest / spóźniona > 20 min / z flagą / brak / w drodze / rynek zamknięty, na żywo z `meta/status.recent`, lista ostatnich problemów, D-027); w mapie Dukascopy każdy miesiąc wobec kalendarza sesji: nie pobrany / błąd / pobrany częściowo (brakujące dni) / pełny / z dziurami (natężenie) / w toku / Dukascopy nie ma; luki rozdzielone na *dziury* (brak tylko w tej parze) i *wspólne* (brak w ≥ połowie par: święto, krótka sesja, przerwa źródła), z potwierdzeniem z drugiego źródła; cienkie godziny (< 30 minut z notowaniami); klik miesiąc → lista luk co do godziny, klik para → wszystkie jej dziury; w trakcie pobierania mapa wypełnia się na żywo z heartbeatu; **dziennik dzień po dniu** — z ostatnich 30 dni, ile świec przybyło każdego dnia (wg dnia świecy, UTC) wobec oczekiwanych z kalendarza sesji, per para, z brakami na kolor; tabela par. Flagi Yahoo nie mają osobnej listy — widać je w audycie jako kafelki „z flagą”, a ich liczbę w przeglądzie zdrowia.
+**mapa pokrycia** (D-022) — Dukascopy: 8 par × miesiące od 2003; Yahoo: **audyt ostatniej doby** (D-033) — 24 zamknięte świece + trwająca godzina (przerywana kratka), nad kolumną godzina otwarcia w czasie polskim; stany: jest / spóźniona > 20 min / z flagą / czeka (czerwony zegar od pełnej godziny do zapisu) / rynek zamknięty; przy każdej parze zegar albo czas ostatniego zapisu; na żywo z `meta/status.recent` i `pairs`; w mapie Dukascopy każdy miesiąc wobec kalendarza sesji: nie pobrany / błąd / pobrany częściowo (brakujące dni) / pełny / z dziurami (natężenie) / w toku / Dukascopy nie ma; luki rozdzielone na *dziury* (brak tylko w tej parze) i *wspólne* (brak w ≥ połowie par: święto, krótka sesja, przerwa źródła), z potwierdzeniem z drugiego źródła; cienkie godziny (< 30 minut z notowaniami); klik miesiąc → lista luk co do godziny, klik para → wszystkie jej dziury; w trakcie pobierania mapa wypełnia się na żywo z heartbeatu; **dziennik dzień po dniu** — z ostatnich 30 dni, ile świec przybyło każdego dnia (wg dnia świecy, UTC) wobec oczekiwanych z kalendarza sesji, per para, z brakami na kolor; tabela par. Flagi Yahoo nie mają osobnej listy — widać je w audycie jako kafelki „z flagą”, a ich liczbę w przeglądzie zdrowia.
 
 ### 10.3 Lista strategii
 Nazwa, status (do policzenia / liczy się x% / policzona / błąd / zamrożona), data, werdykt, kluczowe liczby najlepszego wariantu IS obok OOS.

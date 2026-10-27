@@ -1,9 +1,13 @@
 /**
  * IA5 — pobieranie świec H1 z Yahoo do Firestore (CLAUDE.md, sekcja 5).
- * Uruchom raz: setup()  (backfill 730 dni + wyzwalacz co 5 min).
+ * Uruchom raz: setup()  (backfill 730 dni + wyzwalacz co 1 min). Po wklejeniu nowej wersji: installTrigger().
  * Źródło prawdy tego pliku: repo miszyszka/IA5, katalog apps_script/.
  *
- * Budżet Firestore (Z4): ok. 8 zapisów świec + 1 zapis statusu na godzinę ≈ 220 zapisów/dobę, 0 odczytów.
+ * Budżet Firestore (Z4): ok. 8 zapisów świec + 1–4 zapisy statusu na godzinę (po każdej rundzie z nową świecą)
+ * ≈ 300 zapisów/dobę, 0 odczytów.
+ * Budżet Apps Script (D-033): wyzwalacz co 1 min; gdy wszystko jest — koniec po odczycie Script Properties (< 0,5 s).
+ * Tuż po pełnej godzinie skrypt czeka na zamknięcie świecy (D2: +60 s) i ponawia brakujące pary co 15 s,
+ * najwyżej ok. 100 s na uruchomienie → ok. 30–40 min czasu wykonania na dobę (limit konta: 90 min).
  * Dziennik (meta/status.daily) i audyt świeca po świecy z 3 tygodni (meta/status.recent, ok. 4 KB): bez dodatkowych zapisów — jadą w zapisie statusu;
  * jednorazowo 16 odczytów (2 miesiące × 8 par) przy pierwszym uruchomieniu i przy rebuildDaily().
  */
@@ -14,6 +18,9 @@ const H = 3600;
 const DAILY_DAYS = 60; // tyle dni trzyma dziennik świec w meta/status
 const RECENT_H = 21 * 24; // audyt świeca po świecy: ostatnie 3 tygodnie (meta/status.recent, D-027)
 const LATE_S = 20 * 60;   // świeca zapisana później niż 20 min po zamknięciu = spóźniona
+const RETRY_S = 15;       // D-033: ponowienie brakujących par co 15 s…
+const BURST_S = 10 * 60;  // …przez pierwsze 10 min po zamknięciu świecy…
+const RUN_MAX_S = 100;    // …i najwyżej tyle sekund jednego uruchomienia (wyzwalacz co 1 min, blokada nie dubluje)
 
 const PAIRS = [
   { name: 'EURUSD', yahoo: 'EURUSD=X', pip: 0.0001 },
@@ -52,7 +59,7 @@ function installTrigger() {
   ScriptApp.getProjectTriggers()
     .filter(t => t.getHandlerFunction() === 'tick')
     .forEach(t => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('tick').timeBased().everyMinutes(5).create();
+  ScriptApp.newTrigger('tick').timeBased().everyMinutes(1).create(); // D-033: najszybciej, jak pozwala Apps Script
 }
 
 function healthcheck() {
@@ -118,10 +125,20 @@ function barFlags(b) {
 // ---------- główna praca ----------
 
 function run_(mode) {
-  const startedAt = nowSec();
+  let startedAt = nowSec();
+  // D-033: tuż po pełnej godzinie świeca jeszcze nie jest „zamknięta” (D2: +60 s) — czekamy, zamiast odpuszczać minutę
+  const hourStart = Math.floor(startedAt / H) * H;
+  if (mode === 'tick' && startedAt - hourStart < 60 && isExpectedBar(hourStart - H)) {
+    const st0 = loadState_();
+    const waiting = PAIRS.some(p => !(st0.pairs[p.name] && st0.pairs[p.name].lastTs >= hourStart - H));
+    if (waiting) {
+      Utilities.sleep((hourStart + 61 - startedAt) * 1000);
+      startedAt = nowSec();
+    }
+  }
   const state = loadState_();
   const exp = expectedTs(startedAt);
-  const todo = PAIRS.filter(p => mode === 'backfill' ||
+  let todo = PAIRS.filter(p => mode === 'backfill' ||
     !(state.pairs[p.name] && state.pairs[p.name].lastTs >= exp));
   if (!todo.length && state.daily && state.recent) return; // nic nowego — zero zapytań i zapisów
   if (!state.daily || !state.recent) { // jednorazowo: dziennik i audyt z tego, co już jest w bazie
@@ -131,6 +148,20 @@ function run_(mode) {
   }
   state.recent = shiftRecent_(state.recent, startedAt);
 
+  // rundy: każda pyta Yahoo tylko o brakujące pary i od razu zapisuje status (dashboard zatrzymuje zegar tej pary)
+  for (let round = 0; ; round++) {
+    const r = fetchRound_(mode, todo, state, startedAt, round);
+    todo = todo.filter(p => !(state.pairs[p.name] && state.pairs[p.name].lastTs >= exp));
+    const now = nowSec();
+    const more = mode === 'tick' && todo.length && now - (exp + H) < BURST_S && now - startedAt + RETRY_S < RUN_MAX_S;
+    if (Object.keys(r.updated).length || r.errors.length || !more) writeRound_(mode, state, startedAt, r);
+    if (!more) break;
+    Utilities.sleep(RETRY_S * 1000);
+  }
+  saveState_(state);
+}
+
+function fetchRound_(mode, todo, state, startedAt, round) {
   const updated = {};
   const errors = [];
   let runLatency = null;
@@ -139,13 +170,15 @@ function run_(mode) {
     try {
       const params = mode === 'backfill'
         ? 'period1=' + (startedAt - 729 * 86400) + '&period2=' + startedAt
-        : 'range=5d';
+        : round ? 'range=1d' : 'range=5d';
       const now = nowSec();
       const closed = fetchYahoo(p.yahoo, params).filter(b => b.ts + H <= now - 60);
       const ps = state.pairs[p.name] || { lastTs: 0, count: 0, last: [], latencySec: null };
       const from = mode === 'backfill' || !ps.lastTs ? 0 : ps.lastTs - 3 * H;
       const bars = closed.filter(b => b.ts >= from);
       if (!bars.length) return;
+      const fresh = bars.filter(b => b.ts > ps.lastTs);
+      if (round && !fresh.length) return; // ponowienie bez nowej świecy — bez zapisu
 
       const flags = [];
       bars.forEach(b => barFlags(b).forEach(f => flags.push(f + '@' + b.ts)));
@@ -161,7 +194,6 @@ function run_(mode) {
 
       writeBars_(p.name, bars);
       const writtenAt = nowSec();
-      const fresh = bars.filter(b => b.ts > ps.lastTs);
       const newest = bars[bars.length - 1];
       // dziennik: liczba świec w bazie wg dnia świecy (UTC); backfill przelicza, tick dolicza nowe
       const counted = mode === 'backfill' ? bars : fresh;
@@ -189,31 +221,34 @@ function run_(mode) {
       ps.last = bars.slice(-3);
       ps.flags = flags.slice(-20);
       if (lat !== null) ps.latencySec = lat;
+      ps.savedAt = writtenAt;
       state.pairs[p.name] = ps;
-      updated[p.name] = { lastTs: ps.lastTs, latencySec: ps.latencySec, count: ps.count, flags: ps.flags };
+      updated[p.name] = { lastTs: ps.lastTs, latencySec: ps.latencySec, count: ps.count, flags: ps.flags, savedAt: writtenAt };
       if (lat !== null && mode === 'tick') runLatency = Math.max(runLatency || 0, lat);
-      log_(mode, p.name, fresh.length, lat, flags.slice(0, 5).join(' '));
+      if (fresh.length || flags.length) log_(mode, p.name, fresh.length, lat, flags.slice(0, 5).join(' '));
     } catch (e) {
       errors.push(p.name + ': ' + e.message);
       log_(mode, p.name, 0, null, 'BŁĄD ' + e.message);
     }
   });
+  return { updated: updated, errors: errors, runLatency: runLatency };
+}
 
+function writeRound_(mode, state, startedAt, r) {
   state.latency24h = (state.latency24h || []).filter(x => x.at > startedAt - 86400);
-  if (runLatency !== null) state.latency24h.push({ at: startedAt, s: runLatency });
+  if (r.runLatency !== null) state.latency24h.push({ at: nowSec(), s: r.runLatency });
   state.latency24h = state.latency24h.slice(-300);
 
   const totalBars = PAIRS.reduce((s, p) => s + ((state.pairs[p.name] || {}).count || 0), 0);
   const status = {
     daily: pruneDaily_(state.daily, startedAt),
     recent: state.recent,
-    lastRun: { mode: mode, startedAt: startedAt, finishedAt: nowSec(), ok: !errors.length, error: errors.join('; ') || null },
+    lastRun: { mode: mode, startedAt: startedAt, finishedAt: nowSec(), ok: !r.errors.length, error: r.errors.join('; ') || null },
     totalBars: totalBars,
     latency24h: state.latency24h,
     cross: crossCheck_(state),
   };
-  writeStatus_(status, updated);
-  saveState_(state);
+  writeStatus_(status, r.updated);
 }
 
 /** Okno audytu przesunięte do teraz: { start, pairs: { PARA: napis RECENT_H znaków } }, '.' = brak świecy. */

@@ -160,18 +160,16 @@ def test_trading_window_polish_time_with_dst():
     assert in_trading_hours(winter, hours=False).all()
 
 
-def test_forced_close_at_23_polish_time():
-    """B11 (D-030): pozycja zamknięta najpóźniej o 23:00 czasu polskiego — zimą 22:00 UTC, latem 21:00 UTC."""
+def test_no_forced_close_position_runs_overnight():
+    """B11 (D-032): wejście tylko 07–17 czasu polskiego, ale wyjście na dowolnej świecy — bez limitu 23:00."""
     from datetime import UTC, datetime
 
-    for month, last_utc in ((1, 21), (7, 20)):  # ostatnia świeca pozycji: 21:00 UTC zimą, 20:00 UTC latem
-        t0 = int(datetime(2024, month, 9, 0, tzinfo=UTC).timestamp())
-        n = 60
-        c = 1.1 + np.arange(n) * 1e-5
-        df = pd.DataFrame({"ts": t0 + 3600 * np.arange(n), "open": c, "high": c + 1e-4, "low": c - 1e-4, "close": c})
-        sig = np.zeros(n, np.int8)
-        sig[32] = 1  # 10.xx 08:00 UTC → wejście 09:00 UTC (10:00 lub 11:00 czasu polskiego), po rozgrzewce ATR
-        res = run({"EURUSD": df}, {(0, "EURUSD"): sig}, [{}], exits=[Exit("time", n=24, cap=24)])
-        t = res["outcomes"].iloc[0]
-        exit_hour = datetime.fromtimestamp(int(t["exit_ts"]), UTC).hour
-        assert t["reason"] == "23:00" and exit_hour == last_utc + 1, (month, t["reason"], exit_hour)
+    t0 = int(datetime(2024, 1, 9, 0, tzinfo=UTC).timestamp())
+    n = 80
+    c = 1.1 + np.arange(n) * 1e-5
+    df = pd.DataFrame({"ts": t0 + 3600 * np.arange(n), "open": c, "high": c + 1e-4, "low": c - 1e-4, "close": c})
+    sig = np.zeros(n, np.int8)
+    sig[32] = 1  # 10.01 08:00 UTC → wejście 09:00 UTC (10:00 czasu polskiego)
+    res = run({"EURUSD": df}, {(0, "EURUSD"): sig}, [{}], exits=[Exit("time", n=24, cap=24)])
+    t = res["outcomes"].iloc[0]
+    assert t["reason"] == "czas" and t["bars"] == 24 and t["exit_ts"] == df.ts[33 + 24]

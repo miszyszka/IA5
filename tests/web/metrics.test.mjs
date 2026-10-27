@@ -146,3 +146,52 @@ test('pobieracz ia5 fetch: stan i tekst wskaźnika (D-031)', async () => {
   assert.equal(fetchState({ fetch: { lastSeen: { seconds: now - 200 }, state: 'pobiera' } }, now).online, false);
   assert.equal(fetchText(fetchState({}, now), now).state, 'mute');
 });
+
+test('audyt doby i zegar oczekiwania na świecę (D-033)', async () => {
+  const { auditCells, waitingSince, elapsed } = await import('../../web/js/session.js');
+  const H = 3600;
+  const cur = Date.UTC(2026, 9, 27, 17) / 1000;   // wtorek 17:00 UTC trwa
+  const now = cur + 14 * 60;                       // 17:14
+  // świeca 16:00 zapisana → para nie czeka; zapisana tylko 15:00 → czeka od 17:00:00 (pełna godzina)
+  assert.equal(waitingSince(cur - H, now), null);
+  assert.equal(waitingSince(cur - 2 * H, now), cur);
+  assert.equal(elapsed(cur, now), '14:00');
+  assert.equal(elapsed(cur, cur + 3725), '1:02:05');
+  // weekend: w sobotę nic nie czeka
+  assert.equal(waitingSince(Date.UTC(2026, 9, 30, 20) / 1000, Date.UTC(2026, 9, 31, 12, 5) / 1000), null);
+  const start = cur - 24 * H;
+  const str = '1'.repeat(23) + '.';                // 24 godziny: ostatnia (16:00) jeszcze nie dotarła
+  const a = auditCells({ start, pairs: { EURUSD: str, USDJPY: '1'.repeat(24) } }, { EURUSD: { lastTs: cur - 2 * H }, USDJPY: { lastTs: cur - H } }, now);
+  assert.equal(a.hours.length, 25);
+  assert.equal(a.hours[24], cur);
+  assert.deepEqual(a.pairs.EURUSD.slice(-2), [{ st: 'wait', since: cur }, { st: 'now' }]);
+  assert.deepEqual(a.pairs.USDJPY.slice(-2), [{ st: 'ok' }, { st: 'now' }]);
+  // świeca nowsza niż napis audytu (status zapisany, recent jeszcze nie przesunięty) — liczy się lastTs
+  const b = auditCells({ start: start - H, pairs: { EURUSD: '1'.repeat(24) } }, { EURUSD: { lastTs: cur - H } }, now);
+  assert.equal(b.pairs.EURUSD[23].st, 'ok');
+});
+
+test('wycinki świec: okna, przerwy i transakcje tylko w swoim oknie (D-033)', async () => {
+  const { splitWindows, placeTrades, seriesData } = await import('../../web/js/candlewin.js');
+  const H = 3600;
+  const t0 = Date.UTC(2025, 4, 14, 0) / 1000;   // środa
+  const mk = (a, n) => Array.from({ length: n }, (_, i) => ({ ts: a + i * H, open: 1, high: 1.1, low: 0.9, close: 1 }));
+  const fri = Date.UTC(2025, 4, 16, 10) / 1000, sun = Date.UTC(2025, 4, 18, 22) / 1000;
+  const far = Date.UTC(2025, 6, 1, 8) / 1000;
+  const bars = [...mk(t0, 10), ...mk(fri, 11), ...mk(sun, 5), ...mk(far, 6)];
+  const w = splitWindows(bars);
+  // weekend (pt 20:00 → nd 22:00) nie dzieli okna; luka środa → piątek i maj → lipiec dzielą
+  assert.deepEqual(w.map((x) => [x.from, x.to]), [[0, 10], [10, 26], [26, 32]]);
+  const trades = [
+    { entry_ts: fri + 9 * H, exit_ts: sun + 3 * H },   // przez weekend — w jednym oknie
+    { entry_ts: t0 + 8 * H, exit_ts: far + 2 * H },    // wyjście w innym oknie — nie rysujemy
+    { entry_ts: t0 + 30 * H, exit_ts: t0 + 31 * H },   // wejścia nie ma wśród świec
+  ];
+  const p = placeTrades(bars, w, trades);
+  assert.equal(p.shown.length, 1);
+  assert.equal(p.hidden, 2);
+  assert.equal(p.shown[0].exit, sun + 2 * H);
+  const d = seriesData(bars, w);
+  assert.equal(d.filter((x) => x.open === undefined).length, 16);   // 8 pustych miejsc po każdym z dwóch okien
+  assert.ok(d.every((x, i) => i === 0 || x.time > d[i - 1].time));
+});

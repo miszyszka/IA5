@@ -64,7 +64,7 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
         f"- Pary: {', '.join(m['pairs'])}; świece H1 od {_d(m['data_from'])} do {_d(m['data_to'])}; źródło: {m['data_source']}.",
         f"- In-sample do {_d(m['oos_cutoff'])}, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS.",
         "- Wejście na open świecy po sygnale, tylko w oknie handlu 07:00–17:00 czasu polskiego (B11 — najniższe spready); "
-        "zamknięcie najpóźniej o 23:00 czasu polskiego (powód `23:00`). TP i SL w tej samej świecy: "
+        "wyjście na dowolnej świecy, także po nocy i weekendzie (D-032). TP i SL w tej samej świecy: "
         + ("rozstrzygane na M1, w tej samej minucie — SL." if m["m1_resolver"] else "przyjęty SL (brak danych M1)."),
         f"- Spread raz na transakcję (pips): {spreads}. Swapy pominięte.",
         _clean_line(m),
@@ -75,7 +75,8 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
         f"- Pominięte sygnały, średnio na wariant: {sk['B8'] / n_var:,.0f} (otwarta pozycja w parze), "
         f"{sk['brak_danych'] / n_var:,.1f} (brak danych do wyjścia); {sk.get('rozgrzewka', 0)} wejść w rozgrzewce ATR, "
         f"{sk.get('poza_godzinami', 0)} sygnałów poza oknem 07:00–17:00 czasu polskiego (B11), "
-        f"{sk.get('luka_danych', 0) / n_var:,.1f} transakcji anulowanych przez lukę w danych lub świecę uzupełnioną (D-031).",
+        f"anulowane transakcje, średnio na wariant: {sk.get('luka_danych', 0) / n_var:,.1f} (przerwa w dostępie do danych), "
+        f"{sk.get('swieca_uzupelniona', 0) / n_var:,.1f} (sygnał, wejście lub wyjście na świecy uzupełnionej) — D-032.",
         "## Top 10 wariantów (ranking po IS, min. 30 transakcji IS)",
         _table(top) if len(top) else "_Żaden wariant nie ma 30 transakcji w IS._",
     ]
@@ -140,7 +141,8 @@ def _clean_line(m: dict) -> str:
     parts = []
     for p, d in dc.items():
         months = f"{d['months']}/{d['months_total']} mies. zatwierdzonych, " if d.get("months") is not None else ""
-        parts.append(f"{p}: {months}{d.get('filled', 0)} świec uzupełnionych (luki ≤ 3 h), "
-                     f"{d.get('gaps', 0)} długich luk ({d.get('gap_hours', 0)} h)")
+        parts.append(f"{p}: {months}{d.get('filled', 0)} świec uzupełnionych (dziury ≤ 3 h w pobranych dniach), "
+                     f"{d.get('gaps', 0)} przerw w dostępie do danych ({d.get('gap_hours', 0)} h)")
     return ("- Dane tylko z zatwierdzonych miesięcy (D-031): " + "; ".join(parts)
-            + ". Transakcja nachodząca na długą lukę albo na świecę uzupełnioną jest anulowana.")
+            + ". Transakcja nachodząca na przerwę w dostępie do danych albo na świecę uzupełnioną jest anulowana; "
+            "weekendy, święta i godziny bez notowań nie są przerwą (D-032).")

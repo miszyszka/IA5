@@ -1,5 +1,7 @@
 // Wykresy: ECharts (kapitał, heatmapa, krzywe) i Lightweight Charts (świece z transakcjami).
 // Zasada uczciwości (CLAUDE.md 11): bez wygładzania linii, osie z rzeczywistych wartości. Płasko, bez gradientów (D-019).
+import { placeTrades, seriesData, splitWindows } from './candlewin.js';
+
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const instances = new Set();
 
@@ -105,12 +107,16 @@ export function lines(el, xs, series, xName) {
   });
 }
 
-/** Świece z transakcjami. Zwraca { focus(from, to) }. */
+/**
+ * Świece z transakcjami. Wycinki świec (D-010) są dzielone na okna z widoczną przerwą między nimi (D-033);
+ * markery tylko dla transakcji, których wejście i wyjście leżą w jednym oknie.
+ * Zwraca { shown: [{ trade, entry, exit }], hidden, focus(from, to), remove() }.
+ */
 export function candles(el, bars, trades) {
   const LW = window.LightweightCharts;
   const ch = LW.createChart(el, {
     autoSize: true,
-    layout: { background: { color: 'transparent' }, textColor: css('--muted'), fontFamily: 'Inter, system-ui, sans-serif' },
+    layout: { background: { color: 'transparent' }, textColor: css('--muted'), fontFamily: 'Inter, system-ui, sans-serif', attributionLogo: false },
     grid: { vertLines: { color: css('--line') }, horzLines: { color: css('--line') } },
     timeScale: { timeVisible: true, secondsVisible: false, borderColor: css('--line') },
     rightPriceScale: { borderColor: css('--line') },
@@ -126,25 +132,28 @@ export function candles(el, bars, trades) {
   instances.add(ch);
   const s = ch.addCandlestickSeries({ upColor: css('--ok'), downColor: css('--bad'), borderVisible: false,
     wickUpColor: css('--ok'), wickDownColor: css('--bad'), priceFormat: { type: 'price', precision: bars[0]?.close > 20 ? 3 : 5, minMove: bars[0]?.close > 20 ? 0.001 : 0.00001 } });
-  s.setData(bars.map((b) => ({ time: b.ts, open: b.open, high: b.high, low: b.low, close: b.close })));
-  const times = bars.map((b) => b.ts);
-  const snap = (t) => { // marker musi wskazywać istniejącą świecę
-    let lo = 0, hi = times.length - 1;
-    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (times[mid] <= t) lo = mid; else hi = mid - 1; }
-    return times[lo];
-  };
+  const windows = splitWindows(bars);
+  s.setData(seriesData(bars, windows));
+  const { shown, hidden } = placeTrades(bars, windows, trades);
   const markers = [];
-  for (const t of trades) {
-    markers.push({ time: snap(t.entry_ts), position: t.dir > 0 ? 'belowBar' : 'aboveBar', color: css('--accent'),
+  for (const { trade: t, entry, exit } of shown) {
+    markers.push({ time: entry, position: t.dir > 0 ? 'belowBar' : 'aboveBar', color: css('--accent'),
       shape: t.dir > 0 ? 'arrowUp' : 'arrowDown', text: t.dir > 0 ? 'L' : 'S' });
-    markers.push({ time: snap(t.exit_ts - 1), position: t.dir > 0 ? 'aboveBar' : 'belowBar', color: t.pips_net > 0 ? css('--ok') : css('--bad'),
+    markers.push({ time: exit, position: t.dir > 0 ? 'aboveBar' : 'belowBar', color: t.pips_net > 0 ? css('--ok') : css('--bad'),
       shape: 'circle', text: `${t.pips_net > 0 ? '+' : ''}${t.pips_net.toFixed(1)}` });
   }
   markers.sort((a, b) => a.time - b.time);
   s.setMarkers(markers);
-  ch.timeScale().fitContent();
-  return {
-    focus: (from, to) => ch.timeScale().setVisibleRange({ from: snap(from), to: snap(to) }),
-    remove: () => { instances.delete(ch); ch.remove(); },
+  const times = bars.map((b) => b.ts);
+  const snap = (t) => {
+    let lo = 0, hi = times.length - 1;
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (times[mid] <= t) lo = mid; else hi = mid - 1; }
+    return times[lo];
   };
+  const focus = (from, to) => ch.timeScale().setVisibleRange({ from: snap(from), to: snap(to) });
+  // transakcja z otoczeniem, ale tylko w jej oknie — sąsiednie okno (inne lata) nie rozciąga skali cen
+  const show = (x) => focus(Math.max(x.from, x.entry - 36 * 3600), Math.min(x.to, x.exit + 36 * 3600));
+  const last = shown[shown.length - 1];
+  if (last) show(last); else ch.timeScale().fitContent();
+  return { shown, hidden, focus, show, remove: () => { instances.delete(ch); ch.remove(); } };
 }

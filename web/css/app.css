@@ -259,6 +259,30 @@ table.daily tr.short .meter i { background: var(--warn); }
 .covlegend .sw.a-flag { background: var(--warn); } .covlegend .sw.a-missing { background: var(--bad); }
 .covlegend .sw.a-pending { background: none; border: 1px dashed var(--muted); } .covlegend .sw.a-closed { background: var(--line); }
 .gaplist.audit li { grid-template-columns: 170px 70px 1fr; }
+/* audyt Yahoo — ostatnia doba (D-033): kolumna = świeca, podpis = godzina otwarcia (czas polski) */
+.aud { display: grid; gap: 2px; margin: 10px 0 6px; }
+.aud .ah { font: 11px/1.15 var(--mono); color: var(--dim); text-align: center; align-self: end; padding-bottom: 4px; white-space: nowrap; overflow: visible; min-width: 0; }
+.aud .ah small { display: block; font: 10px/1.2 Inter, system-ui, sans-serif; color: var(--muted); text-align: left; padding-left: 3px; }
+.aud .ah.day { border-left: 1px solid var(--line-2); }
+.aud .ah.cur { color: var(--text); }
+.aud .ah.r { text-align: right; font-family: Inter, system-ui, sans-serif; font-size: 10px; }
+.aud .ap { font-size: 12px; color: var(--muted); align-self: center; white-space: nowrap; }
+.aud .ar { font-size: 12px; text-align: right; align-self: center; white-space: nowrap; }
+.aud .ac { height: 22px; min-width: 0; border-radius: 3px; display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: pointer; box-sizing: border-box; }
+.aud .ac.sel { outline: 1px solid var(--accent); outline-offset: 1px; }
+.aud .a-ok { background: rgba(61, 220, 132, .45); }
+.aud .a-late { background: rgba(245, 165, 36, .5); }
+.aud .a-flag { background: var(--warn); }
+.aud .a-wait { background: rgba(255, 77, 79, .14); border: 1px solid var(--bad); }
+.aud .a-now { border: 1px dashed var(--muted); }
+.aud .a-closed { background: var(--line); }
+.aud .a-allgap { background: var(--line-2); }
+.aud .tmr { font: 10px var(--mono); color: var(--bad); font-variant-numeric: tabular-nums; }
+.aud .a-allgap .tmr { color: var(--muted); }
+.covlegend .sw.a-wait { background: rgba(255, 77, 79, .14); border: 1px solid var(--bad); }
+.covlegend .sw.a-now { background: none; border: 1px dashed var(--muted); }
+.ind .s .wait { color: var(--bad); }
+
 
 /* mapa pokrycia (D-022): szary = jest, bursztyn = dziura tej pary, obrys = brak pliku, czerwony obrys = błąd */
 .covsum { margin: 0 0 6px; color: var(--muted); font-size: 12.5px; }

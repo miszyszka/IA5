@@ -77,16 +77,19 @@ def prepare(df: pd.DataFrame) -> dict:
     }
 
 
-def data_cancel(P: dict, signal_i: np.ndarray, entry_i: np.ndarray, exit_i: np.ndarray) -> np.ndarray:
-    """D-031: transakcje do anulowania — nachodzą na długą lukę w danych (od świecy wejścia do wyjścia włącznie,
-    także luka między sygnałem a wejściem) albo jej świeca sygnału, wejścia lub wyjścia jest uzupełniona."""
+def data_cancel(P: dict, signal_i: np.ndarray, entry_i: np.ndarray, exit_i: np.ndarray, split: bool = False):
+    """D-031/D-032: transakcje do anulowania — nachodzą na przerwę w dostępie do danych (od świecy wejścia do wyjścia
+    włącznie, także przerwa między sygnałem a wejściem) albo jej świeca sygnału, wejścia lub wyjścia jest uzupełniona.
+    Weekend i godziny bez notowań nie są przerwą (clean.py nie oznacza ich w gap_before).
+    split=True → (przerwa, uzupełniona) osobno."""
     xi = np.asarray(exit_i, float)
     ok = ~np.isnan(xi)
     e = np.asarray(entry_i, np.int64)
     x = np.where(ok, xi, e).astype(np.int64)
     gc, f = P["gapcum"], P["filled"]
-    gap = gc[x + 1] - gc[e] > 0
-    return ok & (gap | f[np.asarray(signal_i, np.int64)] | f[e] | f[x])
+    gap = ok & (gc[x + 1] - gc[e] > 0)
+    fill = ok & ~gap & (f[np.asarray(signal_i, np.int64)] | f[e] | f[x])
+    return (gap, fill) if split else gap | fill
 
 
 def find_entries(P: dict, sig: np.ndarray) -> pd.DataFrame:
@@ -124,23 +127,6 @@ def _windows(P: dict, e: np.ndarray, d: np.ndarray, width: int) -> dict:
     }
 
 
-def deadline_bars(P: dict, e: np.ndarray, hours=None) -> np.ndarray:
-    """B11 (D-030): ile świec od wejścia do 23:00 czasu polskiego tego samego dnia.
-
-    Pozycja trwa najwyżej do zamknięcia świecy kończącej się o 23:00 (= świeca 22:00 czasu polskiego).
-    hours=False → bez limitu (testy zgodności z backtesting.py).
-    """
-    from .config import CLOSE_BY_HOUR, TRADING_TZ
-
-    if hours is False or len(e) == 0:
-        return np.full(len(e), 10**9)
-    loc = pd.to_datetime(P["ts"][e], unit="s", utc=True).tz_convert(TRADING_TZ)
-    dl = (loc.normalize() + pd.Timedelta(hours=CLOSE_BY_HOUR)).tz_convert("UTC")
-    dl_ts = np.asarray((dl - pd.Timestamp(0, tz="UTC")) // pd.Timedelta(seconds=1), dtype=np.int64)  # niezależnie od jednostki indeksu
-    k = np.searchsorted(P["ts"], dl_ts, side="left") - e  # pierwsza świeca otwarta o 23:00 lub później
-    return np.maximum(k, 1)
-
-
 def _first(mask: np.ndarray) -> np.ndarray:
     """Indeks pierwszego True w wierszu; brak = szerokość."""
     has = mask.any(axis=1)
@@ -162,7 +148,7 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     En = ent["entry_px"].to_numpy() * d
     atr = ent[f"atr{ex.n}" if ex.kind == "atr" else "atr14"].to_numpy()
 
-    # B11 (D-030): limit 23:00 czasu polskiego — efektywny limit świec dla każdego wejścia osobno
+    # opcjonalny limit świec dla każdego wejścia osobno (kolumna max_bars); domyślnie limit wariantu
     cap_r = np.clip(ent["max_bars"].to_numpy(np.int64), 1, cap) if "max_bars" in ent else np.full(m, cap)
     beyond = np.arange(cap)[None, :] >= cap_r[:, None]
     tp = En + ex.tp * atr if ex.kind == "atr" else np.full(m, np.inf)
@@ -239,8 +225,7 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     tw = ~stop & ~xw
     exit_n = np.where(tw, w["C"][rows, cap_r - 1], exit_n)
     exit_j = np.where(tw, cap_r - 1, exit_j)
-    reason[tw & (cap_r >= cap)] = "czas"
-    reason[tw & (cap_r < cap)] = "23:00"
+    reason[tw] = "czas"
 
     done = ~np.isnan(exit_n)
     # MAE/MFE: świece przed świecą wyjścia + cena wyjścia
@@ -252,7 +237,7 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     # świeca wyjścia wewnątrz-świecowego/czasowego sama też należy do przebiegu pozycji
     in_bar = ~exit_at_open
     jb = np.clip(exit_j, 0, cap)
-    timed = (reason == "czas") | (reason == "23:00")
+    timed = reason == "czas"
     bar_max = np.where(in_bar & timed, w["H"][rows, jb], -np.inf)
     bar_min = np.where(in_bar & timed, w["L"][rows, jb], np.inf)
     mfe = np.maximum.reduce([prev_max, bar_max, exit_n, En]) - En
@@ -306,18 +291,18 @@ def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray],
     cutoff = t0 + (1 - oos_frac) * (t1 - t0)
 
     ent_frames, out_frames = [], []
-    skipped = {"B8": 0, "brak_danych": 0, "rozgrzewka": 0, "poza_godzinami": 0, "luka_danych": 0}
+    skipped = {"B8": 0, "brak_danych": 0, "rozgrzewka": 0, "poza_godzinami": 0, "luka_danych": 0,
+               "swieca_uzupelniona": 0}
     eid = 0
     for (pid, pair), sig in signals.items():
         P = preps[pair]
         ent = find_entries(P, sig)
         warm = ent["atr14"].isna() | ent["atr5"].isna()  # bez ATR nie ma poziomów TP/SL ani R
         skipped["rozgrzewka"] += int(warm.sum())
-        # B11: wejście tylko w oknie handlu 07:00–17:00 czasu polskiego (D-028); wyjścia bez ograniczeń
+        # B11: wejście tylko w oknie handlu 07:00–17:00 czasu polskiego (D-028); wyjście na dowolnej świecy (D-032)
         outside = ~in_trading_hours(ent["entry_ts"].to_numpy(), hours) & ~warm.to_numpy()
         skipped["poza_godzinami"] += int(outside.sum())
         ent = ent[~warm.to_numpy() & ~outside].reset_index(drop=True)
-        ent["max_bars"] = deadline_bars(P, ent["entry_i"].to_numpy(), hours)  # B11: zamknięcie najpóźniej 23:00
         if ent.empty:
             continue
         ent.insert(0, "entry_id", np.arange(eid, eid + len(ent)))
@@ -330,12 +315,15 @@ def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray],
             res = simulate(P, ent, ex, pair, opp=np.asarray(sig), resolver=resolver)
             missing = res["exit_i"].isna().to_numpy()
             # D-031: transakcja nachodząca na długą lukę albo na świecę uzupełnioną — anulowana, jakby jej nie było
-            cancel = data_cancel(P, ent["signal_i"].to_numpy(), ent["entry_i"].to_numpy(), res["exit_i"].to_numpy(float))
+            gap, fill = data_cancel(P, ent["signal_i"].to_numpy(), ent["entry_i"].to_numpy(), res["exit_i"].to_numpy(float),
+                                    split=True)
+            cancel = gap | fill
             xi = res["exit_i"].to_numpy(float).copy()
             xi[cancel] = np.nan
             keep = no_overlap(ent["entry_i"].to_numpy(), xi)
             skipped["brak_danych"] += int(missing.sum())
-            skipped["luka_danych"] += int(cancel.sum())
+            skipped["luka_danych"] += int(gap.sum())
+            skipped["swieca_uzupelniona"] += int(fill.sum())
             skipped["B8"] += int((~keep & ~missing & ~cancel).sum())
             res = res[keep].copy()
             res.insert(0, "variant_id", pid * len(exits) + xid)

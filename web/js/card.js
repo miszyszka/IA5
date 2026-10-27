@@ -351,17 +351,47 @@ async function renderCandles(t, focus = null) {
   }
   const bars = await S.candlesCache.get(pair);
   if (S.chartPair !== pair) return;
-  $('#cd-note').textContent = `${S.manifest.candles === 'pełne' ? 'Pełna historia świec.' : `Świece: ${S.manifest.candles} (dane Dukascopy nie są publikowane w całości, D-010).`} Strzałka = wejście (L/S), kółko = wyjście z wynikiem w pipsach.`;
-  if (!bars.length) { el.replaceChildren(h('p', { class: 'hint' }, 'Brak świec dla tej pary w wynikach.')); return; }
+  if (!bars.length) { el.replaceChildren(h('p', { class: 'hint' }, 'Brak świec dla tej pary w wynikach.')); $('#cd-note').textContent = ''; return; }
   candleView = candles(el, bars, t.filter((x) => x.pair === pair));
-  if (focus) candleView.focus(focus.entry_ts - 48 * 3600, focus.exit_ts + 48 * 3600);
+  const n = candleView.shown.length;
+  S.tradeIdx = focus ? candleView.shown.findIndex((x) => x.trade === focus) : n - 1;
+  $('#cd-note').textContent = `${S.manifest.candles === 'pełne' ? 'Pełna historia świec.' : `Świece: ${S.manifest.candles} — dane Dukascopy nie są publikowane w całości (D-010), więc wykres składa się z osobnych okien; pusty pas między nimi = pominięty okres, nie ruch ceny.`} `
+    + `Strzałka = wejście (L/S), kółko = wyjście z wynikiem w pipsach.${candleView.hidden ? ` ${candleView.hidden} transakcji wybranego wariantu nie ma na wykresie (świece opublikowane tylko dla 10 najlepszych wariantów).` : ''} Wykres: TradingView Lightweight Charts™.`;
+  if (focus && S.tradeIdx < 0) candleView.focus(focus.entry_ts - 48 * 3600, focus.exit_ts + 48 * 3600);
+  else if (focus) goTrade(S.tradeIdx);
+  renderTradeNav();
+}
+
+function goTrade(i) {
+  const x = candleView?.shown[i];
+  if (!x) return;
+  S.tradeIdx = i;
+  candleView.show(x);
+  renderTradeNav();
+}
+
+/** ← transakcja k z N → — przeskok między narysowanymi transakcjami wybranej pary. */
+function renderTradeNav() {
+  const n = candleView?.shown.length || 0;
+  let nav = $('#cd-nav');
+  if (!nav) { nav = h('span', { id: 'cd-nav', class: 'row' }); $('#cd-tools').append(nav); }
+  if (!n) { nav.replaceChildren(); return; }
+  const i = Math.max(0, S.tradeIdx);
+  const x = candleView.shown[i];
+  nav.replaceChildren(
+    h('button', { class: 'btn small', disabled: i <= 0, onclick: () => goTrade(i - 1), title: 'poprzednia transakcja' }, '←'),
+    h('span', { class: 'hint mono' }, `${i + 1}/${n} · ${dateUTC(x.entry, true)}`),
+    h('button', { class: 'btn small', disabled: i >= n - 1, onclick: () => goTrade(i + 1), title: 'następna transakcja' }, '→'));
 }
 
 async function focusTrade(tr) {
   const el = $('#candles');
   el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   if (tr.pair !== S.chartPair) { S.chartPair = tr.pair; await renderCandles(filtered(), tr); }
-  else candleView?.focus(tr.entry_ts - 48 * 3600, tr.exit_ts + 48 * 3600);
+  else {
+    const k = candleView?.shown.findIndex((x) => x.trade === tr) ?? -1;
+    if (k >= 0) goTrade(k); else candleView?.focus(tr.entry_ts - 48 * 3600, tr.exit_ts + 48 * 3600);
+  }
 }
 
 async function loadCode(e) {

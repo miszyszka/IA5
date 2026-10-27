@@ -409,7 +409,8 @@ def facts(status: dict, h1: dict, yahoo: dict, cov: dict | None, docs: list[dict
             continue
         out.append(f"Do liczenia {label(pair)}: {fmt(r.get('bars', 0))} świec z {r['months']}/{r.get('months_total')} "
                    f"zatwierdzonych miesięcy; uzupełnione {fmt(r.get('filled', 0))} świec (luki ≤ 3 h), "
-                   f"{fmt(r.get('gaps_n', 0))} długich luk ({fmt(r.get('gap_hours', 0))} h) — transakcje na nich są anulowane.")
+                   f"{fmt(r.get('gaps_n', 0))} przerw w dostępie do danych ({fmt(r.get('gap_hours', 0))} h)"
+                   " — transakcje na nich są anulowane.")
     if docs is not None:
         done = sum(1 for d in docs if d.get("status") == "policzona")
         frozen_n = sum(1 for d in docs if d.get("frozenAt"))

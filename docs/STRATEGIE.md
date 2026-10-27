@@ -54,7 +54,7 @@ def signals(df, p, ind):       # WYMAGANE — dokładnie ta nazwa i te trzy argu
 | `ind` | Biblioteka wskaźników (sekcja 3). Własnych RSI/ATR/EMA nie piszemy (B9). |
 | wynik | `pd.Series` na tym samym indeksie (albo tablica tej samej długości) z wartościami `-1`, `0`, `1`; `True/False` też działa (`.astype("int8")`). `NaN` = 0. |
 | moment | Sygnał w świecy `t` znaczy: warunek spełniony **na zamknięciu** `t`. Wejście silnik robi na **open** `t+1` (B1). |
-| godziny | Silnik wchodzi tylko wtedy, gdy świeca `t+1` zaczyna się **07:00–16:00 czasu polskiego** (B11, najniższe spready). Sygnały poza oknem są pomijane i liczone w raporcie — strategia nie musi sama filtrować godzin. Każda pozycja jest zamykana najpóźniej o **23:00** czasu polskiego (powód wyjścia `23:00`). |
+| godziny | Silnik wchodzi tylko wtedy, gdy świeca `t+1` zaczyna się **07:00–16:00 czasu polskiego** (B11, najniższe spready). Sygnały poza oknem są pomijane i liczone w raporcie — strategia nie musi sama filtrować godzin. Wyjście na dowolnej świecy (także po nocy i weekendzie), według wariantu wyjścia. |
 | importy | Tylko `numpy`, `pandas`, `math`. Zakazane: `open`, `exec`, `eval`, `compile`, `__import__`, atrybuty `__…`. |
 | czas | Limit 30 min na całe liczenie sygnałów. |
 

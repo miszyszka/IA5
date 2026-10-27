@@ -110,3 +110,57 @@ export function recentCells(recent, now, graceS = 20 * 60) {
   }
   return { hours, pairs };
 }
+
+/**
+ * Od kiedy para czeka na świecę (D-033): moment zamknięcia najstarszej oczekiwanej świecy po lastTs, która już się
+ * zamknęła (pełna godzina wybiła). null = para ma wszystko. Zegar startuje równo o pełnej godzinie, nie po 60 s z D2.
+ */
+export function waitingSince(lastTs, now) {
+  const cur = Math.floor(now / H) * H; // otwarcie trwającej świecy
+  let ts = Math.max((lastTs || 0) + H, cur - 14 * 24 * H);
+  for (; ts < cur; ts += H) if (isExpectedBar(ts)) return ts + H;
+  return null;
+}
+
+/** Czas od `since` do `now` krótko: 0:42, 12:05, 1:07:12; short=true powyżej godziny: 1h07. */
+export function elapsed(since, now, short = false) {
+  const s = Math.max(0, Math.floor(now - since));
+  const hh = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60;
+  if (short && hh) return `${hh}h${String(mm).padStart(2, '0')}`;
+  return hh ? `${hh}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}` : `${mm}:${String(ss).padStart(2, '0')}`;
+}
+
+/**
+ * Audyt ostatniej doby (D-033): n zamkniętych godzin + trwająca godzina, dla każdej pary.
+ * recent = meta/status.recent, pairsSt = meta/status.pairs (lastTs — gdy świeca jest nowsza niż napis audytu).
+ * Zwraca { hours: [ts…], pairs: { PARA: [{ st, since }] } }; stany: ok, late, flag, closed (rynek zamknięty),
+ * now (godzina trwa), wait (pełna godzina wybiła, świecy jeszcze nie ma — czerwony zegar od `since`),
+ * allgap (brak we ≥ 75% par dłużej niż 20 min — rynek nieczynny albo przerwa Yahoo; zegar też biegnie).
+ */
+export function auditCells(recent, pairsSt, now, n = 24, graceS = 20 * 60) {
+  if (!recent?.pairs) return null;
+  const cur = Math.floor(now / H) * H;
+  const hours = [];
+  for (let k = n; k >= 0; k--) hours.push(cur - k * H);
+  const names = Object.keys(recent.pairs);
+  const code = (p, ts) => {
+    const i = Math.round((ts - recent.start) / H);
+    const c = i >= 0 ? recent.pairs[p][i] : undefined;
+    if (c && c !== '.') return c;
+    return (pairsSt?.[p]?.lastTs ?? 0) >= ts && (c === undefined || ts > (pairsSt?.[p]?.lastTs ?? 0) - 3 * H) ? '1' : '.';
+  };
+  const allGap = hours.map((ts) => names.length >= 3 && names.filter((p) => code(p, ts) === '.').length >= 0.75 * names.length);
+  const pairs = {};
+  for (const p of names) {
+    pairs[p] = hours.map((ts, i) => {
+      if (ts === cur) return { st: 'now' };
+      const c = code(p, ts);
+      if (c === '1') return { st: 'ok' };
+      if (c === 'l') return { st: 'late' };
+      if (c === 'f') return { st: 'flag' };
+      if (!isExpectedBar(ts)) return { st: 'closed' };
+      return { st: allGap[i] && now - (ts + H) > graceS ? 'allgap' : 'wait', since: ts + H };
+    });
+  }
+  return { hours, pairs };
+}

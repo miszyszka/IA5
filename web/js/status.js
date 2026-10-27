@@ -5,7 +5,7 @@ import { watchDoc } from './fb.js';
 import { fetchState, fetchText, pairLabel } from './downloader.js';
 import { healthView, problemWord } from './health.js';
 import { PAIRS } from './metrics.js';
-import { expectedTs, H, isExpectedBar, lastClosedTs, nextClose } from './session.js';
+import { elapsed, expectedTs, H, isExpectedBar, lastClosedTs, nextClose, waitingSince } from './session.js';
 import { $, ago, dateUTC, esc, num, store } from './util.js';
 
 export { fetchState };
@@ -59,7 +59,11 @@ function renderData() {
   if (!status) { setInd('data', d.state, d.word, err ? `Firestore: ${err}` : 'Łączenie z Firestore…'); return; }
   const last = d.lastTs ? `${dayWord(d.lastTs)}${hm(d.lastTs)}–${hm(d.lastTs + H)}` : '—';
   let sub;
-  if (d.state === 'ok') sub = `${last}<span class="cd"> · nowa za <span class="mono">${clock(Math.max(0, Math.round(nextClose(now) - now)))}</span></span>`;
+  // D-033: gdy wybije pełna godzina — czerwony zegar, dopóki wszystkie pary nie mają nowej świecy
+  const since = Math.min(...Object.keys(PAIRS).map((p) => waitingSince(status.pairs?.[p]?.lastTs, now) ?? Infinity));
+  const waitN = Object.keys(PAIRS).filter((p) => waitingSince(status.pairs?.[p]?.lastTs, now) != null).length;
+  if (d.state === 'ok' && Number.isFinite(since)) sub = `${last}<span class="wait"> · czeka ${waitN}/${Object.keys(PAIRS).length} <span class="mono">${elapsed(since, now)}</span></span>`;
+  else if (d.state === 'ok') sub = `${last}<span class="cd"> · nowa za <span class="mono">${clock(Math.max(0, Math.round(nextClose(now) - now)))}</span></span>`;
   else if (d.state === 'mute') sub = `rynek zamknięty · ${last}`;
   else sub = `${d.word} · brak świecy od ${d.missingMin} min`;
   setInd('data', d.state, sub,

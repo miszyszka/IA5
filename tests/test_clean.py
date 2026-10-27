@@ -37,15 +37,23 @@ def test_single_missing_bar_is_filled_and_marked():
                                   raw.drop(index=10).reset_index(drop=True), check_dtype=False)
 
 
-def test_three_hours_filled_linearly_but_four_is_a_gap():
+def test_three_hours_filled_linearly_longer_quiet_hole_is_not_a_barrier():
     raw = walk(40)
     df3, i3 = clean_h1(raw.drop(index=[10, 11, 12]))
     assert i3["filled"] == FILL_MAX == 3
     f = df3[df3.filled]
     assert f.close.iloc[-1] == pytest.approx(raw.open[13]) and f.open.iloc[0] == pytest.approx(raw.close[9])
+    # D-032: 4 godziny bez notowań w pobranym dniu — ani uzupełnienie, ani bariera (jak weekend)
     df4, i4 = clean_h1(raw.drop(index=[20, 21, 22, 23]))
-    assert i4["filled"] == 0 and i4["gaps"] == [[int(raw.ts[20]), int(raw.ts[23]) + H, 4]]
-    assert df4.loc[df4.ts == raw.ts[24], "gap_before"].item() == 4
+    assert i4["filled"] == 0 and i4["gaps"] == [] and i4["quiet_runs"] == 1 and df4.gap_before.sum() == 0
+
+
+def test_access_gap_is_a_barrier_even_when_short():
+    raw = walk(40)
+    hole = [int(raw.ts[20]), int(raw.ts[22]) + H]           # dzień niedostępny obejmuje te godziny
+    df, info = clean_h1(raw.drop(index=[20, 21, 22]), unavailable=[hole])
+    assert info["filled"] == 0 and info["gaps"] == [[hole[0], hole[1], 3]]
+    assert df.loc[df.ts == raw.ts[23], "gap_before"].item() == 3
 
 
 def test_weekend_and_holiday_are_not_gaps():
@@ -60,32 +68,61 @@ def test_weekend_and_holiday_are_not_gaps():
     assert info["filled"] == 0 and info["gaps"] == []
 
 
-def test_engine_cancels_trades_on_long_gap_and_filled_entry():
-    raw = walk(60).drop(index=[20] + list(range(40, 45)))   # 1 świeca (uzupełniona) i 5 godzin (luka)
-    df, info = clean_h1(raw)
+def test_engine_cancels_trades_on_access_gap_and_filled_entry():
+    full = walk(60)
+    raw = full.drop(index=[20] + list(range(40, 45)))   # 1 świeca (uzupełniona) i 5 godzin bez dostępu do danych
+    df, info = clean_h1(raw, unavailable=[[int(full.ts[40]), int(full.ts[44]) + H]])
     assert info["filled"] == 1 and len(info["gaps"]) == 1
     idx = {int(t): i for i, t in enumerate(df.ts)}
     sig = np.zeros(len(df), np.int8)
-    for h in (19, 25, 37):   # wejście na uzupełnionej świecy; czysta transakcja; transakcja przez lukę
+    for h in (19, 25, 37):   # wejście na uzupełnionej świecy; czysta transakcja; transakcja przez przerwę
         sig[idx[T0 + h * H]] = 1
     res = run({"EURUSD": df}, {(0, "EURUSD"): sig}, [{}], exits=[Exit("time", n=4, cap=4)], hours=False)
     out = res["outcomes"]
-    assert res["skipped"]["luka_danych"] == 2
+    assert res["skipped"]["luka_danych"] == 1 and res["skipped"]["swieca_uzupelniona"] == 1
     assert len(out) == 1
     ent = res["entries"].set_index("entry_id").loc[out.entry_id.iloc[0]]
     assert ent.entry_ts == T0 + 26 * H
 
 
+def test_trade_through_weekend_is_not_cancelled():
+    """D-032: po ostatniej piątkowej świecy następna jest niedzielna/poniedziałkowa — weekend nie jest barierą."""
+    fri = 1761868800  # piątek 2025-10-31 00:00 UTC
+    ts = [fri + H * k for k in range(21)] + [1762120800 + H * k for k in range(30)]  # pt 00–20, nd 22 → pn
+    n = len(ts)
+    c = 1.1 + np.arange(n) * 1e-5
+    df = pd.DataFrame({"ts": ts, "open": c, "high": c + 2e-4, "low": c - 2e-4, "close": c})
+    df, info = clean_h1(df)
+    assert info["gaps"] == [] and info["filled"] == 0
+    sig = np.zeros(n, np.int8)
+    sig[18] = 1  # piątek 18:00 UTC (po rozgrzewce ATR) → wejście 19:00, wyjście po 6 świecach = niedziela/poniedziałek
+    res = run({"EURUSD": df}, {(0, "EURUSD"): sig}, [{}], exits=[Exit("time", n=6, cap=6)], hours=False)
+    t = res["outcomes"].iloc[0]
+    assert res["skipped"]["luka_danych"] == 0 and t["reason"] == "czas" and t["exit_ts"] > 1762120800
+
+
 def test_data_cancel_rules():
-    df, _ = clean_h1(walk(30).drop(index=[10] + list(range(20, 25))))
+    full = walk(30)
+    df, _ = clean_h1(full.drop(index=[10] + list(range(20, 25))), unavailable=[[int(full.ts[20]), int(full.ts[24]) + H]])
     P = prepare(df)
     i_f = int(np.flatnonzero(P["filled"])[0])           # świeca uzupełniona
-    i_g = int(np.flatnonzero(df.gap_before.to_numpy())[0])  # pierwsza świeca po luce
+    i_g = int(np.flatnonzero(df.gap_before.to_numpy())[0])  # pierwsza świeca po przerwie w dostępie do danych
     c = data_cancel(P, np.array([i_f, i_f - 2, i_f - 3, i_g - 3, i_g - 1, 2]),
                     np.array([i_f + 1, i_f - 1, i_f - 2, i_g - 2, i_g, 3]),
                     np.array([i_f + 2, i_f, i_f + 1, i_g, i_g + 1, 5.0]))
-    # sygnał na uzupełnionej · wyjście na uzupełnionej · przez uzupełnioną (dozwolone) · przez lukę · luka przed wejściem · czysta
+    # sygnał na uzupełnionej · wyjście na uzupełnionej · przez uzupełnioną (dozwolone) · przez przerwę · przerwa przed wejściem · czysta
     assert c.tolist() == [True, True, False, True, True, False]
+
+
+def test_unavailable_ranges_from_months_and_given_up_days(tmp_path):
+    from ia5 import ready
+
+    f = tmp_path / "m1" / "EURUSD"
+    f.mkdir(parents=True)
+    (f / "2024-03.missing.json").write_text('{"missing": {}, "given_up": ["2024-03-05"]}')
+    r = ready.unavailable_ranges(tmp_path, "EURUSD", ["2024-01", "2024-03"])
+    ts = lambda *a: int(pd.Timestamp(*a, tz="UTC").timestamp())  # noqa: E731
+    assert r == [[ts(2024, 2, 1), ts(2024, 3, 1)], [ts(2024, 3, 5), ts(2024, 3, 6)]]
 
 
 # ---------- zatwierdzanie miesięcy i pobieracz ----------

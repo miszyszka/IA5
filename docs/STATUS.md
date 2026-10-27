@@ -24,10 +24,14 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
 - **D-031: dwa procesy.** `ia5 fetch` pobiera Dukascopy para po parze do końca (EUR/USD najpierw), dni odrzucane długo → niedostępne; `ia5 start` liczy tylko na zatwierdzonych miesiącach EUR/USD (`data/h1_ready/`). Luki ≤ 3 h uzupełnione i oznaczone, dłuższe anulują transakcje (B12, D8), także w benchmarku. `ENGINE_VERSION` 0.4.0. Nagłówek dashboardu: nowy wskaźnik „Pobieranie”; mapa na żywo z pobieracza. 101 testów + Node zielone.
 
+- **D-032:** wyjście na dowolnej świecy (bez 23:00), anuluje tylko przerwa w dostępie do danych; weekend/święto/cisza nie. `ENGINE_VERSION` 0.5.0.
+- **D-033:** Apps Script co 1 min + rundy co 15 s po pełnej godzinie; nagłówek i Stats → Yahoo: czerwony zegar od pełnej godziny do zapisu, audyt ostatniej doby z godzinami.
+- Wykres transakcji: okna zamiast sklejonych wycinków, nawigacja ← → (D-031a). 107 testów + Node zielone.
+
 **Następne (Michał)**
-0. Wkleić nowy `apps_script/Code.gs` do Apps Script — audyt świec i dziennik (jeśli jeszcze nie).
+0. Wkleić nowy `apps_script/Code.gs` do Apps Script, zapisać i **raz uruchomić `installTrigger()`** (wyzwalacz co 1 min zamiast co 5).
 1. Na Macu: przerwij działające `ia5 start` (Ctrl+C), `git pull`. Potem **dwa terminale**: w pierwszym `ia5 fetch` (pobiera, działa bez końca), w drugim `ia5 start` (liczy).
-2. Strategie policzone przed 0.4.0 dashboard oznaczy jako nieaktualne — „Policz ponownie”.
+2. Strategie policzone przed 0.5.0 dashboard oznaczy jako nieaktualne — „Policz ponownie” (bez limitu 23:00 wyniki się zmienią).
 
 **Znane problemy**
 - `ia5 start` ładuje całe M1 EUR/USD do pamięci przy przebudowie danych do liczenia (kilkaset MB, raz po zmianie plików).

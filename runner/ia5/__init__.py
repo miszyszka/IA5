@@ -1,1 +1,1 @@
-ENGINE_VERSION = "0.4.0"  # B10: każda zmiana logiki silnika = podbicie
+ENGINE_VERSION = "0.5.0"  # B10: każda zmiana logiki silnika = podbicie
