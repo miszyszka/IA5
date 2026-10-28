@@ -44,6 +44,8 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 - **Skan 2026-10-27 22:06** (`--duzy`, tylko EUR/USD + USD/JPY z danymi): 312 tys. reguł, próg t ≥ 4,23, 7 odkrytych, 1 potwierdzona (EUR/USD long w grudniu 01–08 Londynu). Poranny short EUR/USD nie przeszedł progu duże siatki — za dużo słabych reguł podnosi poprzeczkę.
 - **D-038:** silnik liczy wszystkie pary z zatwierdzonymi miesiącami (zmiana D8 za zgodą Michała). Skaner: lata dodatnie, „najbliżej progu”, opis danych per para.
 
+- **Skany 2026-10-28** (standard 11 tys. i duży 313 tys. reguł; dane nadal tylko EUR/USD i USD/JPY ~ połowa historii): potwierdzona 1 reguła (EUR/USD long w grudniu nocą, 17/18 lat dodatnich); najbliżej progu — poranny short EUR/USD (15–16/18 lat, płaskowyż). Reguły o 22–23 Londynu (godzina rolowania, realny spread wyższy) odrzucone jako artefakt kosztów. Strategia `eurusd_seasonal_pair.py`: oba składniki, 2 warianty, `HOURS = False` (wymaga zgody na wyjątek B11).
+
 **Następne (Michał)**
 0. Wkleić nowy `apps_script/Code.gs` do Apps Script, zapisać i **raz uruchomić `installTrigger()`** (wyzwalacz co 1 min zamiast co 5).
 1. Na Macu: przerwij działające `ia5 start` (Ctrl+C), `git pull`. Potem **dwa terminale**: w pierwszym `ia5 fetch` (pobiera, działa bez końca), w drugim `ia5 start` (liczy).
