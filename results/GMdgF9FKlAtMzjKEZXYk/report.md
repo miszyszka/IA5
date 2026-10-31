@@ -1,16 +1,16 @@
 # Raport strategii: Strategia 5
 
-Run `20261027-184719` · silnik 0.7.0 · kod `9322b9d60f8d5553` · dane `f8d8bc72a0207c72`
+Run `20261031-091403` · silnik 0.7.0 · kod `9322b9d60f8d5553` · dane `51eede8f48c7f380`
 
-## Werdykt: 🟡 ŻÓŁTY — zaliczone 4 z 5 testów
+## Werdykt: 🔴 CZERWONY — brak przewagi
 
 | test | wynik | wartość |
 |---|---|---|
-| expectancy netto OOS > 0 | ✔ | 0.70 |
-| percentyl benchmarku ≥ 95 | ✔ | 100.00 |
-| PBO < 0,3 | ✔ | 0.07 |
-| DSR ≥ 0,95 | ✘ | 0.60 |
-| dodatni przy spreadzie ×1,5 | ✔ | 1.22 |
+| expectancy netto OOS > 0 | ✘ | -0.81 |
+| percentyl benchmarku ≥ 95 | ✔ | 97.30 |
+| PBO < 0,3 | ✔ | 0.11 |
+| DSR ≥ 0,95 | ✘ | 0.05 |
+| dodatni przy spreadzie ×1,5 | ✘ | -0.22 |
 
 ## Hipoteza
 
@@ -22,9 +22,9 @@ połowach próby i w 10 z 11 lat; tu sprawdzamy go na Dukascopy 2003–2026 — 
 
 ## Dane i model wykonania
 
-- Pary: EURUSD; świece H1 od 2003-05-04 do 2026-10-26; źródło: dukascopy.
+- Pary: EURUSD, USDJPY; świece H1 od 2003-05-04 do 2026-09-30; źródło: dukascopy.
 
-- In-sample do 2020-12-12, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS.
+- In-sample do 2020-11-23, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS.
 
 - Wejście na open świecy po sygnale, tylko w oknie handlu 07:00–17:00 czasu polskiego (B11 — najniższe spready); wyjście na dowolnej świecy, także po nocy i weekendzie (D-032). TP i SL w tej samej świecy: rozstrzygane na M1, w tej samej minucie — SL.
 
@@ -32,7 +32,7 @@ połowach próby i w 10 z 11 lat; tu sprawdzamy go na Dukascopy 2003–2026 — 
 
 - Jedna pozycja na parę naraz (B8).
 
-- Dane tylko z zatwierdzonych miesięcy (D-031): EURUSD: 282/282 mies. zatwierdzonych, 9 świec uzupełnionych (dziury ≤ 3 h w pobranych dniach), 3 przerw w dostępie do danych (93 h). Transakcja nachodząca na przerwę w dostępie do danych albo na świecę uzupełnioną jest anulowana; weekendy, święta i godziny bez notowań nie są przerwą (D-032).
+- Dane tylko z zatwierdzonych miesięcy (D-031): EURUSD: 281/282 mies. zatwierdzonych, 9 świec uzupełnionych (dziury ≤ 3 h w pobranych dniach), 3 przerw w dostępie do danych (93 h); USDJPY: 141/282 mies. zatwierdzonych, 9 świec uzupełnionych (dziury ≤ 3 h w pobranych dniach), 16 przerw w dostępie do danych (40147 h). Transakcja nachodząca na przerwę w dostępie do danych albo na świecę uzupełnioną jest anulowana; weekendy, święta i godziny bez notowań nie są przerwą (D-032).
 
 - Kapitał 10,000 USD, dźwignia 30:1, depozyt na pozycję: 5%, 10%, 15%, 20%, 30%; suma depozytów ≤ 100% kapitału.
 
@@ -40,90 +40,91 @@ połowach próby i w 10 z 11 lat; tu sprawdzamy go na Dukascopy 2003–2026 — 
 
 - **Przetestowane warianty: 18** (3 wejścia × 6 wyjść).
 
-- Pominięte sygnały, średnio na wariant: 0 (limit otwartych pozycji w parze), 0.0 (brak danych do wyjścia); 3 wejść w rozgrzewce ATR, 10 sygnałów poza oknem 07:00–17:00 czasu polskiego (B11), anulowane transakcje, średnio na wariant: 0.0 (przerwa w dostępie do danych), 0.8 (sygnał, wejście lub wyjście na świecy uzupełnionej) — D-032.
+- Pominięte sygnały, średnio na wariant: 0 (limit otwartych pozycji w parze), 0.0 (brak danych do wyjścia); 6 wejść w rozgrzewce ATR, 13 sygnałów poza oknem 07:00–17:00 czasu polskiego (B11), anulowane transakcje, średnio na wariant: 0.0 (przerwa w dostępie do danych), 1.6 (sygnał, wejście lub wyjście na świecy uzupełnionej) — D-032.
 
 ## Top 10 wariantów (ranking po IS, min. 30 transakcji IS)
 
 | # | wyjście | parametry | IS trans. | IS śr. R | IS śr. pips | IS win % | OOS trans. | OOS śr. R | OOS śr. pips |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | po 6 świecach | start=7 | 4 585 | 0.11 | 2.00 | 52.1 | 1 524 | 0.07 | 0.70 |
-| 2 | po 8 świecach | start=8 | 4 577 | 0.08 | 1.71 | 51.5 | 1 520 | -0.04 | -0.53 |
-| 3 | po 4 świecach | start=8 | 4 579 | 0.07 | 1.33 | 51.6 | 1 520 | -0.08 | -0.92 |
-| 4 | po 6 świecach | start=6 | 4 586 | 0.06 | 1.17 | 51.2 | 1 524 | -0.04 | -0.58 |
-| 5 | po 6 świecach | start=8 | 4 579 | 0.06 | 1.28 | 51.3 | 1 520 | -0.04 | -0.52 |
-| 6 | po 8 świecach | start=7 | 4 585 | 0.06 | 1.14 | 51.2 | 1 524 | -0.06 | -0.75 |
-| 7 | po 8 świecach | start=6 | 4 586 | 0.06 | 1.11 | 50.9 | 1 524 | -0.00 | -0.19 |
-| 8 | ATR14 TP 50× SL 2× max 8 | start=8 | 4 579 | 0.05 | 2.08 | 44.0 | 1 520 | -0.02 | -0.58 |
-| 9 | ATR14 TP 50× SL 2× max 6 | start=8 | 4 579 | 0.04 | 1.68 | 47.4 | 1 520 | -0.01 | -0.30 |
-| 10 | ATR14 TP 50× SL 2× max 6 | start=7 | 4 585 | 0.04 | 1.43 | 48.7 | 1 524 | 0.01 | 0.03 |
+| 1 | ATR14 TP 50× SL 2× max 8 | start=8 | 7 447 | 0.01 | 0.57 | 43.9 | 1 688 | -0.04 | -0.81 |
+| 2 | ATR14 TP 50× SL 2× max 6 | start=8 | 7 448 | 0.01 | 0.23 | 46.4 | 1 688 | -0.03 | -0.62 |
+| 3 | ATR14 TP 50× SL 2× max 8 | start=7 | 7 456 | 0.00 | 0.04 | 44.7 | 1 693 | -0.03 | -0.59 |
+| 4 | po 6 świecach | start=7 | 7 456 | -0.00 | 0.01 | 49.2 | 1 693 | 0.01 | 0.16 |
+| 5 | ATR14 TP 50× SL 2× max 6 | start=7 | 7 456 | -0.00 | -0.10 | 46.9 | 1 693 | -0.02 | -0.49 |
+| 6 | po 8 świecach | start=8 | 7 444 | -0.00 | 0.17 | 50.0 | 1 688 | -0.07 | -0.76 |
+| 7 | ATR14 TP 50× SL 2× max 4 | start=8 | 7 448 | -0.01 | -0.10 | 48.2 | 1 688 | -0.06 | -1.23 |
+| 8 | ATR14 TP 50× SL 2× max 8 | start=6 | 7 458 | -0.01 | -0.47 | 44.8 | 1 693 | -0.01 | -0.49 |
+| 9 | ATR14 TP 50× SL 2× max 6 | start=6 | 7 458 | -0.01 | -0.45 | 46.6 | 1 693 | -0.04 | -1.08 |
+| 10 | po 6 świecach | start=6 | 7 458 | -0.02 | -0.17 | 48.6 | 1 693 | -0.08 | -0.95 |
 
-## Najlepszy wariant IS: po 6 świecach (start=7)
+## Najlepszy wariant IS: ATR14 TP 50× SL 2× max 8 (start=8)
 
 ### Według pary
 
 | para | transakcje | śr. pips | suma pips | win % |
 |---|---|---|---|---|
-| EURUSD | 6109 | 1.7 | 10 220.5 | 51.9 |
+| EURUSD | 6081 | 1.4 | 8 495.7 | 43.3 |
+| USDJPY | 3054 | -1.8 | -5 616.4 | 43.4 |
 
 ### Według roku
 
 | rok | transakcje | śr. pips | suma pips | win % |
 |---|---|---|---|---|
-| 2003 | 172 | 2.5 | 436.8 | 51.2 |
-| 2004 | 261 | -0.2 | -56.5 | 52.9 |
-| 2005 | 260 | 1.6 | 404.5 | 51.9 |
-| 2006 | 260 | 2.4 | 617.3 | 55.8 |
-| 2007 | 261 | 2.8 | 723.9 | 52.5 |
-| 2008 | 262 | 2.9 | 751.4 | 50.0 |
-| 2009 | 261 | -0.0 | -4.7 | 49.8 |
-| 2010 | 261 | 2.2 | 574.8 | 53.3 |
-| 2011 | 260 | -0.5 | -136.6 | 49.2 |
-| 2012 | 261 | 3.0 | 771.3 | 51.7 |
-| 2013 | 260 | 1.3 | 339.5 | 50.0 |
-| 2014 | 260 | 2.9 | 749.4 | 50.0 |
-| 2015 | 260 | 4.7 | 1 232.9 | 53.1 |
-| 2016 | 260 | 2.9 | 754.0 | 51.9 |
-| 2017 | 260 | 2.9 | 753.2 | 55.0 |
-| 2018 | 260 | 2.6 | 669.5 | 54.2 |
-| 2019 | 259 | 1.6 | 411.5 | 53.3 |
-| 2020 | 261 | 0.6 | 149.3 | 52.1 |
-| 2021 | 257 | 1.3 | 337.2 | 49.8 |
-| 2022 | 260 | 1.2 | 315.0 | 50.4 |
-| 2023 | 260 | 0.9 | 243.2 | 53.1 |
-| 2024 | 261 | 1.0 | 270.4 | 49.0 |
-| 2025 | 260 | -0.4 | -100.6 | 53.8 |
-| 2026 | 212 | 0.1 | 13.6 | 52.4 |
+| 2003 | 342 | -0.8 | -289.4 | 48.2 |
+| 2004 | 522 | 1.1 | 590.8 | 46.7 |
+| 2005 | 499 | 2.5 | 1 245.7 | 46.1 |
+| 2006 | 497 | -2.4 | -1 171.0 | 40.6 |
+| 2007 | 522 | -1.9 | -1 000.5 | 41.4 |
+| 2008 | 524 | 0.8 | 407.3 | 43.3 |
+| 2009 | 522 | -1.4 | -726.4 | 44.3 |
+| 2010 | 522 | 4.9 | 2 540.5 | 48.7 |
+| 2011 | 345 | 2.4 | 844.2 | 45.8 |
+| 2012 | 282 | 1.0 | 286.9 | 41.8 |
+| 2013 | 326 | -0.3 | -112.9 | 41.1 |
+| 2014 | 408 | 1.4 | 551.5 | 41.4 |
+| 2015 | 475 | 1.7 | 809.5 | 45.1 |
+| 2016 | 476 | -0.5 | -251.0 | 42.4 |
+| 2017 | 412 | -0.3 | -132.4 | 44.2 |
+| 2018 | 282 | 1.8 | 518.6 | 45.0 |
+| 2019 | 258 | -0.1 | -28.4 | 41.1 |
+| 2020 | 282 | -0.1 | -33.3 | 39.0 |
+| 2021 | 407 | -1.1 | -432.7 | 40.0 |
+| 2022 | 260 | -1.1 | -293.3 | 41.5 |
+| 2023 | 259 | 1.8 | 463.9 | 41.7 |
+| 2024 | 260 | -0.2 | -53.2 | 36.9 |
+| 2025 | 259 | -2.7 | -702.9 | 41.3 |
+| 2026 | 194 | -0.8 | -152.2 | 44.8 |
 
 ### IS i OOS
 
 | próba | transakcje | śr. pips | suma pips | win % |
 |---|---|---|---|---|
-| IS | 4585 | 2.0 | 9 157.3 | 52.1 |
-| OOS | 1524 | 0.7 | 1 063.2 | 51.3 |
+| IS | 7447 | 0.6 | 4 249.1 | 43.9 |
+| OOS | 1688 | -0.8 | -1 369.8 | 40.8 |
 
 ### Kapitał
 
 | depozyt | kapitał końcowy | zwrot % | CAGR % | max obsunięcie % | Sharpe | pominięte (depozyt) |
 |---|---|---|---|---|---|---|
-| 5.0% | 32 184 | 221.8 | 5.1 | -12.4 | 0.59 | 0 |
-| 10.0% | 90 977 | 809.8 | 9.9 | -23.9 | 0.59 | 0 |
-| 15.0% | 225 950 | 2 159.5 | 14.2 | -34.3 | 0.59 | 0 |
-| 20.0% | 493 170 | 4 831.7 | 18.1 | -44.6 | 0.59 | 0 |
-| 30.0% | 1 595 454 | 15 854.5 | 24.1 | -64.8 | 0.59 | 0 |
+| 5.0% | 9 878 | -1.2 | -0.1 | -40.8 | 0.04 | 0 |
+| 10.0% | 7 703 | -23.0 | -1.1 | -67.6 | 0.04 | 0 |
+| 15.0% | 4 752 | -52.5 | -3.1 | -83.7 | 0.04 | 0 |
+| 20.0% | 2 323 | -76.8 | -6.0 | -92.4 | 0.04 | 0 |
+| 30.0% | 278 | -97.2 | -14.2 | -98.7 | 0.04 | 0 |
 
 ## Walidacja
 
-- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 1.67 pips/transakcję, percentyl **100.0** (losowe: 5%=-1.15, mediana=-0.22, 95%=0.66).
+- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 0.32 pips/transakcję, percentyl **97.3** (losowe: 5%=-1.23, mediana=-0.55, 95%=0.16).
 
-- **Deflated Sharpe Ratio**: 0.597 (Sharpe na transakcję 0.051, próg przy 18 próbach 0.047).
+- **Deflated Sharpe Ratio**: 0.050 (Sharpe na transakcję 0.009, próg przy 18 próbach 0.028).
 
-- **PBO** (CSCV, 16 bloków, 18 wariantów): 0.069 — szansa, że najlepszy wariant IS wypada poniżej mediany poza próbą.
+- **PBO** (CSCV, 16 bloków, 18 wariantów): 0.106 — szansa, że najlepszy wariant IS wypada poniżej mediany poza próbą.
 
-- **Walk-forward** (okna kotwiczone, wybór najlepszego wariantu przed każdym oknem): 3657 transakcji, śr. 1.19 pips, 0.09 R.
+- **Walk-forward** (okna kotwiczone, wybór najlepszego wariantu przed każdym oknem): 4655 transakcji, śr. -0.07 pips, -0.01 R.
 
-- **Bootstrap 95%** średnich pipsów: całość [0.68; 2.61], OOS [-0.66; 2.07].
+- **Bootstrap 95%** średnich pipsów: całość [-0.55; 1.20], OOS [-2.24; 0.69].
 
-- **Spread**: ×1 1.67, ×1,5 1.22, ×2 0.77, faktyczny 1.92 pips/transakcję.
+- **Spread**: ×1 0.32, ×1,5 -0.22, ×2 -0.75, faktyczny 1.81 pips/transakcję.
 
 - TP i SL w tej samej świecy bez rozstrzygnięcia: 0.00% transakcji.
 
