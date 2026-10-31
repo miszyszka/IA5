@@ -103,9 +103,9 @@
    "to": 1767222000
   },
   "candles/USDCAD/2026.parquet": {
-   "bars": 5093,
+   "bars": 5060,
    "from": 1767225600,
-   "hash": "ecad0292d8a01562",
+   "hash": "89c7708a2cd8c020",
    "to": 1793401200
   },
   "candles/USDCHF/2024.parquet": {
@@ -121,9 +121,9 @@
    "to": 1767214800
   },
   "candles/USDCHF/2026.parquet": {
-   "bars": 5050,
+   "bars": 5020,
    "from": 1767229200,
-   "hash": "6bf82e2bcdf8682c",
+   "hash": "0f6aa5d91380d0e7",
    "to": 1793401200
   },
   "candles/USDJPY/2024.parquet": {
