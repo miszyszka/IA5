@@ -172,15 +172,22 @@ function fetchRound_(mode, todo, state, startedAt, round) {
         ? 'period1=' + (startedAt - 729 * 86400) + '&period2=' + startedAt
         : round ? 'range=1d' : 'range=5d';
       const now = nowSec();
-      const closed = fetchYahoo(p.yahoo, params).filter(b => b.ts + H <= now - 60);
+      const got = fetchYahoo(p.yahoo, params);
+      // D2/D5: Yahoo czasem zwraca pojedyncze notowania z czasem nie na pełnej godzinie (np. 30.10.2026 17:59–18:25
+      // dla USD/CAD i USD/CHF) — to nie są świece H1: nie zapisujemy ich, zostaje flaga i wpis w logu (nie cicha naprawa)
+      const offGrid = got.filter(b => b.ts % H !== 0);
+      const closed = got.filter(b => b.ts % H === 0 && b.ts + H <= now - 60);
       const ps = state.pairs[p.name] || { lastTs: 0, count: 0, last: [], latencySec: null };
+      ps.lastTs = Math.floor((ps.lastTs || 0) / H) * H;   // stary stan mógł mieć czas notowania zamiast świecy
       const from = mode === 'backfill' || !ps.lastTs ? 0 : ps.lastTs - 3 * H;
       const bars = closed.filter(b => b.ts >= from);
+      if (offGrid.length) log_(mode, p.name, 0, null, 'pominięte notowania poza pełną godziną: ' + offGrid.length +
+        ' (' + new Date(offGrid[0].ts * 1000).toISOString() + ' …)');
       if (!bars.length) return;
       const fresh = bars.filter(b => b.ts > ps.lastTs);
       if (round && !fresh.length) return; // ponowienie bez nowej świecy — bez zapisu
 
-      const flags = [];
+      const flags = offGrid.slice(0, 3).map(b => 'ts@' + b.ts);
       bars.forEach(b => barFlags(b).forEach(f => flags.push(f + '@' + b.ts)));
       (ps.last || []).forEach(old => {
         const nb = bars.find(b => b.ts === old.ts);
