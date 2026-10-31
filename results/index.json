@@ -1,6 +1,36 @@
 {
  "strategies": [
   {
+   "id": "rw28o7Q3tq6AssepIzis",
+   "name": "Strategia 6",
+   "run_id": "20261031-102844",
+   "created": 1793442524,
+   "verdict": "red",
+   "verdict_note": "brak przewagi",
+   "n_variants": 48,
+   "hypothesis": "Kursy walut mają trendy trwające tygodnie (przepływy kapitału, polityka banków centralnych zmienia się\npowoli), a rynek reaguje na nie z opóźnieniem. Wybicie ceny z kanału kilku dni w kierunku trendu dziennego\nłapie początek takiego ruchu; zysk daje kilka dużych ruchów, nie trafność. Wersja 5b: stop początkowy i stop\nkroczący w skali DNIA (ok. 2–3 dzienne ATR), bo trend trwający tygodnie musi przetrwać zwykłe wahania w ciągu\ndnia — w wersji 5 stop 2–4 × ATR godzinowego (0,3–0,7 dziennego zakresu) zamykał pozycję po medianie 18 h.\nUwaga: zmiana stopu powstała po obejrzeniu wyniku wersji 5 na całej historii (także OOS) — OOS tej wersji nie jest\nczysty; liczba prób łącznie z wersją 5: 96. Rozstrzyga forward test po zamrożeniu (W4).",
+   "pairs": [
+    "AUDUSD",
+    "EURGBP",
+    "EURJPY",
+    "EURUSD",
+    "GBPUSD",
+    "USDCAD",
+    "USDCHF",
+    "USDJPY"
+   ],
+   "data_from": 1730073600,
+   "data_to": 1793394000,
+   "source": "yahoo",
+   "engine_version": "0.8.0",
+   "best_exit": "ATR14 SL 10× kroczący 20× max 480",
+   "is_mean_r": -0.086667,
+   "oos_mean_r": 0.0185,
+   "oos_mean_pips": -7.097032,
+   "oos_trades": 63,
+   "demo": false
+  },
+  {
    "id": "GMdgF9FKlAtMzjKEZXYk",
    "name": "Strategia 5",
    "run_id": "20261031-102827",
