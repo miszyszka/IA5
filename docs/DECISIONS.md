@@ -5,6 +5,12 @@ Najnowsze na górze.
 
 ---
 
+### D-042 · 2026-10-31 · Notowania Yahoo poza pełną godziną nie są świecami
+- **Fakt:** 30.10.2026 17:59–18:25 UTC Yahoo zwróciło dla USD/CAD (33) i USD/CHF (30) pojedyncze notowania z czasem co do sekundy. `tick` zapisał je do Firestore obok świec H1 (świece godzinowe są kompletne). Warstwa czyszczenia odrzuciła je jako naruszenie D5 (`ts % 3600`), więc wyniki liczenia nie były skażone; `lastTs` dostawał jednak czas notowania (np. 18:25:46), przez co świeca 18:00 nie liczyła się jako „nowa” (latencja, dziennik).
+- **Decyzja (Michał: „napraw te błędy”):** `tick` pomija wpisy spoza pełnej godziny (flaga `ts` w statusie + wiersz w logu — nie cicha naprawa), `lastTs` jest zawsze pełną godziną. Jednorazowa funkcja `removeOffGrid()` usuwa te wpisy z Firestore — to zgoda na usunięcie danych surowych (G4) ograniczona do wpisów, które nie są świecami. Kopia na Macu doczytywane miesiące zastępuje w całości (`cloud.keep_other_months`), więc usunięte wpisy znikają też lokalnie i z gałęzi `data`.
+- Z4: jednorazowo ok. 200 odczytów + 2 zapisy; potem bez zmian.
+- **Odrzucone:** zaokrąglanie czasu notowania do pełnej godziny (to byłaby zmyślona świeca z jednego notowania); zostawienie śmieci w Firestore (każdy przegląd zdrowia pokazywałby je jako błąd D5).
+
 ### D-041 · 2026-10-31 · Lokalnie tylko pary z Yahoo; liczenie wyłącznie na danych z Yahoo
 - **Decyzja (Michał):** „Żeby w bazie lokalnej były te pary z Yahoo i żeby lokalnie nie było żadnych innych danych. Liczenie strategii na podstawie danych z Yahoo.”
 - **Sprzątanie przy każdym starcie i każdej synchronizacji (`cli.enforce_local_data`):** w `~/.ia5/data` zostaje tylko `yahoo/` (wyłącznie `{PARA}.parquet` dla 8 par z sekcji 2) i `h1_ready/` (dane do liczenia; `ready.build` usuwa z niego pliki innych par i przebudowuje opisy bez źródła „yahoo”). Każdy inny katalog i plik jest usuwany z wpisem w logu — nie tylko po Dukascopy (D-039 sprzątało raz), także to, co pojawiłoby się później.

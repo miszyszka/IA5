@@ -62,12 +62,21 @@ def months_since(ts: int, now: datetime) -> list[str]:
     return out
 
 
+def keep_other_months(df: pd.DataFrame, months: list[str] | None) -> pd.DataFrame:
+    """Wiersze kopii spoza doczytanych miesięcy (doczytane miesiące zastępujemy w całości)."""
+    if not months or df is None or df.empty:
+        return df
+    m = pd.to_datetime(df["ts"], unit="s", utc=True).dt.strftime("%Y-%m")
+    return df[~m.isin(months)]
+
+
 def sync_yahoo(folder, log=print) -> dict[str, pd.DataFrame]:
     """Kopia świec Yahoo z Firestore do folder/{PARA}.parquet (D-039: jedyne źródło cen).
 
     Pierwszy raz pełny odczyt (ok. 25 dokumentów na parę), potem miesiące od ostatniej świecy kopii do dziś
     (zwykle 2 na parę → 16 odczytów; po dłuższej przerwie Maca więcej — kopia nie ma dziur). Yahoo poprawia
-    ostatnie świece, więc doczytane miesiące zastępują stare wartości (keep="last"). Zapis atomowy.
+    ostatnie świece, więc doczytane miesiące zastępują stare W CAŁOŚCI — kopia = Firestore także wtedy, gdy
+    z dokumentu usunięto wpis (np. notowanie Yahoo poza pełną godziną, D-042). Zapis atomowy.
     """
     folder.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc)
@@ -79,7 +88,7 @@ def sync_yahoo(folder, log=print) -> dict[str, pd.DataFrame]:
             old = None
         months = None if old is None else months_since(int(old["ts"].max()), now)
         new = _bars_to_df(yahoo_docs(pair, months))
-        df = new if old is None else pd.concat([old, new])
+        df = new if old is None else pd.concat([keep_other_months(old, months), new])
         df = df.drop_duplicates("ts", keep="last").sort_values("ts").reset_index(drop=True)
         df["ts"] = df["ts"].astype("int64")
         tmp = path.with_suffix(".tmp")

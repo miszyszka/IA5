@@ -466,3 +466,37 @@ function log_(mode, pair, fresh, lat, msg) {
   if (sh.getLastRow() === 0) sh.appendRow(['czas UTC', 'tryb', 'para', 'nowe świece', 'latencja s', 'uwagi']);
   sh.appendRow([new Date().toISOString(), mode, pair, fresh, lat === null ? '' : lat, msg]);
 }
+
+/**
+ * Ręcznie, jednorazowo (D-042, zgoda Michała 2026-10-31): usuwa z candles/* wpisy, których czas nie jest pełną
+ * godziną — to pojedyncze notowania Yahoo, nie świece H1 (np. 30.10.2026 17:59–18:25 dla USD/CAD i USD/CHF).
+ * Świece godzinowe zostają nietknięte. Koszt: ok. 200 odczytów (wszystkie dokumenty) + 1 zapis na dokument z błędem.
+ */
+function removeOffGrid() {
+  withLock_(() => {
+    let total = 0;
+    let pageToken = '';
+    do {
+      const url = API + '/documents/candles?pageSize=50&mask.fieldPaths=bars' +
+        (pageToken ? '&pageToken=' + encodeURIComponent(pageToken) : '');
+      const r = UrlFetchApp.fetch(url, {
+        headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'x-goog-user-project': PROJECT_ID },
+        muteHttpExceptions: true,
+      });
+      if (r.getResponseCode() !== 200) throw new Error('Firestore ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 300));
+      const j = JSON.parse(r.getContentText());
+      (j.documents || []).forEach(d => {
+        const bars = (d.fields && d.fields.bars && d.fields.bars.mapValue && d.fields.bars.mapValue.fields) || {};
+        const bad = Object.keys(bars).filter(k => Number(k) % H !== 0);
+        if (!bad.length) return;
+        // pole w updateMask, którego nie ma w `fields` → Firestore je usuwa; świece godzinowe zostają
+        commit_([{ update: { name: d.name, fields: {} }, updateMask: { fieldPaths: bad.map(k => 'bars.`' + k + '`') } }]);
+        const doc = d.name.split('/').pop();
+        total += bad.length;
+        log_('removeOffGrid', doc.split('_')[0], 0, null, 'usunięte notowania poza pełną godziną: ' + bad.length + ' w ' + doc);
+      });
+      pageToken = j.nextPageToken || '';
+    } while (pageToken);
+    Logger.log('removeOffGrid: usunięto ' + total + ' wpisów poza pełną godziną');
+  });
+}

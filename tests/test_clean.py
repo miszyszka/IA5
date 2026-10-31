@@ -242,3 +242,14 @@ def test_only_yahoo_data_stays_local_and_engine_refuses_other_sources(tmp_path, 
     with pytest.raises(SystemExit, match="nie pochodzą"):
         run_file("def signals(df, p, ind):\n    return df.close * 0\n", "x", data / "h1_ready", tmp_path / "r",
                  log=lambda m: None, require_source="yahoo")
+
+
+def test_sync_replaces_refetched_months_whole():
+    """D-042: wpis usunięty z dokumentu Firestore znika też z kopii na Macu (doczytany miesiąc zastępuje stary)."""
+    import pandas as pd
+    from ia5 import cloud
+    ts = [1790000000 - 1790000000 % 3600 + k * 3600 for k in range(3)]
+    old = pd.DataFrame({"ts": ts + [ts[-1] + 77], "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0})
+    month = pd.to_datetime(ts[0], unit="s", utc=True).strftime("%Y-%m")
+    assert cloud.keep_other_months(old, [month]).empty
+    assert len(cloud.keep_other_months(old, ["1999-01"])) == 4
