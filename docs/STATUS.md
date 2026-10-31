@@ -19,6 +19,8 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
 - **Apps Script:** Yahoo 30.10.2026 17:59–18:25 UTC zwróciło dla USD/CAD i USD/CHF 63 notowania z czasem nie na pełnej godzinie; trafiły do Firestore (świece godzinowe obok są całe), warstwa czyszczenia je odrzuca (D5). Od teraz `tick` ich nie zapisuje (flaga `ts` + wpis w logu), a `lastTs` jest zawsze pełną godziną. Michał zgodził się je usunąć: funkcja `removeOffGrid()` w Apps Script (D-042); kopia na Macu zastępuje doczytane miesiące w całości.
 
+- **RSI w wyraźnym trendzie** (1 wariant, Yahoo): 🟡 3/5 — OOS +9,7 pipsa, percentyl 99,7, bootstrap dodatni w IS i OOS; DSR był „—” (naprawione, D-043, PSR ≈ 0,9995), PBO przy 1 wariancie nie istnieje (decyzja otwarta). Do zamrożenia. Wersja 2 (`rsi_trend_pyramid_v2.py`, 24 warianty): filtr szoku, stop cenowy 2/3 ATR, łagodniejszy trend / EMA100 — OOS nie jest czysty.
+
 **Następne (Michał)**
 1. Wkleić nowy `apps_script/Code.gs` do Apps Script (bez fałszywych flag „luka” na otwarciu tygodnia). Opcjonalnie raz `backfill()` — uzupełni 3 przerwy Yahoo, jeśli Yahoo ma już te świece.
 2. Na Macu: zatrzymać `ia5 fetch` i `ia5 start` (Ctrl+C), `git pull`, potem tylko `ia5 start` (jeden terminal). Pierwszy start usunie dane Dukascopy i przeliczy strategie.

@@ -83,11 +83,14 @@ def deflated_sharpe(best_r: np.ndarray, trial_sharpes: np.ndarray) -> dict:
     r = best_r[~np.isnan(best_r)]
     srs = trial_sharpes[~np.isnan(trial_sharpes)]
     T, N = len(r), len(srs)
-    if T < 10 or N < 2:
+    if T < 10 or N < 1:
         return {"dsr": np.nan, "trials": int(N)}
     sr = per_trade_sharpe(r)
-    var = float(np.var(srs, ddof=1))
-    sr0 = math.sqrt(var) * ((1 - EULER) * N01.inv_cdf(1 - 1 / N) + EULER * N01.inv_cdf(1 - 1 / (N * math.e)))
+    if N == 1:   # D-043: jedna próba = brak wyboru, nic do odjęcia — DSR = PSR (próg Sharpe 0)
+        sr0 = 0.0
+    else:
+        var = float(np.var(srs, ddof=1))
+        sr0 = math.sqrt(var) * ((1 - EULER) * N01.inv_cdf(1 - 1 / N) + EULER * N01.inv_cdf(1 - 1 / (N * math.e)))
     z = (r - r.mean()) / r.std(ddof=0)
     skew = float((z**3).mean())
     kurt = float((z**4).mean())

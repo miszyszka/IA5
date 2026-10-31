@@ -5,6 +5,12 @@ Najnowsze na górze.
 
 ---
 
+### D-043 · 2026-10-31 · DSR przy jednym wariancie = PSR
+- **Fakt:** strategia z jednym wariantem („RSI w wyraźnym trendzie”) dostała w raporcie DSR „—” i test ✘, bo wzór na próg Sharpe wymaga wariancji między próbami (≥ 2 próby).
+- **Decyzja:** przy jednej próbie nie ma wyboru, więc nie ma czego odejmować: próg Sharpe = 0, DSR = Probabilistic Sharpe Ratio (Bailey, López de Prado). To dokładna granica wzoru, nie poluzowanie progu. Liczenie transakcji bez zmian, więc bez podbicia `ENGINE_VERSION`; nowe liczenie pokaże wartość.
+- **Otwarte (do decyzji Michała):** PBO przy jednym wariancie nie istnieje (mierzy przeuczenie wyboru spośród wielu) — dziś liczy się jako ✘ i blokuje 🟢. Propozycja: „nie dotyczy” (nie liczy się ani za, ani przeciw).
+- **Odrzucone:** pomijanie DSR przy jednym wariancie (to właśnie ta strategia, w której DSR najwięcej mówi).
+
 ### D-042 · 2026-10-31 · Notowania Yahoo poza pełną godziną nie są świecami
 - **Fakt:** 30.10.2026 17:59–18:25 UTC Yahoo zwróciło dla USD/CAD (33) i USD/CHF (30) pojedyncze notowania z czasem co do sekundy. `tick` zapisał je do Firestore obok świec H1 (świece godzinowe są kompletne). Warstwa czyszczenia odrzuciła je jako naruszenie D5 (`ts % 3600`), więc wyniki liczenia nie były skażone; `lastTs` dostawał jednak czas notowania (np. 18:25:46), przez co świeca 18:00 nie liczyła się jako „nowa” (latencja, dziennik).
 - **Decyzja (Michał: „napraw te błędy”):** `tick` pomija wpisy spoza pełnej godziny (flaga `ts` w statusie + wiersz w logu — nie cicha naprawa), `lastTs` jest zawsze pełną godziną. Jednorazowa funkcja `removeOffGrid()` usuwa te wpisy z Firestore — to zgoda na usunięcie danych surowych (G4) ograniczona do wpisów, które nie są świecami. Kopia na Macu doczytywane miesiące zastępuje w całości (`cloud.keep_other_months`), więc usunięte wpisy znikają też lokalnie i z gałęzi `data`.

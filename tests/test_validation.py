@@ -68,3 +68,12 @@ def test_verdict_rules():
     assert verdict({**good, "oos_mean_pips": -1})["color"] == "red"
     assert verdict({**good, "pbo": {"pbo": 0.5}})["color"] == "yellow"
     assert verdict({**good, "oos_trades": 3})["color"] == "yellow"
+
+
+def test_dsr_single_variant_equals_psr():
+    """D-043: przy jednej próbie nie ma wyboru, więc DSR = PSR (próg Sharpe 0), a nie „—”."""
+    rng = np.random.default_rng(3)
+    best = rng.normal(0.2, 1.0, 400)
+    d = deflated_sharpe(best, np.array([0.2]))
+    assert d["sharpe0"] == 0.0 and 0.99 < d["dsr"] <= 1.0
+    assert deflated_sharpe(rng.normal(0, 1, 400), np.array([0.0]))["dsr"] < 0.95
