@@ -3,8 +3,8 @@
   {
    "id": "4tnm7GF0IMeRNDuIabi7",
    "name": "RSI 2",
-   "run_id": "20261031-111911",
-   "created": 1793445551,
+   "run_id": "20261031-173443",
+   "created": 1793468083,
    "verdict": "yellow",
    "verdict_note": "zaliczone 4 z 5 testów",
    "n_variants": 24,
