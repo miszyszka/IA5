@@ -15,6 +15,8 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
 - **D-041:** lokalnie tylko świece Yahoo (8 par) i dane do liczenia z nich — reszta usuwana przy każdym starcie i synchronizacji; silnik odmawia liczenia na danych spoza Yahoo; kontrola „Dane lokalne” w przeglądzie zdrowia.
 
+- **Strategia 5b** (`strategies/examples/donchian_d1_trail_v2.py`): strategia 5 na Yahoo — 0/48 wariantów na plusie, percentyl 44, mediana trzymania 18 h (stop 2–4 × ATR H1 ≈ 0,3–0,7 dziennego zakresu, nie mierzył hipotezy tygodniowych trendów). 5b: to samo wejście, stop początkowy 10/15 i kroczący 10/15/20 × ATR14(H1) (≈ 2–4 dzienne ATR), D1 bez niedzielnych skrawków. Zmiana po obejrzeniu OOS wersji 5 — OOS 5b nie jest czysty, łącznie 96 prób; rozstrzyga forward test.
+
 **Następne (Michał)**
 1. Wkleić nowy `apps_script/Code.gs` do Apps Script (bez fałszywych flag „luka” na otwarciu tygodnia). Opcjonalnie raz `backfill()` — uzupełni 3 przerwy Yahoo, jeśli Yahoo ma już te świece.
 2. Na Macu: zatrzymać `ia5 fetch` i `ia5 start` (Ctrl+C), `git pull`, potem tylko `ia5 start` (jeden terminal). Pierwszy start usunie dane Dukascopy i przeliczy strategie.
