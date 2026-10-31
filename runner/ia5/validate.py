@@ -189,18 +189,22 @@ def verdict(v: dict) -> dict:
     s15 = v.get("spread", {}).get("x1_5")
     reasons = []
 
-    def ok(x, cond, label):
+    def ok(x, cond, label, na=False):
+        if na:   # test nie istnieje dla tej strategii — ani za, ani przeciw (D-043)
+            reasons.append({"test": label, "ok": None, "na": True, "value": None})
+            return None
         good = x is not None and not (isinstance(x, float) and np.isnan(x)) and cond(x)
         reasons.append({"test": label, "ok": bool(good), "value": None if x is None or (isinstance(x, float) and np.isnan(x)) else x})
         return good
 
-    checks = [
+    single = v.get("pbo", {}).get("variants", 2) < 2   # PBO mierzy przeuczenie WYBORU — przy 1 wariancie nie ma wyboru
+    checks = [c for c in (
         ok(oos, lambda x: x > 0, "expectancy netto OOS > 0"),
         ok(pct, lambda x: x >= 95, "percentyl benchmarku ≥ 95"),
-        ok(pbo, lambda x: x < 0.3, "PBO < 0,3"),
+        ok(pbo, lambda x: x < 0.3, "PBO < 0,3", na=single),
         ok(dsr, lambda x: x >= 0.95, "DSR ≥ 0,95"),
         ok(s15, lambda x: x > 0, "dodatni przy spreadzie ×1,5"),
-    ]
+    ) if c is not None]
     if v.get("oos_trades", 0) < 10:
         color = "yellow"
         note = "za mało transakcji OOS do oceny"

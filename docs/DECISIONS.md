@@ -8,7 +8,8 @@ Najnowsze na górze.
 ### D-043 · 2026-10-31 · DSR przy jednym wariancie = PSR
 - **Fakt:** strategia z jednym wariantem („RSI w wyraźnym trendzie”) dostała w raporcie DSR „—” i test ✘, bo wzór na próg Sharpe wymaga wariancji między próbami (≥ 2 próby).
 - **Decyzja:** przy jednej próbie nie ma wyboru, więc nie ma czego odejmować: próg Sharpe = 0, DSR = Probabilistic Sharpe Ratio (Bailey, López de Prado). To dokładna granica wzoru, nie poluzowanie progu. Liczenie transakcji bez zmian, więc bez podbicia `ENGINE_VERSION`; nowe liczenie pokaże wartość.
-- **Otwarte (do decyzji Michała):** PBO przy jednym wariancie nie istnieje (mierzy przeuczenie wyboru spośród wielu) — dziś liczy się jako ✘ i blokuje 🟢. Propozycja: „nie dotyczy” (nie liczy się ani za, ani przeciw).
+- **PBO przy jednym wariancie (Michał: „tak — nie dotyczy”):** PBO mierzy przeuczenie wyboru spośród wielu wariantów, więc przy jednym nie istnieje — w werdykcie „nie dotyczy”, nie liczy się ani za, ani przeciw; 🟢 wymaga wtedy pozostałych czterech testów. Raport i karta pokazują „nie dotyczy”.
+- **Ograniczenie (świadome):** werdykt widzi tylko warianty z jednego pliku. Wariant wybrany ręcznie po obejrzeniu innych liczeń (np. „RSI 2” → wersja w oknie 07–17) ma w raporcie 1 próbę, choć prawdziwych było więcej — trzeba to czytać razem z historią strategii; rozstrzyga forward test.
 - **Odrzucone:** pomijanie DSR przy jednym wariancie (to właśnie ta strategia, w której DSR najwięcej mówi).
 
 ### D-042 · 2026-10-31 · Notowania Yahoo poza pełną godziną nie są świecami

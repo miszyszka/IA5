@@ -77,3 +77,15 @@ def test_dsr_single_variant_equals_psr():
     d = deflated_sharpe(best, np.array([0.2]))
     assert d["sharpe0"] == 0.0 and 0.99 < d["dsr"] <= 1.0
     assert deflated_sharpe(rng.normal(0, 1, 400), np.array([0.0]))["dsr"] < 0.95
+
+
+def test_verdict_pbo_not_applicable_for_single_variant():
+    """D-043 (decyzja Michała): przy 1 wariancie PBO „nie dotyczy” — nie blokuje 🟢 i nie liczy się do testów."""
+    v = {"oos_mean_pips": 5.0, "oos_trades": 50, "benchmark": {"percentile": 99.0}, "pbo": {"pbo": float("nan"), "variants": 1},
+         "dsr": {"dsr": 0.99}, "spread": {"x1_5": 3.0}}
+    out = verdict(v)
+    assert out["color"] == "green"
+    na = [c for c in out["checks"] if c.get("na")]
+    assert len(na) == 1 and na[0]["test"].startswith("PBO")
+    v["pbo"] = {"pbo": float("nan"), "variants": 5}
+    assert verdict(v)["color"] == "yellow"

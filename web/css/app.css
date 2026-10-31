@@ -156,6 +156,7 @@ blockquote.hyp { margin: 0; padding: 2px 0 2px 14px; border-left: 2px solid var(
 .checks-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; }
 .checks-list li { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); }
 .checks-list li.ok .mark { color: var(--ok); } .checks-list li.bad .mark { color: var(--bad); }
+.checks-list li.na { color: var(--muted); }
 .gauge .track { position: relative; height: 6px; background: var(--line); border-radius: 999px; margin: 10px 0; }
 .gauge .track i { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--accent); }
 .gauge .track em { position: absolute; top: -5px; bottom: -5px; width: 2px; background: var(--text); }

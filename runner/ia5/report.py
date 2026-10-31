@@ -56,7 +56,7 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
         f"# Raport strategii: {m['name']}",
         f"Run `{m['run_id']}` · silnik {m['engine_version']} · kod `{m['code_hash']}` · dane `{m['data_hash']}`",
         f"## Werdykt: {VERDICT.get(vd.get('color'), '—')} — {vd.get('note', '')}",
-        _table(pd.DataFrame([{"test": c["test"], "wynik": "✔" if c["ok"] else "✘",
+        _table(pd.DataFrame([{"test": c["test"], "wynik": "nie dotyczy" if c.get("na") else "✔" if c["ok"] else "✘",
                               "wartość": _f(c["value"]) if isinstance(c["value"], (int, float)) else "—"}
                              for c in vd.get("checks", [])])) if vd.get("checks") else "",
         "## Hipoteza", m.get("hypothesis") or "_Brak hipotezy — spisz ją przed liczeniem._",

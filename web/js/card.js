@@ -160,8 +160,8 @@ function renderHead() {
 function renderVerdict() {
   const v = S.validation, b = v.benchmark || {};
   const checks = (v.verdict?.checks || []).map((c) =>
-    h('li', { class: c.ok ? 'ok' : 'bad' }, h('span', { class: 'mark' }, c.ok ? '✔' : '✘'), c.test,
-      h('b', { class: 'num' }, c.value == null ? '—' : num(c.value, Math.abs(c.value) < 10 ? 3 : 1))));
+    h('li', { class: c.na ? 'na' : c.ok ? 'ok' : 'bad' }, h('span', { class: 'mark' }, c.na ? '—' : c.ok ? '✔' : '✘'), c.test,
+      h('b', { class: 'num' }, c.na ? 'nie dotyczy' : c.value == null ? '—' : num(c.value, Math.abs(c.value) < 10 ? 3 : 1))));
   const p = b.percentile ?? null;
   $('#verdict').replaceChildren(
     h('div', { class: 'phead' }, h('h3', {}, 'Werdykt — testy z góry ustalone (sekcja 9)')),

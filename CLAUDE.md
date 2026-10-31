@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.28 · 2026-10-31 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
+Wersja 0.29 · 2026-10-31 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
 
 ---
 
@@ -321,6 +321,7 @@ Rozbicia: para, rok, kierunek, sesja (Azja 00–07, Europa 07–13, USA 13–21 
 **Werdykt w karcie** (progi ustalone z góry, do kalibracji w DECISIONS):
 🟢 gdy jednocześnie: expectancy netto OOS > 0, percentyl benchmarku ≥ 95, PBO < 0,3, DSR ≥ 0,95, wynik dodatni przy spreadzie × 1,5.
 🟡 gdy część warunków. 🔴 gdy OOS ≤ 0 albo percentyl < 80.
+Przy jednym wariancie PBO „nie dotyczy” (nie liczy się ani za, ani przeciw), a DSR = PSR (D-043).
 
 ---
 
