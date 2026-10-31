@@ -4,13 +4,12 @@ import { biggestHoles, cellView, fmtRange, gapsInMonth, layoutBands, NONE, sourc
 import { getJSON, refreshData } from './data.js';
 import { healthView, problemWord, sortChecks } from './health.js';
 import { PAIRS } from './metrics.js';
-import { auditCells, dailyRows, elapsed, H as HOUR, waitingSince } from './session.js';
+import { auditCells, elapsed, H as HOUR, waitingSince } from './session.js';
+import { calendarMonths, calendarSummary } from './calendar.js';
 import { heartbeatState } from './status.js';
 import { $, dateUTC, esc, h, local, num, store } from './util.js';
 
-const DAYS = 30;
 const median = (a) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
-const WD = ['nd', 'pn', 'wt', 'śr', 'cz', 'pt', 'sb'];
 
 function spark(points) {
   if (!points || points.length < 2) return '';
@@ -86,36 +85,69 @@ function pairsTable(s) {
       }).join('')}</tbody></table>` }));
 }
 
-function dailyLog(s) {
-  const pairs = Object.keys(PAIRS);
-  const head = h('div', { class: 'phead' }, h('h3', {}, 'Dziennik — świece dzień po dniu'),
-    h('span', { class: 'hint' }, `ostatnie ${DAYS} dni (UTC) · dodane / oczekiwane`));
-  if (!s.daily) {
-    return h('section', { class: 'panel' }, head, h('p', { class: 'hint' },
-      'Dziennik pojawi się po wklejeniu nowego Code.gs do Apps Script — pierwsze uruchomienie policzy ostatnie 2 miesiące z bazy.'));
+// ---------- kalendarz danych dzień po dniu (całe historia, miesiąc po miesiącu) ----------
+
+let calPair = null, calSel = null; // calPair: null = wszystkie pary; calSel: ts wybranego dnia
+const CAL_LABEL = { ok: 'komplet', fill: 'pojedyncze braki ≤ 3 h (uzupełnione do liczenia)', gap: 'przerwa w danych > 3 h (transakcje anulowane)',
+  none: 'brak danych', off: 'bez sesji (weekend, święto)' };
+const WDS = ['pn', 'wt', 'śr', 'cz', 'pt', 'sb', 'nd'];
+
+function renderCalendar() {
+  const panel = $('#calpanel');
+  if (!panel) return;
+  const days = cov?.sources?.yahoo?.days;
+  const all = Object.keys(PAIRS);
+  const head = h('div', { class: 'phead' }, h('h3', {}, 'Kalendarz danych — dzień po dniu'),
+    h('div', { class: 'seg cal-pairs', role: 'group', 'aria-label': 'Para' },
+      ...[[null, 'wszystkie'], ...all.map((p) => [p, PAIRS[p].label])].map(([v, l]) =>
+        h('button', { class: calPair === v ? 'on' : '', 'aria-pressed': calPair === v, onclick: () => { calPair = v; renderCalendar(); } }, l))));
+  if (!days?.start) {
+    panel.replaceChildren(head, h('p', { class: 'hint' }, cov === undefined ? 'Wczytywanie…'
+      : 'Kalendarza jeszcze nie ma — policzy go Mac przy najbliższym ia5 start (po git pull).'));
+    return;
   }
-  const rows = dailyRows(s.daily, pairs, Date.now() / 1000, DAYS);
-  const max = Math.max(1, ...rows.map((r) => r.expected));
-  const body = rows.map((r) => {
-    const d = new Date(r.day + 'T00:00:00Z');
-    const state = r.closed ? 'closed' : r.missing ? 'short' : 'full';
-    const note = r.closed ? 'bez handlu' : r.open ? 'w toku' : r.missing ? `brak ${r.missing}` : '';
-    const cells = pairs.map((p) => {
-      const c = r.counts[p];
-      const miss = !r.closed && c < r.expectedPerPair;
-      return `<td class="r ${miss ? 'warn' : c ? '' : 'dimmed'}" title="${PAIRS[p].label}: ${c} z ${r.expectedPerPair}">${c}</td>`;
-    }).join('');
-    return `<tr class="${state}"><td>${r.day.slice(5)} <span class="dimmed">${WD[d.getUTCDay()]}</span></td>
-      <td class="r">${num(r.total, 0)}<span class="dimmed"> / ${num(r.expected, 0)}</span></td>
-      <td class="fill"><span class="meter"><i style="width:${(r.total / max) * 100}%"></i></span></td>
-      ${cells}<td class="txt note">${note}</td></tr>`;
-  }).join('');
-  return h('section', { class: 'panel' }, head,
-    h('div', { class: 'tablewrap', html: `<table class="data compact static daily">
-      <thead><tr><th>Dzień</th><th class="r">Razem</th><th></th>${pairs.map((p) => `<th class="r">${PAIRS[p].label}</th>`).join('')}<th></th></tr></thead>
-      <tbody>${body}</tbody></table>` }),
-    h('p', { class: 'hint' }, 'Liczone wg dnia świecy (UTC). Święta nie są w kalendarzu sesji, więc tego dnia pokażą się jako braki (D-009).'));
+  const months = calendarMonths(days, calPair ? [calPair] : all);
+  const s = calendarSummary(months);
+  const d = (ts) => new Date(ts * 1000).toISOString().slice(0, 10).split('-').reverse().join('.');
+  const line = [`dane od <b>${d(s.from)}</b> do ${d(s.to)}`, `${num(s.session, 0)} dni sesji`, `komplet ${num(s.ok, 0)}`,
+    s.fill ? `<span class="warn">z uzupełnieniem ${num(s.fill, 0)}</span>` : '',
+    s.gap ? `<span class="neg">w przerwie ${num(s.gap, 0)}</span>` : 'bez przerw',
+    s.none ? `<span class="neg">bez danych ${num(s.none, 0)}</span>` : ''].filter(Boolean).join(' · ');
+  const today = Math.floor(Date.now() / 1000 / 86400) * 86400;
+  const grid = h('div', { class: 'cal' }, h('div'), ...Array.from({ length: 31 }, (_, i) => h('div', { class: 'cal-h' }, String(i + 1))));
+  for (const m of months) {
+    grid.append(h('div', { class: 'cal-m', title: m.label }, h('span', { class: 'lg' }, m.label), h('span', { class: 'sm' }, m.short)));
+    for (let dom = 1; dom <= 31; dom++) {
+      const c = m.cells.find((x) => x.dom === dom);
+      if (!c) { grid.append(h('div', { class: 'cal-c cal-x' })); continue; }
+      const wd = WDS[(new Date(c.ts * 1000).getUTCDay() + 6) % 7];
+      const who = c.pairs.map((x) => `${PAIRS[x.pair]?.label || x.pair}${x.hours ? ` ${x.hours} h` : ''}`).join(', ');
+      grid.append(h('div', {
+        class: `cal-c cal-${c.state}${c.ts === today ? ' cal-today' : ''}${calSel === c.ts ? ' sel' : ''}`,
+        title: `${wd} ${d(c.ts)} · ${CAL_LABEL[c.state]}${who ? ` — ${who}` : ''}${c.ts === today ? ' · dzień w toku' : ''}`,
+        onclick: () => { calSel = calSel === c.ts ? null : c.ts; renderCalendar(); },
+      }));
+    }
+  }
+  let detail = '';
+  if (calSel != null) {
+    const gaps = Object.entries(cov.sources.yahoo.pairs || {})
+      .filter(([p]) => !calPair || p === calPair)
+      .flatMap(([p, v]) => v.gaps.filter((g) => g[0] < calSel + 86400 && g[1] > calSel).map((g) => ({ p, g })));
+    const cell = months.flatMap((m) => m.cells).find((x) => x.ts === calSel);
+    detail = h('div', { class: 'covdetail' },
+      h('div', { class: 'phead' }, h('h3', {}, `${WDS[(new Date(calSel * 1000).getUTCDay() + 6) % 7]} ${d(calSel)}`),
+        h('span', { class: 'hint' }, cell ? CAL_LABEL[cell.state] : '')),
+      gaps.length ? h('ul', { class: 'gaplist' }, ...gaps.map(({ p, g }) => gapRow(g, p)))
+        : h('p', { class: 'hint' }, cell?.state === 'none' ? 'Tego dnia nie ma żadnej świecy tej pary w bazie.' : 'Wszystkie godziny sesji są na miejscu.'));
+  }
+  const legend = h('div', { class: 'covlegend' }, ...['ok', 'fill', 'gap', 'none', 'off'].map((k) =>
+    h('span', {}, h('i', { class: `sw cal-${k}` }), CAL_LABEL[k])), h('span', {}, h('i', { class: 'sw cal-today' }), 'dziś'));
+  panel.replaceChildren(head, h('p', { class: 'covsum', html: line }), h('div', { class: 'calwrap' }, grid), legend, detail,
+    h('p', { class: 'hint' }, 'Dni w UTC, od najnowszego miesiąca. Kolor dnia dla kilku par = najgorszy stan. Klik w dzień → lista luk co do godziny. ',
+      'Niedziela zimą jest „bez sesji”: Yahoo otwiera tydzień ok. 2 h później niż kalendarz, a granica tygodnia nie jest dziurą (D-039).'));
 }
+
 
 
 
@@ -135,6 +167,7 @@ async function loadCoverage() {
   try { cov = await getJSON('coverage/coverage.json'); covErr = null; } catch (e) { covErr = e.message || String(e); cov = cov ?? null; }
   covLoading = false;
   renderCoverage();
+  renderCalendar();
 }
 
 /** Mapa całej historii świec Yahoo (opublikowana przez Maca). */
@@ -384,8 +417,9 @@ export function renderStats() {
     return;
   }
   root.replaceChildren(h('div', { class: 'toolbar' }, h('h2', {}, 'Stats')), healthPanel(s), summary(s),
-    h('section', { id: 'covpanel', class: 'panel' }), dailyLog(s), pairsTable(s));
+    h('section', { id: 'covpanel', class: 'panel' }), h('section', { id: 'calpanel', class: 'panel' }), pairsTable(s));
   renderCoverage();
+  renderCalendar();
   if (cov === undefined) loadCoverage();
 }
 

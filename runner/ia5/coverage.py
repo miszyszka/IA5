@@ -184,6 +184,55 @@ def yahoo_months(df: pd.DataFrame | None, start: date, last: date) -> list[dict]
     return info
 
 
+NO_SESSION, NO_DATA, BARRIER = -1, -2, 100
+
+
+def day_map(yahoo: dict[str, pd.DataFrame], gaps: dict[str, list], now: int) -> dict:
+    """Kalendarz dzień po dniu (Stats): {"start": "RRRR-MM-DD", "pairs": {PARA: [wartość na dzień, ...]}}.
+
+    Wartość dnia (UTC): -1 = dzień bez sesji (weekend, święto), -2 = brak danych (przed pierwszą świecą pary albo
+    dzień, w którym nie ma żadnej świecy), n = brakujące godziny sesji z dziur tej pary ≤ 3 h (uzupełniane do liczenia),
+    100 + n = dzień należy do przerwy w danych (dziura > 3 h — transakcje anulowane, B12). Granica tygodnia
+    i luki bez ruchu nie są liczone (nie są dziurami).
+    """
+    first = min((int(df["ts"].min()) for df in yahoo.values() if df is not None and len(df)), default=None)
+    if first is None:
+        return {"start": None, "pairs": {}}
+    d0 = first // DAY * DAY
+    n_days = int((now // DAY * DAY - d0) // DAY) + 1
+    hours = d0 + H * np.arange(n_days * 24, dtype=np.int64)
+    sess_h = expected_mask(hours).reshape(n_days, 24).sum(axis=1)
+    sess = sess_h > 0
+    out = {}
+    for pair, df in yahoo.items():
+        if df is None or df.empty:
+            out[pair] = [NO_DATA] * n_days
+            continue
+        ts = df["ts"].to_numpy(np.int64)
+        has = np.bincount(((ts - d0) // DAY).clip(0, n_days - 1), minlength=n_days) > 0
+        miss = np.zeros(n_days, np.int64)
+        soft = np.zeros(n_days, np.int64)   # godziny granicy tygodnia / bez ruchu — nie są dziurą
+        barrier = np.zeros(n_days, bool)
+        for a, b, n, kind, *_ in gaps.get(pair, []):
+            for t in expected_hours(a, b):
+                i = int((t - d0) // DAY)
+                if not 0 <= i < n_days:
+                    continue
+                if kind != "p":
+                    soft[i] += 1
+                    continue
+                miss[i] += 1
+                barrier[i] |= n > BOUNDARY_H
+        start_i = int((ts.min() - d0) // DAY)
+        vals = np.where(barrier, BARRIER + miss, miss)
+        live = sess_h - soft > 0            # dzień ma godziny sesji poza granicą tygodnia (np. niedziela zimą — nie ma)
+        vals = np.where(~live, NO_SESSION, vals)
+        vals = np.where(live & ~has & ~barrier, NO_DATA, vals)
+        vals[:start_i] = np.where(sess[:start_i], NO_DATA, NO_SESSION)
+        out[pair] = [int(v) for v in vals]
+    return {"start": datetime.fromtimestamp(int(d0), UTC).strftime("%Y-%m-%d"), "pairs": out}
+
+
 def build(yahoo: dict[str, pd.DataFrame], now: int | None = None) -> dict:
     """Mapa pokrycia świec Yahoo (jedyne źródło, D-039): para × miesiąc od pierwszej świecy."""
     now = now or int(datetime.now(UTC).timestamp())
@@ -192,6 +241,7 @@ def build(yahoo: dict[str, pd.DataFrame], now: int | None = None) -> dict:
     start = datetime.fromtimestamp(first, UTC).date().replace(day=1) if first else datetime.fromtimestamp(now, UTC).date().replace(day=1)
     info = {p: yahoo_months(yahoo.get(p), start, datetime.fromtimestamp(now, UTC).date()) for p in pairs}
     cov = source_coverage(info, yahoo, start)
+    cov["days"] = day_map(yahoo, {p: v["gaps"] for p, v in cov["pairs"].items()}, now)
     return {
         "v": 3, "generated": now, "boundary_h": BOUNDARY_H,
         "sources": {

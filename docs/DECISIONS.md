@@ -5,6 +5,12 @@ Najnowsze na górze.
 
 ---
 
+### D-040 · 2026-10-31 · Kalendarz danych dzień po dniu zamiast dziennika 30 dni
+- **Decyzja (Michał):** „Dziennika nie potrzebuję. Zrób mapę wszystkich dni dzień po dniu całej historii, miesiąc po miesiącu, żebym widział, jak daleko mam dane i gdzie są dziury.”
+- **Dane:** `coverage.json → sources.yahoo.days = {start, pairs: {PARA: [wartość dnia]}}` liczone na Macu (`coverage.day_map`) z tych samych luk co mapa i warstwa czyszczenia: −1 bez sesji (weekend, święto, sama granica tygodnia), −2 brak danych, n = godziny w dziurach ≤ 3 h (uzupełniane), 100 + n = dzień w przerwie > 3 h. Ok. 6 tys. liczb (2 lata × 8 par), plik ~55 KB; 0 odczytów Firestore.
+- **Strona:** Stats → „Kalendarz danych”: miesiące od najnowszego, 31 kolumn, kolor = najgorszy stan z wybranych par, przełącznik wszystkie / jedna para, podsumowanie „dane od … do …”, klik w dzień → luki co do godziny ze skutkiem dla liczenia. Dziennik 30 dni (z `meta/status.daily`) usunięty ze strony.
+- **Odrzucone:** liczenie kalendarza w przeglądarce z mapy luk (strona musiałaby znać kalendarz sesji i zasady czyszczenia — dwa miejsca do utrzymania); osobny kalendarz na parę obok siebie (8 × 24 miesiące nieczytelne na telefonie — zamiast tego przełącznik pary).
+
 ### D-039 · 2026-10-31 · Jedno źródło danych: świece H1 Yahoo; koniec Dukascopy i `ia5 fetch`
 - **Decyzja (Michał):** „Dane z Dukascopy są niewiarygodne. Polegajmy tylko na danych z Yahoo — pozbądź się konceptu Dukascopy ze wszystkich miejsc, jakby go nie było. Usuń `ia5 fetch`; potrzebuję jednego `ia5 start`, który weryfikuje aktualność danych i nasłuchuje strategii. Usuń dane Dukascopy z bazy lokalnej.”
 - **D7:** jedyne źródło cen = świece H1 Yahoo (Apps Script → Firestore → kopia na Macu) — do backtestów, forward testów, skanera i monitoringu. Historia od ok. 2024-10 (730 dni Yahoo), rośnie co godzinę.

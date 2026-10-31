@@ -60,3 +60,21 @@ def test_holiday_is_not_expected_and_quiet_gap_is_not_a_hole():
     d = cov["sources"]["yahoo"]["pairs"]["EURUSD"]
     assert {g[0]: g[3] for g in d["gaps"]} == {ts(2024, 2, 6, 21): "q", ts(2024, 2, 13, 10): "p"}
     assert d["m"][0][3:5] == [2, 1]  # dziury 2 h, „bez ruchu” 1 h liczona razem ze wspólnymi
+
+
+def test_day_map_marks_full_days_fills_gaps_and_week_boundary():
+    """Kalendarz dzień po dniu: komplet 0, dziura ≤ 3 h = liczba godzin, przerwa > 3 h = 100 + godziny,
+    weekend i niedziela z samą granicą tygodnia = -1, dzień bez świec = -2."""
+    hrs = [int(t) for t in coverage.expected_hours(ts(2024, 1, 1), ts(2024, 1, 20))]
+    drop = {ts(2024, 1, 3, 10), ts(2024, 1, 3, 11)} | {ts(2024, 1, 10, h) for h in range(5, 12)} \
+        | {ts(2024, 1, 7, 22), ts(2024, 1, 7, 23)} | {t for t in hrs if ts(2024, 1, 17) <= t < ts(2024, 1, 18)}
+    price = np.array([1.1 + 0.001 * (i % 5) for i in range(len(hrs))])
+    keep = [i for i, t in enumerate(hrs) if t not in drop]
+    df = frame([hrs[i] for i in keep], price[keep])
+    d = coverage.build({"EURUSD": df}, now=ts(2024, 1, 19, 12))["sources"]["yahoo"]["days"]
+    v = d["pairs"]["EURUSD"]
+    assert d["start"] == "2024-01-01" and len(v) == 19
+    assert v[1] == 0 and v[2] == 2                 # 2.01 komplet, 3.01 dwie godziny (uzupełniane)
+    assert v[9] == 107                              # 10.01 przerwa 7 h
+    assert v[5] == -1 and v[6] == -1                # sobota i niedziela z samą granicą tygodnia
+    assert v[16] >= 100                             # 17.01 bez żadnej świecy — część przerwy

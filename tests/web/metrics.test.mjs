@@ -39,23 +39,12 @@ test('kontrola kodu w przeglądarce', () => {
   assert.ok(bad.warnings.some((w) => w.includes('HYPOTHESIS')) && bad.warnings.some((w) => w.includes('całej serii')));
 });
 
-test('dziennik świec: oczekiwane wg kalendarza sesji, braki, dzień w toku i sobota', async () => {
-  const { dailyRows, expectedOnDay, parseFlag } = await import('../../web/js/session.js');
-  const now = Date.UTC(2026, 9, 26, 17, 5) / 1000; // pn 17:05 UTC → zamknięte świece 00:00…16:00 = 17
-  assert.equal(expectedOnDay('2026-10-26', now), 17);
-  assert.equal(expectedOnDay('2026-10-23', now), 21); // piątek do 20:00
-  assert.equal(expectedOnDay('2026-10-24', now), 0); // sobota
-  assert.equal(expectedOnDay('2026-10-25', now), 2); // niedziela od 22:00
-  const rows = dailyRows({ '2026-10-26': { EURUSD: 17, USDJPY: 16 }, '2026-10-23': { EURUSD: 21, USDJPY: 22 } }, ['EURUSD', 'USDJPY'], now, 4);
-  assert.deepEqual(rows.map((r) => r.day), ['2026-10-26', '2026-10-25', '2026-10-24', '2026-10-23']);
-  assert.equal(rows[0].open, true);
-  assert.equal(rows[0].missing, 1);
-  assert.equal(rows[1].missing, 4); // niedziela bez świec w dzienniku
-  assert.equal(rows[2].closed, true);
-  assert.equal(rows[3].missing, 0); // nadmiar jednej pary nie znosi braków — tu brak braków
+test('kalendarz sesji i flagi Yahoo', async () => {
+  const { isExpectedBar, parseFlag } = await import('../../web/js/session.js');
+  assert.equal(isExpectedBar(Date.UTC(2026, 9, 31, 12) / 1000), false); // sobota
+  assert.equal(isExpectedBar(Date.UTC(2026, 9, 30, 12) / 1000), true);
   assert.deepEqual(parseFlag('luka@1793016000'), { kind: 'luka', ts: 1793016000 });
 });
-
 test('mapa pokrycia: widok źródła, podsumowanie, luki w miesiącu', async () => {
   const c = await import('../../web/js/coverage.js');
   assert.deepEqual(c.monthKeys('2003-11', 3), ['2003-11', '2003-12', '2004-01']);
@@ -151,4 +140,22 @@ test('otwarcie tygodnia: Yahoo zaczyna później niż kalendarz — bez czerwone
   assert.equal(waitingSince(fri20, sun22 + 2 * H + 120), null);
   assert.equal(weekOpenGrace(fri20, sun22 + 4 * H + 120), false);
   assert.equal(waitingSince(fri20, sun22 + 4 * H + 120), sun22 + H);
+});
+
+test('kalendarz danych dzień po dniu: stany, najgorszy z par, miesiące od najnowszego', async () => {
+  const c = await import('../../web/js/calendar.js');
+  assert.deepEqual([-1, -2, 0, 2, 105].map(c.dayState), ['off', 'none', 'ok', 'fill', 'gap']);
+  // 2026-01-29 (cz) … 2026-02-02 (pn)
+  const days = { start: '2026-01-29', pairs: { EURUSD: [0, 105, -1, 102, 119], USDJPY: [2, 0, -1, 0, -2] } };
+  const m = c.calendarMonths(days, ['EURUSD', 'USDJPY']);
+  assert.deepEqual(m.map((x) => x.key), ['2026-02', '2026-01']);
+  assert.equal(m[1].first, 3);                                        // 1.01.2026 to czwartek
+  assert.deepEqual(m[1].cells.map((x) => x.state), ['fill', 'gap', 'off']);
+  assert.deepEqual(m[1].cells[1].pairs, [{ pair: 'EURUSD', state: 'gap', hours: 5 }]);
+  assert.deepEqual(m[0].cells.map((x) => x.state), ['gap', 'gap']); // przerwa ma pierwszeństwo przed brakiem danych
+  const only = c.calendarMonths(days, ['USDJPY']);
+  assert.equal(only[0].cells[1].state, 'none');
+  const s = c.calendarSummary(m);
+  assert.equal(s.session, 4); assert.equal(s.gap, 3); assert.equal(s.fill, 1);
+  assert.equal(new Date(s.from * 1000).toISOString().slice(0, 10), '2026-01-29');
 });

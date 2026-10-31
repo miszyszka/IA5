@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.22 · 2026-10-31 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
+Wersja 0.23 · 2026-10-31 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
 
 ---
 
@@ -147,7 +147,7 @@ candles/{PARA}_{RRRR-MM}            np. candles/EURUSD_2026-10
 
 meta/status
   lastRun: { startedAt, finishedAt, ok, error }
-  daily:   { "2026-10-26": { EURUSD: 19, ... }, ... }   # dziennik: świece w bazie wg dnia świecy, 60 dni
+  daily:   { "2026-10-26": { EURUSD: 19, ... }, ... }   # świece wg dnia, 60 dni (pisze Apps Script; strona od D-040 korzysta z kalendarza w coverage.json)
   recent:  { start, pairs: { EURUSD: "111l1.f…" } }       # audyt świeca po świecy, 3 tygodnie: 1 jest, l spóźniona, f flaga, . brak (D-027)
   pairs:   { EURUSD: { lastTs, latencySec, count, flags[] }, ... }
   totalBars, latency24h[], dataSha
@@ -178,7 +178,7 @@ Apps Script i Mac działają na uprawnieniach administracyjnych (OAuth właścic
 ```
 candles/{PARA}/{RRRR}.parquet        # H1 z Yahoo (surowa kopia): ts, open, high, low, close; zmienia się tylko bieżący rok
 candles/manifest.json                # hash, liczba świec, zakres per para
-coverage/coverage.json               # mapa pokrycia (D-022): para × miesiąc, luki jako zakresy — same liczniki, bez cen
+coverage/coverage.json               # mapa pokrycia (D-022): para × miesiąc, luki jako zakresy, kalendarz dzień po dniu (D-040) — bez cen
 results/index.json                   # lista policzonych strategii (dashboard)
 results/{strategyId}/                # ostatni run strategii (poprzedni jest w historii gita)
   manifest.json     # hash danych, hash kodu, ENGINE_VERSION, źródło, opis czyszczenia, zakres, liczba wariantów, pominięte
@@ -337,7 +337,7 @@ Rozbicia: para, rok, kierunek, sesja (Azja 00–07, Europa 07–13, USA 13–21 
 **Strategie** | **Stats** | **Inwestorzy** (pusta, „wkrótce").
 
 **Stats** (`meta/status` + `runner/heartbeat` + `coverage/coverage.json` z gałęzi `data`, 0 dodatkowych odczytów Firestore): **Stan systemu** (D-023) — jedno zdanie o stanie, opis bazy i projektu (ile świec w którym źródle, zakresy, strategie, gałąź `data`) i lista nazwanych kontroli (✓ / ! / ✕) z opisem, szczegółami i „co zrobić”; gdy przegląd jest starszy niż 2 h, strona mówi to wprost; świece w bazie i ostatnie pobranie, latencja (ostatnia, mediana 24 h, mini-wykres), kafelek przeglądu z listą wszystkich problemów (nazwa + zdanie);
-**mapa pokrycia świec Yahoo** (D-022, D-033, D-039) z przełącznikiem: *Ostatnia doba* — 24 zamknięte świece + trwająca godzina (przerywana kratka), nad kolumną godzina otwarcia w czasie polskim; stany: jest / spóźniona > 20 min / z flagą / czeka (czerwony zegar od pełnej godziny do zapisu) / rynek zamknięty; przy każdej parze zegar albo czas ostatniego zapisu; na żywo z `meta/status.recent` i `pairs`; *Cała historia* — 8 par × miesiące od pierwszej świecy: kolor = jak duże dziury, luki rozdzielone na *dziury* (brak danych: ≤ 3 h uzupełniana do liczenia, dłuższa = przerwa, transakcje anulowane), *granicę tygodnia* i *bez ruchu ceny*; klik miesiąc → lista luk co do godziny ze skutkiem dla liczenia, klik para → wszystkie jej dziury; **dziennik dzień po dniu** — z ostatnich 30 dni, ile świec przybyło każdego dnia (wg dnia świecy, UTC) wobec oczekiwanych z kalendarza sesji, per para, z brakami na kolor; tabela par. Flagi Yahoo nie mają osobnej listy — widać je w audycie jako kafelki „z flagą”, a ich liczbę w przeglądzie zdrowia.
+**mapa pokrycia świec Yahoo** (D-022, D-033, D-039) z przełącznikiem: *Ostatnia doba* — 24 zamknięte świece + trwająca godzina (przerywana kratka), nad kolumną godzina otwarcia w czasie polskim; stany: jest / spóźniona > 20 min / z flagą / czeka (czerwony zegar od pełnej godziny do zapisu) / rynek zamknięty; przy każdej parze zegar albo czas ostatniego zapisu; na żywo z `meta/status.recent` i `pairs`; *Cała historia* — 8 par × miesiące od pierwszej świecy: kolor = jak duże dziury, luki rozdzielone na *dziury* (brak danych: ≤ 3 h uzupełniana do liczenia, dłuższa = przerwa, transakcje anulowane), *granicę tygodnia* i *bez ruchu ceny*; klik miesiąc → lista luk co do godziny ze skutkiem dla liczenia, klik para → wszystkie jej dziury; **kalendarz danych dzień po dniu** (D-040) — cała historia, miesiąc pod miesiącem (od najnowszego), 1 kratka = 1 dzień UTC: komplet / pojedyncze braki ≤ 3 h (uzupełnione) / przerwa w danych > 3 h / brak danych / bez sesji / dziś; wszystkie pary (najgorszy stan) albo jedna para; podsumowanie „dane od … do …”, klik w dzień → luki co do godziny; tabela par. Flagi Yahoo nie mają osobnej listy — widać je w audycie jako kafelki „z flagą”, a ich liczbę w przeglądzie zdrowia.
 
 ### 10.3 Lista strategii
 Nazwa, status (do policzenia / liczy się x% / policzona / błąd / zamrożona), data, werdykt, kluczowe liczby najlepszego wariantu IS obok OOS.

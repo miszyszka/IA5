@@ -34,41 +34,6 @@ export function nextClose(now) {
 
 export const dayKey = (ts) => new Date(ts * 1000).toISOString().slice(0, 10);
 
-/** Ile zamkniętych świec danego dnia (UTC) powinno być w bazie na chwilę `now`. */
-export function expectedOnDay(key, now) {
-  const start = Date.parse(key + 'T00:00:00Z') / 1000;
-  const last = lastClosedTs(now);
-  let n = 0;
-  for (let ts = start; ts < start + DAY && ts <= last; ts += H) if (isExpectedBar(ts)) n++;
-  return n;
-}
-
-/**
- * Dziennik dzień po dniu, od najnowszego. daily = meta/status.daily: { 'RRRR-MM-DD': { PARA: liczba } }.
- * Zwraca [{ day, counts, total, expected, missing, open, closed }]:
- * expected = oczekiwane świece × liczba par, missing = suma braków (nadmiar nie znosi braku innej pary),
- * open = dzień w toku, closed = dzień bez handlu (sobota).
- */
-export function dailyRows(daily, pairs, now, days = 30) {
-  const out = [];
-  const today = Date.parse(dayKey(now) + 'T00:00:00Z') / 1000;
-  for (let i = 0; i < days; i++) {
-    const day = dayKey(today - i * DAY);
-    const exp = expectedOnDay(day, now);
-    const counts = {};
-    let total = 0, missing = 0;
-    for (const p of pairs) {
-      const c = daily?.[day]?.[p] || 0;
-      counts[p] = c;
-      total += c;
-      missing += Math.max(0, exp - c);
-    }
-    out.push({ day, counts, total, expectedPerPair: exp, expected: exp * pairs.length, missing,
-      open: i === 0, closed: exp === 0 && total === 0 });
-  }
-  return out;
-}
-
 /** Flaga z Apps Script („luka@1793016000”, „revised@…”, „ohlc@…”) → { kind, ts }. */
 export function parseFlag(f) {
   const m = /^(.+)@(\d+)$/.exec(String(f));

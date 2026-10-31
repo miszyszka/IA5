@@ -11,6 +11,8 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 - Kopia świec bez dziur po dłuższej przerwie Maca (wcześniej tylko 2 ostatnie miesiące). Przegląd zdrowia: kontrola „Kopia danych na Macu”, trójkąty skalibrowane na Yahoo, zamrożone notowania tylko w sesji. Strona i Apps Script: pierwsze ≤ 3 h tygodnia to „otwarcie tygodnia”, nie awaria.
 - Pełny przebieg na prawdziwych świecach: `do_prepare` < 1 s, strategia „poranna sesja Europy” (18 wariantów × 8 par) 12 s. 116 testów + Node zielone.
 
+- **D-040:** Stats — kalendarz danych dzień po dniu całej historii (miesiąc po miesiącu) zamiast dziennika 30 dni.
+
 **Następne (Michał)**
 1. Wkleić nowy `apps_script/Code.gs` do Apps Script (bez fałszywych flag „luka” na otwarciu tygodnia). Opcjonalnie raz `backfill()` — uzupełni 3 przerwy Yahoo, jeśli Yahoo ma już te świece.
 2. Na Macu: zatrzymać `ia5 fetch` i `ia5 start` (Ctrl+C), `git pull`, potem tylko `ia5 start` (jeden terminal). Pierwszy start usunie dane Dukascopy i przeliczy strategie.
