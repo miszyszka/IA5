@@ -1,0 +1,163 @@
+{
+ "id": "4tnm7GF0IMeRNDuIabi7",
+ "name": "RSI 2",
+ "run_id": "20261031-111911",
+ "engine_version": "0.8.0",
+ "code_hash": "05a4838aae5707ab",
+ "data_hash": "fca2a7086f281a13",
+ "data_source": "yahoo",
+ "candles": "pełne",
+ "pairs": [
+  "AUDUSD",
+  "EURGBP",
+  "EURJPY",
+  "EURUSD",
+  "GBPUSD",
+  "USDCAD",
+  "USDCHF",
+  "USDJPY"
+ ],
+ "params": [
+  {
+   "ema": 100,
+   "nachylenie": 0.15,
+   "szok": 0
+  },
+  {
+   "ema": 100,
+   "nachylenie": 0.15,
+   "szok": 3.0
+  },
+  {
+   "ema": 100,
+   "nachylenie": 0.25,
+   "szok": 0
+  },
+  {
+   "ema": 100,
+   "nachylenie": 0.25,
+   "szok": 3.0
+  },
+  {
+   "ema": 200,
+   "nachylenie": 0.15,
+   "szok": 0
+  },
+  {
+   "ema": 200,
+   "nachylenie": 0.15,
+   "szok": 3.0
+  },
+  {
+   "ema": 200,
+   "nachylenie": 0.25,
+   "szok": 0
+  },
+  {
+   "ema": 200,
+   "nachylenie": 0.25,
+   "szok": 3.0
+  }
+ ],
+ "n_variants": 24,
+ "n_exits": 3,
+ "oos_cutoff": 1777563900,
+ "sizing": [
+  5.0,
+  10.0,
+  15.0,
+  20.0,
+  30.0
+ ],
+ "pyramid": 5,
+ "hours": "bez okna",
+ "data_from": 1730073600,
+ "data_to": 1793394000,
+ "data_clean": {
+  "AUDUSD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 3,
+   "gaps": 3,
+   "gap_hours": 99,
+   "rejected": 0,
+   "closed_hours": 144
+  },
+  "EURGBP": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 3,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 144
+  },
+  "EURJPY": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 3,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 144
+  },
+  "EURUSD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 5,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 144
+  },
+  "GBPUSD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 4,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 144
+  },
+  "USDCAD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 6,
+   "gaps": 3,
+   "gap_hours": 99,
+   "rejected": 0,
+   "closed_hours": 144
+  },
+  "USDCHF": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 6,
+   "gaps": 4,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 144
+  },
+  "USDJPY": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 6,
+   "gaps": 3,
+   "gap_hours": 99,
+   "rejected": 0,
+   "closed_hours": 144
+  }
+ },
+ "skipped": {
+  "B8": 33,
+  "brak_danych": 0,
+  "rozgrzewka": 0,
+  "poza_godzinami": 0,
+  "luka_danych": 12,
+  "swieca_uzupelniona": 0
+ },
+ "hypothesis": "Jak w wersji 1: w wyraźnym trendzie H1 gwałtowny ruch przeciw trendowi, w którym RSI14 przebija 70\n(trend spadkowy) albo 30 (trend wzrostowy), to chwilowa przesada, po której cena cofa się o ok. 1,5 ATR.\nWersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób łącznie 1 + 24):\n1) Największe straty wersji 1 to nie przesady, tylko SZOKI informacyjne (np. 1.08.2025 13:00 UTC, dane z rynku pracy\n   USA): jedna świeca o zakresie kilku ATR to nowa cena, a nie przesada — filtr „szok” pomija taki epizod.\n2) Seria RSI zamyka stratę dopiero po 6 godzinach; w tym czasie cena potrafiła odejść o 100+ pipsów — stop cenowy\n   2 / 3 × ATR ucina ten ogon (wariant bez stopu zostaje do porównania).\n3) Więcej wejść: łagodniejszy próg „wyraźnego trendu” (0,15 ATR) i krótsza średnia (EMA100).",
+ "trades_rows": 8631,
+ "created": 1793445551,
+ "seconds": 29.0,
+ "verdict": "yellow"
+}

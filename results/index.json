@@ -1,6 +1,36 @@
 {
  "strategies": [
   {
+   "id": "4tnm7GF0IMeRNDuIabi7",
+   "name": "RSI 2",
+   "run_id": "20261031-111911",
+   "created": 1793445551,
+   "verdict": "yellow",
+   "verdict_note": "zaliczone 4 z 5 testów",
+   "n_variants": 24,
+   "hypothesis": "Jak w wersji 1: w wyraźnym trendzie H1 gwałtowny ruch przeciw trendowi, w którym RSI14 przebija 70\n(trend spadkowy) albo 30 (trend wzrostowy), to chwilowa przesada, po której cena cofa się o ok. 1,5 ATR.\nWersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób łącznie 1 + 24):\n1) Największe straty wersji 1 to nie przesady, tylko SZOKI informacyjne (np. 1.08.2025 13:00 UTC, dane z rynku pracy\n   USA): jedna świeca o zakresie kilku ATR to nowa cena, a nie przesada — filtr „szok” pomija taki epizod.\n2) Seria RSI zamyka stratę dopiero po 6 godzinach; w tym czasie cena potrafiła odejść o 100+ pipsów — stop cenowy\n   2 / 3 × ATR ucina ten ogon (wariant bez stopu zostaje do porównania).\n3) Więcej wejść: łagodniejszy próg „wyraźnego trendu” (0,15 ATR) i krótsza średnia (EMA100).",
+   "pairs": [
+    "AUDUSD",
+    "EURGBP",
+    "EURJPY",
+    "EURUSD",
+    "GBPUSD",
+    "USDCAD",
+    "USDCHF",
+    "USDJPY"
+   ],
+   "data_from": 1730073600,
+   "data_to": 1793394000,
+   "source": "yahoo",
+   "engine_version": "0.8.0",
+   "best_exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_mean_r": 0.359558,
+   "oos_mean_r": 0.458452,
+   "oos_mean_pips": 6.781951,
+   "oos_trades": 164,
+   "demo": false
+  },
+  {
    "id": "vUEk86p1XCUADJSGaY7w",
    "name": "RSI w wyraźnym trendzie",
    "run_id": "20261031-105543",
