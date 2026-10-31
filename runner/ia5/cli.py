@@ -60,6 +60,31 @@ def migrate_legacy(log=print) -> bool:
     return first
 
 
+def enforce_local_data(log=print) -> list[str]:
+    """D-041 (Michał): lokalnie mają być tylko pary z Yahoo i nic innego. W ~/.ia5/data zostaje wyłącznie
+    data/yahoo/{PARA}.parquet (8 par z config) i data/h1_ready/ (budowane z nich); wszystko inne jest usuwane
+    przy każdym starcie i każdej synchronizacji. Zwraca listę usuniętych ścieżek."""
+    import shutil
+
+    from .store import DATA_ALLOWED, YAHOO
+
+    removed = []
+    if DATA.exists():
+        for f in DATA.iterdir():
+            if f.name not in DATA_ALLOWED:
+                shutil.rmtree(f) if f.is_dir() else f.unlink()
+                removed.append(str(f))
+    if YAHOO.exists():
+        allowed = {f"{p}.parquet" for p in PAIRS}
+        for f in YAHOO.iterdir():
+            if f.name not in allowed:
+                shutil.rmtree(f) if f.is_dir() else f.unlink()
+                removed.append(str(f))
+    for r in removed:
+        log(f"Usunięto {r} — lokalnie trzymamy tylko świece Yahoo (D-041)")
+    return removed
+
+
 def mark_source() -> None:
     from .ready import SOURCE
 
@@ -75,6 +100,7 @@ def do_prepare(progress=None) -> dict:
 
     if progress:
         progress("Kopia świec Yahoo z Firestore", 10)
+    enforce_local_data(log)
     log("Stan bazy (Firestore)…")
     try:
         st = cloud.read_status()
@@ -185,6 +211,7 @@ def cmd_start(_args) -> int:
 
     log(f"IA5 start · silnik {ENGINE_VERSION} · dane: świece H1 Yahoo (Firestore)")
     first = migrate_legacy(log)
+    enforce_local_data(log)
 
     def sync_progress(name, pct):
         state["job"] = {"id": "sync", "name": name, "progress": pct}
@@ -315,7 +342,8 @@ def handle_job(sid: str, data: dict, state: dict) -> None:
     try:
         from .store import READY
 
-        out = run_file(data.get("code", ""), name, READY, HOME / "results", log=step, source="yahoo", strategy_id=sid)
+        out = run_file(data.get("code", ""), name, READY, HOME / "results", log=step, source="yahoo", strategy_id=sid,
+                       require_source="yahoo")
         sha = publish.publish_result(out, log=log)
         v = json.loads((out / "validation.json").read_text(encoding="utf-8"))
         cloud.update_strategy(sid, {"status": "policzona", "result": {"sha": sha, "path": f"results/{sid}",
@@ -373,7 +401,8 @@ def cmd_run(args) -> int:
         print(f"Brak świec do liczenia w {h1_dir} — najpierw ia5 start (zrobi kopię świec Yahoo).")
         return 1
     try:
-        run_file(path.read_text(encoding="utf-8"), args.name or path.stem, h1_dir, HOME / "results", log=log, source="yahoo")
+        run_file(path.read_text(encoding="utf-8"), args.name or path.stem, h1_dir, HOME / "results", log=log,
+                 require_source=None if args.h1 else "yahoo")
     except StrategyError as e:
         print(f"Błąd strategii: {e}")
         return 1

@@ -13,6 +13,8 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
 - **D-040:** Stats — kalendarz danych dzień po dniu całej historii (miesiąc po miesiącu) zamiast dziennika 30 dni.
 
+- **D-041:** lokalnie tylko świece Yahoo (8 par) i dane do liczenia z nich — reszta usuwana przy każdym starcie i synchronizacji; silnik odmawia liczenia na danych spoza Yahoo; kontrola „Dane lokalne” w przeglądzie zdrowia.
+
 **Następne (Michał)**
 1. Wkleić nowy `apps_script/Code.gs` do Apps Script (bez fałszywych flag „luka” na otwarciu tygodnia). Opcjonalnie raz `backfill()` — uzupełni 3 przerwy Yahoo, jeśli Yahoo ma już te świece.
 2. Na Macu: zatrzymać `ia5 fetch` i `ia5 start` (Ctrl+C), `git pull`, potem tylko `ia5 start` (jeden terminal). Pierwszy start usunie dane Dukascopy i przeliczy strategie.

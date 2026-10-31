@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.23 · 2026-10-31 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
+Wersja 0.24 · 2026-10-31 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku — `docs/STATUS.md`
 
 ---
 
@@ -26,7 +26,7 @@ Zakładka **Inwestorzy** istnieje, ale jest pusta („wkrótce"). Nie budujemy j
 - **D4.** Dane surowe są niezmienne. Czyszczenie (weekendowe świece, odrzucone błędy) to osobna, jawna i wersjonowana warstwa.
 - **D5.** Każda świeca przechodzi kontrolę jakości (kalendarz sesji bez weekendów i świąt 24/25.12 i 31.12/1.01 — D-028): `high ≥ max(open, close)`, `low ≤ min(open, close)`, ceny > 0, `ts % 3600 == 0`, brak luk w sesji (tydzień FX: niedziela ~21/22:00 → piątek ~21/22:00 UTC, zależnie od czasu letniego w USA), test krzyżowy par (EUR/JPY ≈ EUR/USD × USD/JPY; EUR/GBP ≈ EUR/USD ÷ GBP/USD). Naruszenie = flaga w statusie, **nigdy cicha naprawa**.
 - **D6.** Każdy wynik backtestu zapisuje hash danych, hash kodu strategii i `ENGINE_VERSION`. Wynik bez tych trzech pól nie istnieje.
-- **D7.** **Jedno źródło cen: świece H1 Yahoo** (Apps Script → Firestore → kopia na Macu) — do backtestów, forward testów, skanera i monitoringu (D-039). Innych źródeł nie używamy ani nie doklejamy; dane z `research/` służą tylko do szukania hipotez, nigdy do liczenia wyników. Historia zaczyna się ok. 730 dni wstecz (tyle udostępnia Yahoo) i rośnie z każdą godziną.
+- **D7.** **Jedno źródło cen: świece H1 Yahoo** (Apps Script → Firestore → kopia na Macu) — do backtestów, forward testów, skanera i monitoringu (D-039). Innych źródeł nie używamy ani nie doklejamy; dane z `research/` służą tylko do szukania hipotez, nigdy do liczenia wyników. Historia zaczyna się ok. 730 dni wstecz (tyle udostępnia Yahoo) i rośnie z każdą godziną. **Lokalnie na Macu tylko świece Yahoo** (`data/yahoo/` — 8 par) i dane do liczenia zbudowane z nich (`data/h1_ready/`); wszystko inne w `~/.ia5/data` `ia5 start` usuwa przy każdym starcie i synchronizacji, a silnik odmawia liczenia na danych, których opis nie mówi „yahoo” (D-041).
 - **D8.** Backtest liczy na kopii świec Yahoo po **warstwie czyszczenia** (`ia5/clean.py`, dane w `data/h1_ready/`, wersja w raporcie): świeca łamiąca D5 jest odrzucana; świeca poza sesją jest odrzucana, gdy to sobota/święto albo świeca płaska (Yahoo powtarza wtedy starą cenę); brak **≤ 3 godzin** przy weekendzie/święcie to **granica tygodnia** (Yahoo zaczyna i kończy tydzień inaczej niż kalendarz) — nic; inny brak ≤ 3 h → uzupełniony liniowo od zamknięcia przed nim do otwarcia po nim, znacznik `filled`; brak > 3 h → **przerwa w danych** (`gap_before`), także gdy brakuje we wszystkich parach naraz. Liczymy wszystkie pary z `COMPUTE_PAIRS` (8); para z mniej niż ~4 tygodniami świec jest pomijana. Surowa kopia (`data/yahoo/`) zostaje nietknięta; liczby odrzuconych, uzupełnionych i przerw są w raporcie.
 
 ### Backtest (model wykonania)
@@ -198,7 +198,7 @@ scans/{run}/                         # wyniki skanera hipotez (D-037)
   service-account.json                     # klucz Firebase (S3)
   config.json                              # {"owner_uid": "..."} — kto może zlecać liczenie (S1)
   source.json                              # {"source": "yahoo"} — znacznik po przejściu na jedno źródło (D-039)
-  data/yahoo/{PARA}.parquet                # surowa kopia świec z Firestore — niezmieniana (D4)
+  data/yahoo/{PARA}.parquet                # surowa kopia świec z Firestore — niezmieniana (D4); tylko 8 par z sekcji 2 (D-041)
   data/h1_ready/{PARA}.parquet + .json     # po warstwie czyszczenia (filled, gap_before) + opis — jedyne wejście silnika i skanera (D8)
   data-repo/                               # lokalny klon gałęzi data
   results/{id}/{run}/  scans/{run}/        # wyniki liczenia i skanów (to samo trafia na gałąź data)
@@ -227,7 +227,7 @@ scans/{run}/                         # wyniki skanera hipotez (D-037)
 - `ia5 start` — **jedyny proces** (D-039): najpierw weryfikuje aktualność danych, potem nasłuchuje strategii do policzenia.
   1. Pierwszy start po D-039: usuwa z `~/.ia5` dane Dukascopy i policzone na nich wyniki, z gałęzi `data` wyniki i skany policzone na Dukascopy (historia gita zostaje), a policzone strategie wysyła do ponownego liczenia na świecach Yahoo (zgoda Michała z 2026-10-31).
   2. Stan bazy (`meta/status`), kopia świec Yahoo z Firestore (pierwszy raz pełna, potem miesiące od ostatniej świecy kopii — po przerwie Maca kopia nie ma dziur).
-  3. Kontrola aktualności (czy każda para ma ostatnią zamkniętą świecę sesji) i jakości (D5, trójkąty par).
+  3. Sprzątanie: w `~/.ia5/data` zostaje tylko `yahoo/` (8 par) i `h1_ready/` (D-041). Kontrola aktualności (czy każda para ma ostatnią zamkniętą świecę sesji) i jakości (D5, trójkąty par).
   4. Dane do liczenia (`data/h1_ready/`, warstwa czyszczenia D8) — przebudowa pary tylko, gdy zmieniły się jej świece.
   5. Mapa pokrycia (D-022) i push na gałąź `data` świec oraz `coverage/coverage.json` (każde tylko, jeśli coś się zmieniło); przegląd zdrowia (D-023) → `meta/status.health`.
   6. Heartbeat co 30 s do `runner/heartbeat`; `caffeinate -i`, żeby Mac nie usnął.
@@ -310,7 +310,7 @@ Rozbicia: para, rok, kierunek, sesja (Azja 00–07, Europa 07–13, USA 13–21 
 | Wskaźniki | TA-Lib — zgodność do 1e-9 | CI, każdy push |
 | Silnik | Ręcznie policzone „złote" scenariusze na syntetycznych świecach; testy własności (`hypothesis`), np. netto = brutto − spread zawsze | CI |
 | Silnik vs inny silnik | `backtesting.py` na strategii referencyjnej (przecięcie SMA + wyjście po N świecach) — identyczna lista transakcji. Ręcznie: TradingView Strategy Tester | CI / raz na etap |
-| Dane | Przegląd zdrowia (D-023): świeżość Yahoo, kopia na Macu = Firestore, trójkąty par godzina po godzinie na całej historii (przesunięcie czasu jednej pary daje ~11% godzin ponad próg), zamrożone notowania w sesji, kompletność i przerwy, poprawność świec | każda synchronizacja (co godzinę) |
+| Dane | Przegląd zdrowia (D-023): świeżość Yahoo, kopia na Macu = Firestore, na Macu tylko dane Yahoo (D-041), trójkąty par godzina po godzinie na całej historii (przesunięcie czasu jednej pary daje ~11% godzin ponad próg), zamrożone notowania w sesji, kompletność i przerwy, poprawność świec | każda synchronizacja (co godzinę) |
 | Look-ahead | Detektor: sygnały liczone na pełnych danych i na danych obciętych w losowych punktach muszą być identyczne do punktu cięcia | przed każdym liczeniem |
 | Przeuczenie | OOS 25% (W1), walk-forward (okna roczne), Deflated Sharpe Ratio, PBO metodą CSCV (16 bloków), bootstrap 95% CI expectancy | każde liczenie |
 | Przypadek | Benchmark losowych wejść, ≥ 1000 losowań → percentyl (W3) | każde liczenie |

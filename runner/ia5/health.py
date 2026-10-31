@@ -136,6 +136,29 @@ def yahoo_flags(status: dict) -> dict:
     )
 
 
+def local_data(home: Path, yahoo: dict) -> dict:
+    """D-041: lokalnie tylko świece Yahoo (data/yahoo) i dane do liczenia zbudowane z nich (data/h1_ready, źródło yahoo)."""
+    import json
+
+    data = home / "data"
+    foreign = [f.name for f in data.iterdir() if f.name not in ("yahoo", "h1_ready")] if data.exists() else []
+    foreign += [f"yahoo/{f.name}" for f in (data / "yahoo").iterdir() if f.stem not in PAIRS] if (data / "yahoo").exists() else []
+    ready = data / "h1_ready"
+    srcs = {}
+    for f in sorted(ready.glob("*.parquet")) if ready.exists() else []:
+        try:
+            srcs[f.stem] = json.loads(f.with_suffix(".json").read_text()).get("source")
+        except (FileNotFoundError, ValueError):
+            srcs[f.stem] = None
+    bad_src = [f"h1_ready/{p}: źródło {s or 'nieznane'}" for p, s in srcs.items() if s != "yahoo"]
+    n = sum(len(df) for df in yahoo.values() if df is not None)
+    if foreign or bad_src:
+        return check("local_data", "Dane lokalne", "bad", "Na Macu są dane spoza Yahoo.", foreign + bad_src,
+                     "ia5 start usuwa je przy każdym starcie i synchronizacji (D-041) — uruchom go ponownie.")
+    return check("local_data", "Dane lokalne", "ok",
+                 f"Tylko świece Yahoo: {len(yahoo)} par, {fmt(n)} świec; do liczenia {len(srcs)} par (źródło: Yahoo).")
+
+
 def mac_copy(status: dict, yahoo: dict) -> dict:
     """Kopia świec na Macu (data/yahoo) ma to samo co Firestore — inaczej liczenie idzie na starych danych."""
     pairs = status.get("pairs") or {}
@@ -386,6 +409,7 @@ def run(
         strategies(docs, beat_state, now),
     ]
     if home is not None:
+        checks.append(local_data(home, yahoo))
         checks.append(disk(home))
     worst = max((c["state"] for c in checks), key=RANK.get)
     problems = [c for c in checks if c["state"] != "ok"]

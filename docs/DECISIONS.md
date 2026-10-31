@@ -5,6 +5,14 @@ Najnowsze na górze.
 
 ---
 
+### D-041 · 2026-10-31 · Lokalnie tylko pary z Yahoo; liczenie wyłącznie na danych z Yahoo
+- **Decyzja (Michał):** „Żeby w bazie lokalnej były te pary z Yahoo i żeby lokalnie nie było żadnych innych danych. Liczenie strategii na podstawie danych z Yahoo.”
+- **Sprzątanie przy każdym starcie i każdej synchronizacji (`cli.enforce_local_data`):** w `~/.ia5/data` zostaje tylko `yahoo/` (wyłącznie `{PARA}.parquet` dla 8 par z sekcji 2) i `h1_ready/` (dane do liczenia; `ready.build` usuwa z niego pliki innych par i przebudowuje opisy bez źródła „yahoo”). Każdy inny katalog i plik jest usuwany z wpisem w logu — nie tylko po Dukascopy (D-039 sprzątało raz), także to, co pojawiłoby się później.
+- **Strażnik źródła w silniku:** `backtest.run_file(require_source="yahoo")` — `ia5 start` i `ia5 run` liczą tylko wtedy, gdy każda para w danych do liczenia ma w opisie `source = yahoo`; inaczej strategia dostaje błąd „dane nie pochodzą z Yahoo”, zamiast cicho policzyć na czymś innym. Źródło w manifeście wyniku pochodzi z opisów danych, nie z parametru. `ia5 run --h1 <katalog>` (własne dane do testów) zostaje bez strażnika i jest oznaczony jako „inne”.
+- **Przegląd zdrowia:** kontrola „Dane lokalne” — lista wszystkiego spoza Yahoo na Macu (powinna być zawsze pusta).
+- Bez zmian w Firestore (Z4: 0 odczytów i zapisów więcej).
+- **Odrzucone:** zostawienie innych plików z ostrzeżeniem (Michał chce, żeby ich nie było); osobny katalog „kwarantanna” (to wciąż inne dane lokalnie).
+
 ### D-040 · 2026-10-31 · Kalendarz danych dzień po dniu zamiast dziennika 30 dni
 - **Decyzja (Michał):** „Dziennika nie potrzebuję. Zrób mapę wszystkich dni dzień po dniu całej historii, miesiąc po miesiącu, żebym widział, jak daleko mam dane i gdzie są dziury.”
 - **Dane:** `coverage.json → sources.yahoo.days = {start, pairs: {PARA: [wartość dnia]}}` liczone na Macu (`coverage.day_map`) z tych samych luk co mapa i warstwa czyszczenia: −1 bez sesji (weekend, święto, sama granica tygodnia), −2 brak danych, n = godziny w dziurach ≤ 3 h (uzupełniane), 100 + n = dzień w przerwie > 3 h. Ok. 6 tys. liczb (2 lata × 8 par), plik ~55 KB; 0 odczytów Firestore.

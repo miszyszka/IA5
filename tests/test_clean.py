@@ -213,3 +213,32 @@ def test_requeue_after_source_change(monkeypatch):
     assert cli.requeue_after_source_change("me") is True and updates == [("a", "do_policzenia")]
     monkeypatch.setattr(publish, "purge_dukascopy_results", lambda log: (_ for _ in ()).throw(RuntimeError("git push")))
     assert cli.requeue_after_source_change("me") is False
+
+
+def test_only_yahoo_data_stays_local_and_engine_refuses_other_sources(tmp_path, monkeypatch):
+    """D-041: w ~/.ia5/data zostaje tylko kopia świec Yahoo (8 par) i dane do liczenia z niej; silnik nie liczy
+    na danych z innego źródła."""
+    from ia5 import cli, health, ready, store
+    from ia5.backtest import ready_source, run_file
+
+    data = tmp_path / "data"
+    for d in ("yahoo", "h1_ready", "m1", "stare"):
+        (data / d).mkdir(parents=True)
+    (data / "notatka.txt").write_text("x")
+    (data / "yahoo" / "EURUSD.parquet").write_bytes(b"1")
+    (data / "yahoo" / "XAUUSD.parquet").write_bytes(b"1")
+    monkeypatch.setattr(cli, "DATA", data)
+    monkeypatch.setattr(store, "YAHOO", data / "yahoo")
+    removed = cli.enforce_local_data(log=lambda m: None)
+    assert sorted(f.name for f in data.iterdir()) == ["h1_ready", "yahoo"]
+    assert [f.name for f in (data / "yahoo").iterdir()] == ["EURUSD.parquet"] and len(removed) == 4
+
+    yahoo = {"EURUSD": walk(600)}
+    info = ready.build(yahoo, data / "h1_ready", pairs=("EURUSD",), log=lambda m: None)
+    assert ready_source(data / "h1_ready") == "yahoo" and info["EURUSD"]["source"] == "yahoo"
+    assert health.local_data(tmp_path, yahoo)["state"] == "ok"
+    (data / "h1_ready" / "EURUSD.json").write_text('{"source": "inne"}')
+    assert health.local_data(tmp_path, yahoo)["state"] == "bad"
+    with pytest.raises(SystemExit, match="nie pochodzą"):
+        run_file("def signals(df, p, ind):\n    return df.close * 0\n", "x", data / "h1_ready", tmp_path / "r",
+                 log=lambda m: None, require_source="yahoo")

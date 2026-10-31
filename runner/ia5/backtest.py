@@ -183,10 +183,28 @@ def candle_slices(h1: dict, trades: pd.DataFrame, variants: pd.DataFrame, full: 
     return out
 
 
+def ready_source(h1_dir: Path) -> str | None:
+    """Źródło danych do liczenia z opisów {PARA}.json (ready.build): jedno wspólne dla wszystkich par albo None."""
+    found = set()
+    for f in sorted(h1_dir.glob("*.parquet")):
+        try:
+            found.add(json.loads(f.with_suffix(".json").read_text()).get("source"))
+        except (FileNotFoundError, ValueError):
+            found.add(None)
+    return found.pop() if len(found) == 1 else None
+
+
 def run_file(code: str, name: str, h1_dir: Path, out_root: Path, log=print,
              source: str | None = None, full_candles: bool = True, strategy_id: str | None = None,
-             extra: dict | None = None) -> Path:
+             extra: dict | None = None, require_source: str | None = None) -> Path:
+    """require_source="yahoo" (ia5 start, ia5 run) — liczenie tylko na danych z tego źródła (D7, D-041)."""
     t_start = time.time()
+    src = ready_source(h1_dir)
+    if not any(h1_dir.glob("*.parquet")):
+        raise SystemExit(f"Brak danych do liczenia w {h1_dir} — uruchom ia5 start (zrobi kopię świec Yahoo).")
+    if require_source and src != require_source:
+        raise SystemExit(f"Dane do liczenia w {h1_dir} nie pochodzą w całości z {require_source} (źródło: {src or 'nieznane'}) — "
+                         "ia5 start przebuduje je z kopii świec Yahoo.")
     log("Sygnały (osobny proces, detektor look-ahead)…")
     sig, meta = run_strategy_code(code, h1_dir)
     if meta["lookahead"]:
@@ -231,7 +249,7 @@ def run_file(code: str, name: str, h1_dir: Path, out_root: Path, log=print,
     manifest = {
         "id": sid, "name": name, "run_id": run_id, "engine_version": ENGINE_VERSION,       # D6
         "code_hash": hashlib.sha256(code.encode()).hexdigest()[:16], "data_hash": data_hash(h1_dir),
-        "data_source": source or "inne",
+        "data_source": src or source or "inne",
         "candles": "pełne" if full_candles else f"wycinki ±{CANDLE_PAD} świec wokół transakcji {TOP_FOR_CANDLES} najlepszych wariantów",
         "pairs": sorted(h1), "params": meta["params"], "n_variants": res["n_variants"], "n_exits": len(exits),
         "oos_cutoff": int(res["cutoff"]), "sizing": sizing, "pyramid": pyramid,
