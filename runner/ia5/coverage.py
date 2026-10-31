@@ -1,42 +1,35 @@
-"""Mapa pokrycia danych (zakładka Stats): para × miesiąc wobec kalendarza sesji (D-022).
+"""Mapa pokrycia danych (zakładka Stats): para × miesiąc wobec kalendarza sesji (D-022, D-039).
 
-Liczone z surowych danych na Macu: pliki M1 Dukascopy (który miesiąc jest, który nie) i świece H1 z nich
-zbudowane (która godzina jest, z ilu aktywnych minut). Zgłasza, niczego nie naprawia (D5).
-Wynik to same liczniki i zakresy luk — bez cen, więc może iść na publiczną gałąź `data` (D-010).
+Liczone z kopii świec Yahoo na Macu (które godziny sesji są, których brakuje). Zgłasza, niczego nie naprawia (D5).
+Wynik to same liczniki i zakresy luk — bez cen.
 
-Statusy miesiąca:
-  0 brak pliku · 1 pełny · 2 w toku / niepełny (dociągnie się) · 3 Dukascopy nie ma danych · 4 błąd pobierania
-Luki (godziny oczekiwane w sesji, a nieobecne) w dwóch rodzajach:
-  "w" wspólna — brakuje jej w co najmniej połowie par, które mają ten okres (święto, krótka sesja albo przerwa źródła),
-  "p" tylko ta para — prawdziwa dziura w danych tej pary.
-Każda luka ma potwierdzenie z drugiego źródła: ile z jej godzin ma Yahoo (dla Dukascopy) albo Dukascopy (dla Yahoo);
--1 = drugie źródło nie obejmuje tego okresu.
+Statusy miesiąca: 0 brak danych · 1 pełny · 2 w toku (pierwszy/bieżący miesiąc).
+Luki (godziny oczekiwane w sesji, a nieobecne) w trzech rodzajach — te same zasady co warstwa czyszczenia (clean.py):
+  "w" granica tygodnia — ≤ 3 h tuż przy weekendzie albo święcie (Yahoo zaczyna/kończy tydzień inaczej niż kalendarz),
+  "q" bez ruchu — ≤ 3 h, cena po luce taka jak przed (< 1 pips), nic nie przepadło,
+  "p" dziura — brak danych (≤ 3 h uzupełniana do liczenia, dłuższa to przerwa w danych i anuluje transakcje, B12).
+Pole „all” w luce: ile par miało ją w tym samym czasie (wszystkie naraz = przerwa źródła, nie jednej pary).
 """
 from __future__ import annotations
 
 import hashlib
 import json
-from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
+from datetime import UTC, date, datetime
 
 import numpy as np
 import pandas as pd
 
 H = 3600
 DAY = 86400
-THIN_MINUTES = 30      # godzina H1 złożona z mniej niż 30 minut z notowaniami = „cienka”
-COMMON_SHARE = 0.5     # luka wspólna, gdy brakuje jej w ≥ połowie par mających ten okres
-COMMON_MIN_PAIRS = 3   # przy mniej niż 3 parach nie da się powiedzieć, że luka jest wspólna
+BOUNDARY_H = 3         # luka ≤ 3 h przy weekendzie/święcie = granica tygodnia (D-039), nie brak danych
 QUIET_PIPS = 1.0       # luka do 3 h, po której cena jest ta sama (< 1 pips) = „bez ruchu” — nic nie przepadło (D-028)
 QUIET_MAX_H = 3
-NONE, FULL, PARTIAL, EMPTY, FAILED, INCOMPLETE = 0, 1, 2, 3, 4, 5
-LIVE_CODE = {NONE: ".", FULL: "o", PARTIAL: "~", EMPTY: "-", FAILED: "x", INCOMPLETE: "!"}
+NONE, FULL, PARTIAL = 0, 1, 2
 
 
 # ---------- kalendarz ----------
 
-def expected_mask(ts) -> np.ndarray:
-    """Wektorowo to samo co session.is_expected_bar (test sprawdza każdą godzinę od 2003)."""
+def _parts(ts):
     ts = np.asarray(ts, dtype=np.int64)
     wd = (ts // DAY + 4) % 7  # 0 = niedziela; 1970-01-01 był czwartkiem
     hr = (ts % DAY) // H
@@ -46,7 +39,20 @@ def expected_mask(ts) -> np.ndarray:
     mo = mon.astype(np.int64) % 12 + 1
     # święta FX: 24.12 od 21:00 do 25.12 22:00 UTC i 31.12 od 21:00 do 1.01 22:00 UTC — rynek nieczynny (D-028)
     hol = ((mo == 12) & ((dom == 24) | (dom == 31)) & (hr >= 21)) | (((mo == 12) & (dom == 25)) | ((mo == 1) & (dom == 1))) & (hr < 22)
+    return wd, hr, hol
+
+
+def expected_mask(ts) -> np.ndarray:
+    """Wektorowo to samo co session.is_expected_bar (test sprawdza każdą godzinę od 2003)."""
+    wd, hr, hol = _parts(ts)
     return ~((wd == 6) | ((wd == 5) & (hr >= 21)) | ((wd == 0) & (hr < 22)) | hol)
+
+
+def closed_mask(ts) -> np.ndarray:
+    """Godziny, w których rynek na pewno nie działa: sobota i święta (D-028). Piątek po 21:00 i niedziela przed 22:00
+    UTC nie należą tu — zależnie od czasu letniego w USA część z nich to jeszcze/już handel."""
+    wd, _, hol = _parts(ts)
+    return (wd == 6) | hol
 
 
 def expected_hours(a: int, b: int) -> np.ndarray:
@@ -57,11 +63,8 @@ def expected_hours(a: int, b: int) -> np.ndarray:
 
 
 def win_hours(mi: dict) -> np.ndarray:
-    """Oczekiwane godziny okna miesiąca bez dni, których jeszcze nie pobrano (te nie są lukami)."""
-    e = expected_hours(*mi["win"])
-    if mi.get("skip"):
-        e = e[~np.isin(e // DAY * DAY, np.asarray(mi["skip"], np.int64))]
-    return e
+    """Oczekiwane godziny okna miesiąca (od pierwszej do ostatniej świecy źródła)."""
+    return expected_hours(*mi["win"])
 
 
 def month_key(y: int, m: int) -> str:
@@ -90,153 +93,76 @@ def month_index(ts: np.ndarray, start: date) -> np.ndarray:
     return mon - ((start.year - 1970) * 12 + start.month - 1)
 
 
-def day_end(ts: int) -> int:
-    return (int(ts) // DAY + 1) * DAY
-
-
-# ---------- stan plików Dukascopy ----------
-
-def _rows(path: Path) -> int:
-    import pyarrow.parquet as pq
-
-    return pq.ParquetFile(path).metadata.num_rows
-
-
-def dukascopy_months(root: Path, pair: str, until: date, failed=()) -> list[dict]:
-    """Stan każdego miesiąca od START do `until`: status i okno [a, b), w którym liczymy godziny.
-
-    Okno pełnego miesiąca kończy się z miesiącem (albo z końcem danych). Okno niepełnego kończy się
-    na ostatnim dniu w pliku — brakujący ogon to nie luka, tylko dane do dociągnięcia.
-    """
-    from .dukascopy import START, _max_ts, month_complete, read_missing
-
-    folder = root / "m1" / pair
-    data_end = int(datetime(until.year, until.month, until.day, tzinfo=UTC).timestamp()) + DAY
-    failed = set(failed)
-    out = []
-    for y, m in months(START, until):
-        a, b = month_bounds(y, m)
-        b = min(b, data_end)
-        path = folder / f"{month_key(y, m)}.parquet"
-        has = path.exists()
-        rows = _rows(path) if has else 0
-        missing = read_missing(path) if has else []
-        if not has:
-            st = FAILED if month_key(y, m) in failed else NONE
-        elif missing:
-            st = INCOMPLETE  # część dni pobrana i zapisana, reszta dociągnie się później (D-025)
-        elif rows == 0:
-            st = EMPTY
-        elif (y, m) == (until.year, until.month) or not month_complete(path, y, m):
-            st = PARTIAL
-        else:
-            st = FULL
-        win = None
-        skip = [int(datetime.fromisoformat(d).replace(tzinfo=UTC).timestamp()) for d in missing]
-        if rows or missing:
-            end = max(([day_end(_max_ts(path))] if rows else []) + [x + DAY for x in skip])
-            win = (a, b) if st == FULL else (a, min(b, end))
-        out.append({"key": month_key(y, m), "status": st, "cal": (a, b), "win": win, "skip": skip})
-    return out
-
-
-def live_states(root: Path, pair: str, until: date, failed=()) -> str:
-    """Statusy miesięcy jako krótki napis (1 znak = 1 miesiąc) — do heartbeatu w trakcie pobierania."""
-    return "".join(LIVE_CODE[m["status"]] for m in dukascopy_months(root, pair, until, failed))
-
-
 # ---------- liczenie pokrycia ----------
 
-def _present(df: pd.DataFrame | None) -> tuple[np.ndarray, np.ndarray | None]:
+def _present(df: pd.DataFrame | None) -> np.ndarray:
     if df is None or df.empty:
-        return np.empty(0, np.int64), None
-    ts = df["ts"].to_numpy(np.int64)
-    mins = df["minutes"].to_numpy() if "minutes" in df else None
-    return ts, mins
+        return np.empty(0, np.int64)
+    return df["ts"].to_numpy(np.int64)
 
 
-def source_coverage(month_info: dict[str, list[dict]], frames: dict[str, pd.DataFrame], start: date,
-                    other: dict[str, tuple[np.ndarray, np.ndarray]] | None = None) -> dict:
-    """month_info[para] = lista miesięcy (status, cal, win), frames[para] = H1 (ts, opcjonalnie minutes).
+def source_coverage(month_info: dict[str, list[dict]], frames: dict[str, pd.DataFrame], start: date) -> dict:
+    """month_info[para] = lista miesięcy (status, cal, win), frames[para] = H1 (ts, open, close).
 
-    other[para] = (godziny obecne w drugim źródle, godziny objęte drugim źródłem) — do potwierdzenia luk.
-    Zwraca {"pairs": {para: {"m": [[status, oczekiwane, obecne, dziury, wspólne, cienkie], ...],
-                              "gaps": [[od, do, godzin, rodzaj, w drugim źródle], ...]}}}.
-    Rodzaj luki: "p" dziura tej pary (rynek działał, cena się ruszała), "w" wspólna (rynek nieczynny / przerwa
-    źródła), "q" bez ruchu (≤ 3 h, cena po luce taka jak przed — nic nie przepadło). Pole „wspólne” = w + q.
+    Zwraca {"pairs": {para: {"m": [[status, oczekiwane, obecne, dziury, granica/bez ruchu, 0, 0], ...],
+                              "gaps": [[od, do, godzin, rodzaj, ile par ma tę lukę], ...]}}}.
+    Rodzaj luki (te same zasady co clean.py): "w" granica tygodnia (≤ 3 h przy weekendzie/święcie), "q" bez ruchu
+    (≤ 3 h, cena po luce taka jak przed), "p" dziura — brak danych.
     """
     from .config import PAIRS
 
-    exp, miss, pres_sets, mins_map = {}, {}, {}, {}
+    exp, miss, pres_sets = {}, {}, {}
     for pair, info in month_info.items():
-        ts, mins = _present(frames.get(pair))
+        ts = _present(frames.get(pair))
         hours = [win_hours(mi) for mi in info if mi["win"]]
         e = np.concatenate(hours) if hours else np.empty(0, np.int64)
         exp[pair] = e
         miss[pair] = e[~np.isin(e, ts)]
         pres_sets[pair] = ts
-        mins_map[pair] = mins
-
-    # ile par ma daną godzinę w oknie i ilu z nich jej brakuje → luka wspólna czy tylko tej pary
-    all_e = np.concatenate(list(exp.values())) if exp else np.empty(0, np.int64)
     all_m = np.concatenate(list(miss.values())) if miss else np.empty(0, np.int64)
-    eu, ec = np.unique(all_e, return_counts=True)
-    mu, mc = np.unique(all_m, return_counts=True)
+    mu, mc = np.unique(all_m, return_counts=True)   # ile par nie ma danej godziny
 
     out = {}
     for pair, info in month_info.items():
-        e, mh, ts, mins = exp[pair], miss[pair], pres_sets[pair], mins_map[pair]
-        cover = ec[np.searchsorted(eu, mh)] if len(mh) else np.empty(0, np.int64)
-        missing = mc[np.searchsorted(mu, mh)] if len(mh) else np.empty(0, np.int64)
-        common = (cover >= COMMON_MIN_PAIRS) & (missing >= COMMON_SHARE * cover)
-
-        # zakresy luk: kolejne godziny w ciągu oczekiwanych (luka przez weekend to jedna luka)
+        e, mh, ts = exp[pair], miss[pair], pres_sets[pair]
+        soft = np.zeros(len(mh), bool)   # granica tygodnia albo bez ruchu — nie dziura
         gaps = []
         if len(mh):
             pos = np.searchsorted(e, mh)
-            # cięcie: przerwa w ciągu oczekiwanych godzin, zmiana rodzaju albo miesiąc bez danych pomiędzy
-            cut = np.flatnonzero((np.diff(pos) != 1) | (np.diff(common.astype(np.int8)) != 0)
-                                 | (np.diff(mh) > 4 * DAY)) + 1
-            o_pres, o_cov = (other or {}).get(pair, (None, None))
+            # zakresy luk: kolejne godziny w ciągu oczekiwanych (luka przez weekend to jedna luka)
+            cut = np.flatnonzero((np.diff(pos) != 1) | (np.diff(mh) > 4 * DAY)) + 1
             df = frames.get(pair)
             px = df is not None and {"open", "close"} <= set(df.columns) and pair in PAIRS
             if px:
                 ord_ = np.argsort(ts)
                 ts_s, op_s, cl_s = ts[ord_], df["open"].to_numpy(float)[ord_], df["close"].to_numpy(float)[ord_]
-            quiet = np.zeros(len(mh), bool)
-            for seg_i, seg_h, seg_c in zip(np.split(np.arange(len(mh)), cut), np.split(mh, cut), np.split(common, cut)):
-                conf = -1
-                if o_cov is not None and np.isin(seg_h, o_cov).all():
-                    conf = int(np.isin(seg_h, o_pres).sum())
-                kind = "w" if seg_c[0] else "p"
-                # D-028: krótka luka, po której cena się nie ruszyła — rynek stał, nie ma czego brakować
-                if kind == "p" and px and len(seg_h) <= QUIET_MAX_H:
+            for seg_i, seg_h in zip(np.split(np.arange(len(mh)), cut), np.split(mh, cut)):
+                kind = "p"
+                boundary = not expected_mask([seg_h[0] - H])[0] or not expected_mask([seg_h[-1] + H])[0]
+                if boundary and len(seg_h) <= BOUNDARY_H:
+                    kind = "w"
+                elif px and len(seg_h) <= QUIET_MAX_H:  # D-028: krótka luka, po której cena się nie ruszyła
                     j = np.searchsorted(ts_s, seg_h[0])
                     if 0 < j < len(ts_s) and abs(op_s[j] - cl_s[j - 1]) / PAIRS[pair].pip < QUIET_PIPS:
                         kind = "q"
-                        quiet[seg_i] = True
-                gaps.append([int(seg_h[0]), int(seg_h[-1]) + H, int(len(seg_h)), kind, conf])
-            common = common | quiet
+                if kind != "p":
+                    soft[seg_i] = True
+                n_pairs = int(mc[np.searchsorted(mu, seg_h[0])])
+                gaps.append([int(seg_h[0]), int(seg_h[-1]) + H, int(len(seg_h)), kind, n_pairs])
+        common = soft
         # dziury = tylko luki, w których rynek działał i cena się ruszała; wspólne i „bez ruchu” liczone osobno
         n = len(info)
         holes = np.bincount(month_index(mh[~common], start), minlength=n)[:n]
         shared = np.bincount(month_index(mh[common], start), minlength=n)[:n]
         in_win = np.isin(ts, e)
         present = np.bincount(month_index(ts[in_win], start), minlength=n)[:n]
-        thin = np.zeros(n, np.int64)
-        if mins is not None:
-            t = ts[in_win & (mins < THIN_MINUTES)]
-            thin = np.bincount(month_index(t, start), minlength=n)[:n]
 
         rows = []
         for i, mi in enumerate(info):
-            # 7. pole: godziny sesji w dniach jeszcze niepobranych (tyle brakuje w niepełnym miesiącu)
             if mi["win"]:
-                skipped = int(len(expected_hours(*mi["win"])) - len(win_hours(mi))) if mi.get("skip") else 0
-                rows.append([mi["status"], int(len(win_hours(mi))), int(present[i]),
-                             int(holes[i]), int(shared[i]), int(thin[i]), skipped])
+                rows.append([mi["status"], int(len(win_hours(mi))), int(present[i]), int(holes[i]), int(shared[i]), 0, 0])
             else:  # bez danych: oczekiwane wg kalendarza całego miesiąca — tyle brakuje
-                rows.append([mi["status"], int(len(expected_hours(*mi["cal"]))) if mi["status"] != EMPTY else 0, 0, 0, 0, 0, 0])
+                rows.append([mi["status"], int(len(expected_hours(*mi["cal"]))), 0, 0, 0, 0, 0])
 
         out[pair] = {"m": rows, "gaps": gaps}
     return {"pairs": out}
@@ -258,42 +184,20 @@ def yahoo_months(df: pd.DataFrame | None, start: date, last: date) -> list[dict]
     return info
 
 
-def build(root: Path, h1: dict[str, pd.DataFrame], yahoo: dict[str, pd.DataFrame], failed: dict | None = None,
-          until: date | None = None, now: int | None = None) -> dict:
-    """Pełna mapa dla obu źródeł. root = ~/.ia5/data (pliki M1), h1 = Dukascopy H1, yahoo = świece Yahoo."""
-    from .dukascopy import START
-
+def build(yahoo: dict[str, pd.DataFrame], now: int | None = None) -> dict:
+    """Mapa pokrycia świec Yahoo (jedyne źródło, D-039): para × miesiąc od pierwszej świecy."""
     now = now or int(datetime.now(UTC).timestamp())
-    until = until or (datetime.fromtimestamp(now, UTC).date() - timedelta(days=1))
-    failed = failed or {}
-    pairs = list(h1.keys() | yahoo.keys())
-    pairs.sort(key=lambda p: list(_pairs()).index(p) if p in _pairs() else 99)
-
-    d_info = {p: dukascopy_months(root, p, until, failed.get(p, ())) for p in pairs}
-    y_first = min((int(df["ts"].min()) for df in yahoo.values() if df is not None and len(df)), default=None)
-    y_start = datetime.fromtimestamp(y_first, UTC).date().replace(day=1) if y_first else until.replace(day=1)
-    y_info = {p: yahoo_months(yahoo.get(p), y_start, datetime.fromtimestamp(now, UTC).date()) for p in pairs}
-
-    def cover(info):  # godziny objęte oknami źródła
-        hours = [win_hours(mi) for mi in info if mi["win"]]
-        return np.concatenate(hours) if hours else np.empty(0, np.int64)
-
-    d_ts = {p: _present(h1.get(p))[0] for p in pairs}
-    y_ts = {p: _present(yahoo.get(p))[0] for p in pairs}
-    d_other = {p: (y_ts[p], cover(y_info[p])) for p in pairs}
-    y_other = {p: (d_ts[p], cover(d_info[p])) for p in pairs}
-
-    duka = source_coverage(d_info, h1, START, d_other)
-    yah = source_coverage(y_info, yahoo, y_start, y_other)
-    data_end = int(datetime(until.year, until.month, until.day, tzinfo=UTC).timestamp()) + DAY
+    pairs = sorted(yahoo, key=lambda p: list(_pairs()).index(p) if p in _pairs() else 99)
+    first = min((int(df["ts"].min()) for df in yahoo.values() if df is not None and len(df)), default=None)
+    start = datetime.fromtimestamp(first, UTC).date().replace(day=1) if first else datetime.fromtimestamp(now, UTC).date().replace(day=1)
+    info = {p: yahoo_months(yahoo.get(p), start, datetime.fromtimestamp(now, UTC).date()) for p in pairs}
+    cov = source_coverage(info, yahoo, start)
     return {
-        "v": 1, "generated": now, "thin_minutes": THIN_MINUTES, "common_share": COMMON_SHARE,
+        "v": 3, "generated": now, "boundary_h": BOUNDARY_H,
         "sources": {
-            "dukascopy": {"label": "Dukascopy M1 → H1", "role": "backtesty", "start": month_key(START.year, START.month),
-                          "end": data_end, "thin": True, "other": "Yahoo", **duka},
-            "yahoo": {"label": "Yahoo H1", "role": "monitoring", "start": month_key(y_start.year, y_start.month),
+            "yahoo": {"label": "Yahoo H1", "role": "backtesty i monitoring", "start": month_key(start.year, start.month),
                       "end": max((int(df["ts"].max()) + H for df in yahoo.values() if df is not None and len(df)), default=now),
-                      "thin": False, "other": "Dukascopy", **yah},
+                      **cov},
         },
     }
 

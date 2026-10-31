@@ -1,4 +1,4 @@
-"""Publikacja świec H1 na gałąź `data` (D-010: na GitHub tylko dane z Yahoo, Dukascopy zostaje lokalnie)."""
+"""Publikacja na gałąź `data`: świece H1 Yahoo, mapa pokrycia, wyniki strategii i skany (D-039: jedno źródło — Yahoo)."""
 from __future__ import annotations
 
 import hashlib
@@ -88,7 +88,7 @@ def publish_candles(h1: dict[str, pd.DataFrame], source: str, log=print) -> str 
 
 
 def publish_coverage(cov: dict, log=print) -> str | None:
-    """coverage/coverage.json na gałęzi data (D-022): same liczniki i zakresy luk, bez cen (D-010).
+    """coverage/coverage.json na gałęzi data (D-022): same liczniki i zakresy luk, bez cen.
     Push tylko, gdy treść (bez znacznika czasu) się zmieniła. Zwraca SHA lub None."""
     from .coverage import content_hash
 
@@ -194,3 +194,34 @@ def delete_result(strategy_id: str, log=print) -> str | None:
     _git("push", "-q", "origin", "data")
     log(f"  usunięto results/{strategy_id}")
     return _git("rev-parse", "HEAD")
+
+
+def purge_dukascopy_results(log=print) -> int:
+    """D-039: usuwa z gałęzi data wyniki policzone na Dukascopy (results/{id}/ z manifestem data_source = dukascopy,
+    wpisy w indeksie) i wszystkie skany (liczone na Dukascopy). Historia gita zostaje (G4). Zwraca liczbę wyników."""
+    import shutil
+
+    ensure_repo()
+    gone = set()
+    root = DATA_REPO / "results"
+    for m in root.glob("*/manifest.json"):
+        try:
+            src = json.loads(m.read_text(encoding="utf-8")).get("data_source")
+        except ValueError:
+            continue
+        if src == "dukascopy":
+            gone.add(m.parent.name)
+            shutil.rmtree(m.parent)
+    before = _read_index()
+    after = [e for e in before if e.get("source") != "dukascopy" and e["id"] not in gone]
+    scans = DATA_REPO / "scans"
+    had_scans = scans.exists()
+    if had_scans:
+        shutil.rmtree(scans)
+    if not gone and len(after) == len(before) and not had_scans:
+        return 0
+    _write_index(after)
+    _git("add", "-A")
+    _git("commit", "-q", "-m", "D-039: usunięte wyniki i skany policzone na Dukascopy")
+    _git("push", "-q", "origin", "data")
+    return len(gone | {e["id"] for e in before} - {e["id"] for e in after})

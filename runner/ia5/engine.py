@@ -2,7 +2,7 @@
 
 Model wykonania:
 - B1: sygnał na zamknięciu świecy t → wejście na open świecy t+1.
-- TP/SL sprawdzane wewnątrz świecy (high/low); TP i SL w tej samej świecy → resolver M1, inaczej SL + ambiguous (B5).
+- TP/SL sprawdzane wewnątrz świecy (high/low); TP i SL w tej samej świecy → SL + ambiguous (B5, pesymistycznie).
 - B6: open za SL → wyjście po open; open za TP → wyjście po poziomie TP.
 - Wyjście czasowe po N świecach: zamknięcie świecy e+N-1.
 - Wyjścia wskaźnikowe (RSI 50, SMA, sygnał przeciwny): warunek na zamknięciu świecy j → wyjście na open j+1.
@@ -158,8 +158,7 @@ def _first(mask: np.ndarray) -> np.ndarray:
     return np.where(has, mask.argmax(axis=1), mask.shape[1])
 
 
-def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | None = None,
-             resolver=None) -> pd.DataFrame:
+def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | None = None) -> pd.DataFrame:
     """Wynik każdego wejścia dla jednego wariantu wyjścia (bez filtra B8)."""
     m = len(ent)
     cols = ["exit_i", "exit_ts", "exit_px", "reason", "pips_gross", "r", "risk_pips", "mae", "mfe", "bars", "ambiguous"]
@@ -235,17 +234,10 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     j = np.minimum(f_hit, cap - 1)
     gs, gt = gap_sl[rows, j], gap_tp[rows, j]
     hs, ht = hit_sl[rows, j], hit_tp[rows, j]
+    # B5 (D-039): TP i SL w tej samej świecy H1 — kolejności nie znamy (brak danych wewnątrz świecy) → SL + ambiguous
     both = stop & ~gs & ~gt & hs & ht
-    for k in np.flatnonzero(both):
-        res = None
-        if resolver is not None:
-            bar_ts = int(P["ts"][w["idx"][k, j[k]]])
-            res = resolver(pair, bar_ts, int(d[k]), float(tp[k] * d[k]), float(SLm[k, j[k]] * d[k]))
-        if res == "tp":
-            hs[k] = False
-        else:
-            ht[k] = False
-            amb[k] = res is None
+    ht = ht & ~both
+    amb[both] = True
     is_sl = stop & (gs | (hs & ~gt))
     is_tp = stop & ~is_sl
     sl_j = SLm[rows, j]
@@ -324,7 +316,7 @@ def no_overlap(entry_i: np.ndarray, exit_i: np.ndarray, dirs: np.ndarray | None 
 # ---------- uruchomienie dla strategii ----------
 
 def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray], params: list[dict],
-        exits: list[Exit] | None = None, resolver=None, oos_frac: float = 0.25, hours=None, pyramid: int = 1) -> dict:
+        exits: list[Exit] | None = None, oos_frac: float = 0.25, hours=None, pyramid: int = 1) -> dict:
     """Pełny przebieg: wszystkie warianty wejścia (params) × wszystkie wyjścia × wszystkie pary.
 
     signals[(param_id, pair)] = tablica sygnałów (+1/-1/0) na świecach h1[pair].
@@ -358,7 +350,7 @@ def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray],
         eid += len(ent)
         ent_frames.append(ent)
         for xid, ex in enumerate(exits):
-            res = simulate(P, ent, ex, pair, opp=np.asarray(sig), resolver=resolver)
+            res = simulate(P, ent, ex, pair, opp=np.asarray(sig))
             missing = res["exit_i"].isna().to_numpy()
             # D-031: transakcja nachodząca na długą lukę albo na świecę uzupełnioną — anulowana, jakby jej nie było
             gap, fill = data_cancel(P, ent["signal_i"].to_numpy(), ent["entry_i"].to_numpy(), res["exit_i"].to_numpy(float),
@@ -416,54 +408,3 @@ def summarize(outcomes: pd.DataFrame, by=("variant_id",)) -> pd.DataFrame:
         })
 
     return outcomes.groupby(list(by)).apply(agg, include_groups=False).reset_index()
-
-
-def _m1_arrays(df: pd.DataFrame):
-    return (df["ts"].to_numpy(np.int64), ((df["bh"] + df["ah"]) / 2).to_numpy(), ((df["bl"] + df["al"]) / 2).to_numpy())
-
-
-def _resolve(arrays, bar_ts, d, tp, sl):
-    """Pierwsza minuta świecy, w której pada TP albo SL (ceny mid). Obie w tej samej minucie → None."""
-    ts, hi, lo = arrays
-    a, b = np.searchsorted(ts, [bar_ts, bar_ts + H])
-    for k in range(a, b):
-        hit_tp = hi[k] >= tp if d > 0 else lo[k] <= tp
-        hit_sl = lo[k] <= sl if d > 0 else hi[k] >= sl
-        if hit_tp and hit_sl:
-            return None
-        if hit_sl:
-            return "sl"
-        if hit_tp:
-            return "tp"
-    return None
-
-
-def m1_resolver(m1: dict[str, pd.DataFrame]):
-    """B5: kolejność TP/SL w świecy H1 rozstrzygana na M1 (ceny mid). Ta sama minuta → None (SL + ambiguous)."""
-    cache = {pair: _m1_arrays(df) for pair, df in m1.items()}
-
-    def resolve(pair, bar_ts, d, tp, sl):
-        return _resolve(cache[pair], bar_ts, d, tp, sl) if pair in cache else None
-
-    return resolve
-
-
-def m1_resolver_lazy(m1_dir):
-    """Jak m1_resolver, ale czyta miesięczne pliki M1 (data/m1/{PARA}/{RRRR-MM}.parquet) dopiero, gdy są potrzebne."""
-    from collections import OrderedDict
-    from datetime import UTC, datetime
-    from pathlib import Path
-
-    cache: OrderedDict = OrderedDict()
-
-    def resolve(pair, bar_ts, d, tp, sl):
-        ym = datetime.fromtimestamp(bar_ts, UTC).strftime("%Y-%m")
-        key = (pair, ym)
-        if key not in cache:
-            f = Path(m1_dir) / pair / f"{ym}.parquet"
-            cache[key] = _m1_arrays(pd.read_parquet(f)) if f.exists() else None
-            if len(cache) > 48:
-                cache.popitem(last=False)
-        return _resolve(cache[key], bar_ts, d, tp, sl) if cache[key] is not None else None
-
-    return resolve

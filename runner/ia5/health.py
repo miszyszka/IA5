@@ -17,14 +17,16 @@ import numpy as np
 import pandas as pd
 
 from .config import PAIRS
-from .coverage import EMPTY, FAILED, INCOMPLETE, NONE, expected_hours
+from .coverage import NONE, expected_hours, expected_mask
 from .quality import bar_flags
-from .session import H, expected_ts, is_expected_bar, last_closed_ts
+from .session import H, expected_ts, is_expected_bar, last_closed_ts, week_open_grace
 
 RANK = {"ok": 0, "warn": 1, "bad": 2}
-TRIANGLE_PIPS = {"EURJPY": 15.0, "EURGBP": 8.0}  # odchyłka godziny ponad próg = podejrzana
-TRIANGLE_SHARE = 0.001  # > 0,1% podejrzanych godzin → uwaga
-SOURCE_MEDIAN_PIPS = 3.0  # mediana różnicy zamknięć Yahoo vs Dukascopy
+# Yahoo podaje zamknięcia par z różnych chwil, więc trójkąty „pływają” bardziej niż przy jednym feedzie: na danych
+# 2024–2026 mediana EUR/JPY 5 pips, EUR/GBP 2,6 pips; > 25 / 12 pips w 0,02% / 0,1% godzin. Przesunięcie jednej pary
+# o godzinę daje ~11% godzin ponad próg — to kontrola ma złapać (D-039).
+TRIANGLE_PIPS = {"EURJPY": 25.0, "EURGBP": 12.0}  # odchyłka godziny ponad próg = podejrzana
+TRIANGLE_SHARE = 0.005  # > 0,5% podejrzanych godzin → uwaga
 FROZEN_HOURS = 8  # tyle kolejnych identycznych zamknięć = zamrożony feed
 STUCK_SECONDS = 2 * 3600
 DISK_WARN, DISK_BAD = 5e9, 1e9
@@ -72,7 +74,8 @@ def yahoo_fresh(status: dict, now: int) -> dict:
             "yahoo_fresh", "Świeże dane Yahoo", "bad", "W bazie nie ma świec Yahoo.", fix="Uruchom setup() w Apps Script (docs/SETUP.md)."
         )
     exp = expected_ts(now)
-    late = {p: pairs.get(p, {}).get("lastTs", 0) for p in PAIRS if pairs.get(p, {}).get("lastTs", 0) < exp}
+    late = {p: pairs.get(p, {}).get("lastTs", 0) for p in PAIRS if pairs.get(p, {}).get("lastTs", 0) < exp
+            and not week_open_grace(pairs.get(p, {}).get("lastTs", 0), now)}  # Yahoo otwiera tydzień później (D-039)
     closed = not is_expected_bar(last_closed_ts(now) + H) and not is_expected_bar(last_closed_ts(now))
     if not late:
         return check(
@@ -93,7 +96,7 @@ def yahoo_fresh(status: dict, now: int) -> dict:
         f"{len(late)} z {len(PAIRS)} par bez nowych świec od {utc(first_missing + H)} "
         f"({f'{mins} min' if mins < 120 else f'{fmt(mins / 60, 0)} h'}).",
         [f"{label(p)}: ostatnia {utc(t) if t else 'brak'}" for p, t in late.items()],
-        "Sprawdź arkusz „log” w Apps Script i czy wyzwalacz tick() co 5 min istnieje.",
+        "Sprawdź arkusz „log” w Apps Script i czy wyzwalacz tick() co 1 min istnieje (installTrigger()).",
     )
 
 
@@ -128,36 +131,29 @@ def yahoo_flags(status: dict) -> dict:
         "warn",
         f"{len(items)} flag z ostatnich pobrań Yahoo.",
         [f"{p}: {f}" for p, f in items],
-        "Lista w Stats → Flagi. Luki i korekty Yahoo nie wpływają na backtesty (te liczą się z Dukascopy).",
+        "Świece z błędem warstwa czyszczenia odrzuca, luki ≤ 3 h uzupełnia, dłuższe anulują transakcje (D8, B12) — "
+        "szczegóły w Stats → mapa pokrycia.",
     )
 
 
-def duka_fresh(h1: dict, until_ts: int) -> dict:
-    if not h1 or all(df is None or df.empty for df in h1.values()):
-        return check(
-            "duka_fresh",
-            "Aktualność Dukascopy",
-            "bad",
-            "Brak świec Dukascopy na Macu.",
-            fix="Uruchom `ia5 fetch` w osobnym terminalu — pobiera historię para po parze (D-031).",
-        )
-    late = []
-    for p, df in h1.items():
-        last = int(df["ts"].max()) if df is not None and len(df) else 0
-        missing = len(expected_hours(last + H, until_ts)) if last else None
-        if missing is None or missing > 24:
-            late.append(f"{label(p)}: ostatnia {utc(last) if last else 'brak'}")
-    if late:
-        return check(
-            "duka_fresh",
-            "Aktualność Dukascopy",
-            "warn",
-            f"{len(late)} par z danymi starszymi niż doba sesji.",
-            late,
-            "Sprawdź, czy działa `ia5 fetch` (pobiera parami: najpierw EUR/USD, potem kolejne); "
-            "świeży dzień Dukascopy publikuje z opóźnieniem.",
-        )
-    return check("duka_fresh", "Aktualność Dukascopy", "ok", f"Wszystkie pary mają dane do {utc(until_ts - H)}.")
+def mac_copy(status: dict, yahoo: dict) -> dict:
+    """Kopia świec na Macu (data/yahoo) ma to samo co Firestore — inaczej liczenie idzie na starych danych."""
+    pairs = status.get("pairs") or {}
+    if not yahoo or all(df is None or df.empty for df in yahoo.values()):
+        return check("mac_copy", "Kopia danych na Macu", "bad", "Na Macu nie ma świec Yahoo.",
+                     fix="Uruchom ia5 start — pobierze kopię z Firestore.")
+    behind = []
+    for p in PAIRS:
+        df = yahoo.get(p)
+        local = int(df["ts"].max()) if df is not None and len(df) else 0
+        remote = int((pairs.get(p) or {}).get("lastTs") or 0)
+        if remote > local:
+            behind.append(f"{label(p)}: na Macu do {utc(local) if local else 'brak'}, w Firestore do {utc(remote)}")
+    if behind:
+        return check("mac_copy", "Kopia danych na Macu", "warn", f"{len(behind)} par ma na Macu starsze świece niż w Firestore.",
+                     behind, "ia5 start synchronizuje co godzinę; nowa świeca mogła dojść po ostatniej synchronizacji.")
+    n = sum(len(df) for df in yahoo.values() if df is not None)
+    return check("mac_copy", "Kopia danych na Macu", "ok", f"Kopia na Macu zgodna z Firestore ({fmt(n)} świec).")
 
 
 def triangles(h1: dict) -> dict:
@@ -200,57 +196,19 @@ def triangles(h1: dict) -> dict:
         worst_state,
         text,
         rows + detail,
-        None if worst_state == "ok" else "Otwórz te miesiące w mapie pokrycia; jeśli to jedna para — porównaj ją z Yahoo.",
+        None if worst_state == "ok"
+        else "Otwórz te miesiące w mapie pokrycia; pojedyncze godziny to zwykle przesunięcie znaczników Yahoo między parami.",
     )
 
 
-def sources(h1: dict, yahoo: dict) -> dict:
-    """Dukascopy vs Yahoo na wspólnych godzinach; wykrywa też przesunięcie czasu o ±1 h."""
-    rows, problems = [], []
-    for p in PAIRS:
-        d, y = h1.get(p), yahoo.get(p)
-        if d is None or y is None or d.empty or y.empty:
-            continue
-        res = {}
-        for shift in (-H, 0, H):
-            j = d[["ts", "close"]].merge(y[["ts", "close"]].assign(ts=y["ts"] + shift), on="ts", suffixes=("_d", "_y"))
-            if len(j) >= 24:
-                res[shift] = float(((j["close_d"] - j["close_y"]).abs() / PAIRS[p].pip).median())
-        if 0 not in res:
-            continue
-        rows.append(f"{label(p)}: mediana różnicy zamknięć {fmt(res[0], 2)} pips")
-        best = min(res, key=res.get)
-        if best != 0 and res[best] < res[0] / 2:
-            problems.append(
-                f"{label(p)}: zgodność lepsza po przesunięciu Yahoo o {best // H:+d} h ({fmt(res[best], 2)} vs {fmt(res[0], 2)} pips)"
-            )
-        elif res[0] > SOURCE_MEDIAN_PIPS:
-            problems.append(f"{label(p)}: mediana {fmt(res[0], 2)} pips — więcej niż {fmt(SOURCE_MEDIAN_PIPS)}")
-    if not rows:
-        return check(
-            "sources",
-            "Dukascopy vs Yahoo",
-            "warn",
-            "Brak wspólnych świec do porównania.",
-            fix="Pojawią się po ia5 start, gdy oba źródła będą na Macu.",
-        )
-    if problems:
-        return check(
-            "sources",
-            "Dukascopy vs Yahoo",
-            "bad" if any("przesunięciu" in x for x in problems) else "warn",
-            "Źródła różnią się bardziej niż zwykle.",
-            problems + rows,
-            "Przesunięcie o godzinę = błąd strefy czasu w jednym źródle (D1); duża mediana = inny feed lub błędne ceny.",
-        )
-    return check("sources", "Dukascopy vs Yahoo", "ok", "Oba źródła podają te same ceny w tych samych godzinach.", rows)
-
-
 def frozen(h1: dict) -> dict:
+    """Cena stoi ≥ FROZEN_HOURS godzin sesji (świece poza sesją i w święta pomijamy — Yahoo powtarza w nich starą cenę,
+    a warstwa czyszczenia je odrzuca)."""
     hits = []
     for p, df in h1.items():
         if df is None or len(df) < FROZEN_HOURS:
             continue
+        df = df[expected_mask(df["ts"].to_numpy())].reset_index(drop=True)
         c = df["close"].to_numpy()
         same = np.concatenate([[False], c[1:] == c[:-1]])
         run_id = np.cumsum(~same)
@@ -285,42 +243,32 @@ def bars_valid(h1: dict) -> dict:
             "bad",
             "Są świece łamiące podstawowe reguły (D5).",
             bad,
-            "Zgłoś — to błąd budowy H1 z M1 albo uszkodzony plik.",
+            "Warstwa czyszczenia odrzuca te świece przed liczeniem (D8); jeśli jest ich dużo — Yahoo podaje błędne ceny.",
         )
     return check("bars_valid", "Poprawność świec", "ok", "Każda świeca: high ≥ max(open, close), low ≤ min, ceny > 0, pełne godziny.")
 
 
-def coverage_check(cov: dict | None) -> dict:
-    src = (cov or {}).get("sources", {}).get("dukascopy")
+def coverage_check(cov: dict | None, now: int | None = None) -> dict:
+    """Dziury w świecach Yahoo. Przerwy > 3 h anulują transakcje (B12) — stare są już znane, więc tylko je wypisujemy;
+    uwaga, gdy przerwa jest świeża (ostatnie 7 dni), bo wtedy da się ją jeszcze uzupełnić."""
+    now = now or int(time.time())
+    src = (cov or {}).get("sources", {}).get("yahoo")
     if not src:
         return check("coverage", "Kompletność historii", "warn", "Mapy pokrycia jeszcze nie ma.", fix="Pojawi się po ia5 start.")
-    months = [m for d in src["pairs"].values() for m in d["m"] if m[0] != EMPTY]
-    left = sum(1 for m in months if m[0] == NONE)
-    failed = [(p, i) for p, d in src["pairs"].items() for i, m in enumerate(d["m"]) if m[0] == FAILED]
+    months = [m for d in src["pairs"].values() for m in d["m"] if m[0] != NONE]
     holes = sum(m[3] or 0 for m in months)
-    exp = sum(m[1] or 0 for m in months if m[0] not in (NONE, FAILED))
+    exp = sum(m[1] or 0 for m in months)
+    long_ = sorted(((p, g) for p, d in src["pairs"].items() for g in d["gaps"] if g[3] == "p" and g[2] > 3), key=lambda x: -x[1][0])
     share = fmt(100 * holes / exp, 3) if exp else "0"
-    text = f"Pobrane {fmt(len(months) - left - len(failed))} z {fmt(len(months))} miesięcy; dziury {fmt(holes)} h ({share}% godzin)."
-    if failed:
-        return check(
-            "coverage",
-            "Kompletność historii",
-            "bad",
-            f"{len(failed)} {pl(len(failed), 'miesiąca', 'miesięcy', 'miesięcy')} nie udało się pobrać. " + text,
-            [f"{label(p)}: {month_key(src['start'], i)}" for p, i in failed],
-            "ia5 start ponowi je automatycznie; jeśli błąd się powtarza — sprawdź sieć.",
-        )
-    partial = [(p, i, m[6] if len(m) > 6 else 0) for p, d in src["pairs"].items() for i, m in enumerate(d["m"]) if m[0] == INCOMPLETE]
-    if left or partial:
-        lead = (f"Brakuje {fmt(left)} miesięcy. " if left else "") + (
-            f"{len(partial)} {pl(len(partial), 'miesiąc', 'miesiące', 'miesięcy')} pobrane częściowo "
-            f"(brakuje {fmt(sum(x[2] for x in partial))} h sesji). " if partial else "")
-        return check("coverage", "Kompletność historii", "warn", lead + text,
-                     [f"{label(p)}: {month_key(src['start'], i)} — brakuje {h} h" for p, i, h in partial],
-                     "ia5 start dociągnie brakujące dni; pobrane już są zapisane i używane.")
-    if exp and holes / exp > 0.001:
-        return check("coverage", "Kompletność historii", "warn", text, fix="Szczegóły w mapie pokrycia — „Największe dziury”.")
-    return check("coverage", "Kompletność historii", "ok", text)
+    text = (f"Dziury {fmt(holes)} h ({share}% godzin sesji); przerw w danych (> 3 h, transakcje na nich anulowane): {len(long_)}.")
+    detail = [f"{label(p)}: {utc(g[0])} → {utc(g[1])} ({g[2]} h{', wszystkie pary' if len(g) > 4 and g[4] >= len(src['pairs']) else ''})"
+              for p, g in long_]
+    fix = ("Uruchom backfill() w Apps Script — pobierze 730 dni Yahoo od nowa i uzupełni dziury, jeśli Yahoo ma już te świece "
+           "(ok. 200 zapisów Firestore).")
+    fresh = [x for x in long_ if x[1][1] > now - 7 * 86400]
+    if fresh:
+        return check("coverage", "Kompletność historii", "warn", f"Świeża przerwa w danych ({len(fresh)}). " + text, detail, fix)
+    return check("coverage", "Kompletność historii", "ok", text, detail, fix if long_ else None)
 
 
 def publishing(status: dict, publish_error: str | None) -> dict:
@@ -377,40 +325,33 @@ def disk(path: Path) -> dict:
         "Miejsce na dysku",
         state,
         text,
-        fix=None if state == "ok" else "Zwolnij miejsce — pobieranie Dukascopy potrzebuje kilku GB.",
+        fix=None if state == "ok" else "Zwolnij miejsce — liczenie strategii zapisuje wyniki w ~/.ia5/results.",
     )
 
 
 # ---------- opis stanu bazy i projektu ----------
 
 
-def facts(status: dict, h1: dict, yahoo: dict, cov: dict | None, docs: list[dict] | None,
-          ready: dict | None = None) -> list[str]:
+def facts(status: dict, yahoo: dict, cov: dict | None, docs: list[dict] | None, ready: dict | None = None) -> list[str]:
     out = []
     yb = status.get("totalBars") or sum(len(d) for d in yahoo.values() if d is not None)
     yfirst = min((int(d["ts"].min()) for d in yahoo.values() if d is not None and len(d)), default=None)
     ylast = max((v.get("lastTs", 0) for v in (status.get("pairs") or {}).values()), default=0)
     out.append(
-        f"Yahoo (monitoring): {fmt(yb)} świec H1 w Firestore, {len(status.get('pairs') or {})} par"
+        f"Dane: świece H1 Yahoo — {fmt(yb)} w Firestore, {len(status.get('pairs') or {})} par"
         + (f", od {utc(yfirst)[:10]}" if yfirst else "")
         + (f", ostatnia {utc(ylast)}" if ylast else "")
-        + "."
+        + ". Jedyne źródło cen (D-039); historia rośnie o każdą nową godzinę."
     )
-    db = sum(len(d) for d in h1.values() if d is not None)
-    if db:
-        first = min(int(d["ts"].min()) for d in h1.values() if d is not None and len(d))
-        last = max(int(d["ts"].max()) for d in h1.values() if d is not None and len(d))
-        out.append(f"Dukascopy (backtesty): {fmt(db)} świec H1 na Macu, {utc(first)[:10]} → {utc(last)[:10]}.")
-    else:
-        out.append("Dukascopy (backtesty): jeszcze brak danych na Macu.")
-    for pair, r in (ready or {}).items():  # D-031: na czym liczy silnik
-        if not r.get("months"):
-            out.append(f"Do liczenia {label(pair)}: jeszcze brak zatwierdzonych miesięcy (pobiera `ia5 fetch`).")
-            continue
-        out.append(f"Do liczenia {label(pair)}: {fmt(r.get('bars', 0))} świec z {r['months']}/{r.get('months_total')} "
-                   f"zatwierdzonych miesięcy; uzupełnione {fmt(r.get('filled', 0))} świec (luki ≤ 3 h), "
-                   f"{fmt(r.get('gaps_n', 0))} przerw w dostępie do danych ({fmt(r.get('gap_hours', 0))} h)"
-                   " — transakcje na nich są anulowane.")
+    usable = {p: r for p, r in (ready or {}).items() if r.get("bars")}
+    if ready is not None:
+        tot = lambda k: fmt(sum(r.get(k, 0) for r in usable.values()))  # noqa: E731
+        skipped = [label(p) for p, r in ready.items() if not r.get("bars")]
+        out.append(
+            f"Do liczenia: {len(usable)} par, {tot('bars')} świec; odrzucone (D5) {tot('rejected')}, uzupełnione {tot('filled')} "
+            f"(luki ≤ 3 h), przerwy w danych {tot('gaps_n')} ({tot('gap_hours')} h) — transakcje na nich są anulowane."
+            + (f" Pominięte (za mało świec): {', '.join(skipped)}." if skipped else "")
+        )
     if docs is not None:
         done = sum(1 for d in docs if d.get("status") == "policzona")
         frozen_n = sum(1 for d in docs if d.get("frozenAt"))
@@ -422,10 +363,8 @@ def facts(status: dict, h1: dict, yahoo: dict, cov: dict | None, docs: list[dict
 
 def run(
     status: dict,
-    h1: dict,
     yahoo: dict,
     cov: dict | None,
-    until_ts: int,
     docs: list[dict] | None = None,
     beat_state: str | None = None,
     publish_error: str | None = None,
@@ -438,12 +377,11 @@ def run(
         yahoo_fresh(status, now),
         apps_script(status, now),
         yahoo_flags(status),
-        duka_fresh(h1, until_ts),
-        coverage_check(cov),
-        bars_valid(h1),
-        triangles(h1),
-        sources(h1, yahoo),
-        frozen(h1),
+        mac_copy(status, yahoo),
+        coverage_check(cov, now),
+        bars_valid(yahoo),
+        triangles(yahoo),
+        frozen(yahoo),
         publishing(status, publish_error),
         strategies(docs, beat_state, now),
     ]
@@ -457,7 +395,7 @@ def run(
         else f"{len(problems)} {pl(len(problems), 'problem', 'problemy', 'problemów')}: "
         + "; ".join(f"{c['name']} — {c['text'].rstrip('.')}" for c in sorted(problems, key=lambda c: -RANK[c["state"]])[:3])
     )
-    return {"at": now, "state": worst, "summary": summary, "facts": facts(status, h1, yahoo, cov, docs, ready), "checks": checks}
+    return {"at": now, "state": worst, "summary": summary, "facts": facts(status, yahoo, cov, docs, ready), "checks": checks}
 
 
 def report(h: dict) -> str:

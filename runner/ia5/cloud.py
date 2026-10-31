@@ -1,7 +1,8 @@
 """Firestore z Maca (firebase-admin, service account — uprawnienia administracyjne).
 
-Budżet (Z4): heartbeat co 30 s ≈ 2 880 zapisów/dobę gdy program działa; sync Yahoo: ok. 200 odczytów
-za pierwszym razem, potem 16 (bieżący i poprzedni miesiąc × 8 par) na każde `ia5 start`.
+Budżet (Z4): heartbeat co 30 s ≈ 2 880 zapisów/dobę, gdy program działa; kopia świec Yahoo: ok. 200 odczytów
+za pierwszym razem, potem 16 (poprzedni i bieżący miesiąc × 8 par) co godzinę ≈ 400 odczytów/dobę;
+przegląd zdrowia: 1 odczyt meta/status + lista strategii (kilka–kilkanaście) co godzinę.
 """
 from __future__ import annotations
 
@@ -51,27 +52,53 @@ def yahoo_docs(pair: str, months: list[str] | None):
     return [s.to_dict() for s in snaps if s.exists]
 
 
+def months_since(ts: int, now: datetime) -> list[str]:
+    """Miesiące od miesiąca przed `ts` do bieżącego — tyle trzeba doczytać, żeby kopia nie miała dziury po przerwie."""
+    d = (datetime.fromtimestamp(int(ts), timezone.utc).replace(day=1) - pd.Timedelta(days=1)).replace(day=1)
+    out = []
+    while (d.year, d.month) <= (now.year, now.month):
+        out.append(d.strftime("%Y-%m"))
+        d = (d + pd.Timedelta(days=32)).replace(day=1)
+    return out
+
+
 def sync_yahoo(folder, log=print) -> dict[str, pd.DataFrame]:
-    """Kopia świec Yahoo z Firestore do folder/{PARA}.parquet. Pełny odczyt tylko za pierwszym razem."""
+    """Kopia świec Yahoo z Firestore do folder/{PARA}.parquet (D-039: jedyne źródło cen).
+
+    Pierwszy raz pełny odczyt (ok. 25 dokumentów na parę), potem miesiące od ostatniej świecy kopii do dziś
+    (zwykle 2 na parę → 16 odczytów; po dłuższej przerwie Maca więcej — kopia nie ma dziur). Yahoo poprawia
+    ostatnie świece, więc doczytane miesiące zastępują stare wartości (keep="last"). Zapis atomowy.
+    """
     folder.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc)
-    prev = (now.replace(day=1) - pd.Timedelta(days=1)).strftime("%Y-%m")
     out = {}
     for pair in PAIRS:
         path = folder / f"{pair}.parquet"
         old = pd.read_parquet(path) if path.exists() else None
-        new = _bars_to_df(yahoo_docs(pair, None if old is None else [prev, now.strftime("%Y-%m")]))
+        if old is not None and old.empty:
+            old = None
+        months = None if old is None else months_since(int(old["ts"].max()), now)
+        new = _bars_to_df(yahoo_docs(pair, months))
         df = new if old is None else pd.concat([old, new])
         df = df.drop_duplicates("ts", keep="last").sort_values("ts").reset_index(drop=True)
-        df.to_parquet(path, index=False)
+        df["ts"] = df["ts"].astype("int64")
+        tmp = path.with_suffix(".tmp")
+        df.to_parquet(tmp, index=False)
+        tmp.replace(path)
         out[pair] = df
-        log(f"  Yahoo {pair}: {len(df):,} świec")
+        last = f", ostatnia {datetime.fromtimestamp(int(df.ts.iloc[-1]), timezone.utc):%Y-%m-%d %H:%M} UTC" if len(df) else ""
+        log(f"  Yahoo {pair}: {len(df):,} świec{last}")
     return out
 
 
-def heartbeat(state: str, job: dict | None = None, sync: dict | None = None) -> None:
-    """sync = {"start": "2003-05", "pairs": {PARA: "oo~.x…"}} — tylko w trakcie pobierania Dukascopy (mapa na żywo,
-    ok. 2,3 KB; Z4: 0 dodatkowych zapisów, jedzie w heartbeacie co 30 s)."""
+def load_yahoo(folder) -> dict[str, pd.DataFrame]:
+    """Kopia lokalna bez czytania Firestore (ia5 health, ia5 run)."""
+    return {p: pd.read_parquet(folder / f"{p}.parquet") for p in PAIRS if (folder / f"{p}.parquet").exists()}
+
+
+def heartbeat(state: str, job: dict | None = None) -> None:
+    """runner/heartbeat (Z4: co 30 s ≈ 2 880 zapisów/dobę, gdy ia5 start działa).
+    Pola `sync` i `fetch` zostały po pobieraniu Dukascopy — usuwane przy każdym zapisie (D-039)."""
     from firebase_admin import firestore
 
     doc = {
@@ -80,19 +107,10 @@ def heartbeat(state: str, job: dict | None = None, sync: dict | None = None) -> 
         "job": job or {},
         "version": ENGINE_VERSION,
         "host": socket.gethostname(),
+        "sync": firestore.DELETE_FIELD,
+        "fetch": firestore.DELETE_FIELD,
     }
-    doc["sync"] = sync or firestore.DELETE_FIELD
-    # merge po polach: pole `fetch` pisze osobny proces `ia5 fetch` (D-031) — nie może go nadpisać
     db().collection("runner").document("heartbeat").set(doc, merge=list(doc))
-
-
-def fetch_heartbeat(info: dict | None) -> None:
-    """runner/heartbeat.fetch — stan pobieracza `ia5 fetch` (D-031): {state, pair, progress, name, pairs, sync, lastSeen}.
-    Z4: co 30 s ≈ 2 880 zapisów/dobę, gdy pobieracz działa (razem z heartbeatem `ia5 start` ≈ 5 760 z 20 000)."""
-    from firebase_admin import firestore
-
-    doc = {**(info or {"state": "offline"}), "lastSeen": firestore.SERVER_TIMESTAMP, "host": socket.gethostname()}
-    db().collection("runner").document("heartbeat").set({"fetch": doc}, merge=["fetch"])
 
 
 def list_strategies() -> list[dict]:
@@ -121,6 +139,14 @@ def update_strategy(sid: str, fields: dict) -> None:
 
 def delete_strategy(sid: str) -> None:
     db().collection("strategies").document(sid).delete()
+
+
+def computed_strategies() -> list[tuple[str, dict]]:
+    """Strategie z wynikiem (policzone) — do ponownego liczenia po zmianie źródła danych (D-039)."""
+    from google.cloud.firestore_v1.base_query import FieldFilter
+
+    q = db().collection("strategies").where(filter=FieldFilter("status", "==", "policzona"))
+    return [(s.id, s.to_dict() or {}) for s in q.stream()]
 
 
 def frozen_strategies() -> list[tuple[str, dict]]:

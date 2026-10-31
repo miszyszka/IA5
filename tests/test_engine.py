@@ -2,7 +2,7 @@
 import numpy as np
 import pandas as pd
 import pytest
-from ia5.engine import Exit, default_exits, find_entries, m1_resolver, no_overlap, prepare, run, simulate
+from ia5.engine import Exit, default_exits, find_entries, no_overlap, prepare, run, simulate
 
 T0 = 1761523200  # poniedziałek 2025-10-27 00:00 UTC
 
@@ -63,9 +63,6 @@ def test_tp_and_sl_same_bar_is_sl_and_ambiguous_b5():
     ex = Exit("atr", n=14, tp=1, sl=1, cap=24)
     r = simulate(P, entries(P, [1, 0, 0]), ex, "EURUSD").iloc[0]
     assert r.reason == "SL" and r.ambiguous and r.pips_gross == pytest.approx(-10)
-    # resolver M1 mówi: najpierw TP
-    r2 = simulate(P, entries(P, [1, 0, 0]), ex, "EURUSD", resolver=lambda *a: "tp").iloc[0]
-    assert r2.reason == "TP" and not r2.ambiguous and r2.pips_gross == pytest.approx(10)
 
 
 def test_gap_through_stop_exits_at_open_b6():
@@ -134,16 +131,6 @@ def test_run_spread_net_and_oos_split():
     assert np.allclose(o["r_net"], o["pips_net"] / o["risk_pips"])
     assert res["entries"]["sample"].tolist() == ["IS", "OOS"]
     assert res["n_variants"] == 1 and res["skipped"]["rozgrzewka"] == 1
-
-
-def test_m1_resolver_orders_minutes():
-    m1 = pd.DataFrame({"ts": T0 + 3600 + 60 * np.arange(3),
-                       "bh": [1.1003, 1.1012, 1.1000], "ah": [1.1003, 1.1012, 1.1000],
-                       "bl": [1.0995, 1.0995, 1.0985], "al": [1.0995, 1.0995, 1.0985]})
-    res = m1_resolver({"EURUSD": m1})
-    assert res("EURUSD", T0 + 3600, 1, 1.1010, 1.0990) == "tp"
-    # short: SL 1.1010 pada w 2. minucie, zanim TP 1.0990 w 3. minucie
-    assert res("EURUSD", T0 + 3600, -1, 1.0990, 1.1010) == "sl"
 
 
 def test_trading_window_polish_time_with_dst():

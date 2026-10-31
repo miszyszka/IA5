@@ -80,35 +80,14 @@ export const FLAG_LABEL = {
   'cena<=0': 'cena ≤ 0', ts: 'czas nie na pełnej godzinie',
 };
 
-/**
- * Audyt świeca po świecy z meta/status.recent (D-027): { start, pairs: { PARA: napis, 1 znak = 1 godzina } }.
- * Znaki z Apps Script: '1' jest, 'l' spóźniona (> 20 min po zamknięciu), 'f' z flagą jakości, '.' brak.
- * Zwraca { hours: [ts…], pairs: { PARA: [stan…] } } tylko do ostatniej zamkniętej godziny;
- * stany: ok, late, flag, missing (oczekiwana, a brak > 20 min po zamknięciu), pending (zamknięta < 20 min temu), closed (poza sesją i święta),
- * allgap (brak w ≥ 75% par naraz — rynek nieczynny albo przerwa Yahoo, nie brak tej pary).
- */
-export function recentCells(recent, now, graceS = 20 * 60) {
-  if (!recent?.pairs) return null;
-  const last = lastClosedTs(now);
-  const hours = [];
-  for (let ts = recent.start; ts <= last; ts += H) hours.push(ts);
-  const pairs = {};
-  const names = Object.keys(recent.pairs);
-  // D-028: godzina, której brakuje w ≥ 75% par, to rynek nieczynny (święto spoza kalendarza) albo przerwa Yahoo —
-  // nie zaznaczamy jej jako brak konkretnej pary
-  const allGap = hours.map((ts, i) => names.length >= 3 && names.filter((p) => (recent.pairs[p][i] ?? '.') === '.').length >= 0.75 * names.length);
-  for (const [p, str] of Object.entries(recent.pairs)) {
-    pairs[p] = hours.map((ts, i) => {
-      const c = str[i] ?? '.';
-      if (c === '1') return 'ok';
-      if (c === 'l') return 'late';
-      if (c === 'f') return 'flag';
-      if (!isExpectedBar(ts)) return 'closed';
-      if (now - (ts + H) <= graceS) return 'pending';
-      return allGap[i] ? 'allgap' : 'missing';
-    });
-  }
-  return { hours, pairs };
+export const BOUNDARY_H = 3; // D-039: Yahoo otwiera tydzień 1–2 h później niż kalendarz — to nie brak danych
+
+/** Czy brakuje tylko pierwszych ≤ 3 zamkniętych godzin po weekendzie albo święcie (granica tygodnia, jak clean.py). */
+export function weekOpenGrace(lastTs, now) {
+  if (!lastTs || now - lastTs > 5 * DAY) return false;
+  const missing = [];
+  for (let t = lastTs + H; t <= Math.floor((now - H) / H) * H && missing.length <= BOUNDARY_H; t += H) if (isExpectedBar(t)) missing.push(t);
+  return missing.length > 0 && missing.length <= BOUNDARY_H && !isExpectedBar(missing[0] - H);
 }
 
 /**
@@ -116,6 +95,7 @@ export function recentCells(recent, now, graceS = 20 * 60) {
  * zamknęła (pełna godzina wybiła). null = para ma wszystko. Zegar startuje równo o pełnej godzinie, nie po 60 s z D2.
  */
 export function waitingSince(lastTs, now) {
+  if (weekOpenGrace(lastTs, now)) return null;
   const cur = Math.floor(now / H) * H; // otwarcie trwającej świecy
   let ts = Math.max((lastTs || 0) + H, cur - 14 * 24 * H);
   for (; ts < cur; ts += H) if (isExpectedBar(ts)) return ts + H;

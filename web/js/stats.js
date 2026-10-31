@@ -1,11 +1,11 @@
 // Zakładka Stats: baza świec, latencja, mapa pokrycia danych, dziennik dzień po dniu, flagi jakości.
 // meta/status i runner/heartbeat nagłówek i tak nasłuchuje; mapa pokrycia z gałęzi data — 0 dodatkowych odczytów Firestore (Z2, Z4).
-import { biggestHoles, cellView, EMPTY, FAILED, INCOMPLETE, FULL, fmtRange, gapsInMonth, layoutBands, mergeLive, NONE, PARTIAL, STATUS_LABEL, summarize } from './coverage.js';
+import { biggestHoles, cellView, fmtRange, gapsInMonth, layoutBands, NONE, sourceView, STATUS_LABEL, summarize } from './coverage.js';
 import { getJSON, refreshData } from './data.js';
 import { healthView, problemWord, sortChecks } from './health.js';
 import { PAIRS } from './metrics.js';
 import { auditCells, dailyRows, elapsed, H as HOUR, waitingSince } from './session.js';
-import { fetchState, heartbeatState } from './status.js';
+import { heartbeatState } from './status.js';
 import { $, dateUTC, esc, h, local, num, store } from './util.js';
 
 const DAYS = 30;
@@ -122,9 +122,9 @@ function dailyLog(s) {
 // ---------- mapa pokrycia (D-022) ----------
 
 let cov; // undefined = jeszcze nie wczytano, null = Mac jeszcze nie opublikował
-let covErr = null, covSrc = 'dukascopy', sel = null, covLoading = false;
+let covErr = null, covSrc = 'day', sel = null, covLoading = false; // covSrc: 'day' = ostatnia doba, 'history' = cała historia
 const ROW = 18, CELL = 12, AXIS = 18;
-const KIND_LABEL = { p: 'dziura', w: 'rynek nieczynny', q: 'bez ruchu ceny' };
+const KIND_LABEL = { p: 'dziura', w: 'granica tygodnia', q: 'bez ruchu ceny' };
 const MONTHS = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru'];
 const monthName = (key) => `${MONTHS[+key.slice(5, 7) - 1]} ${key.slice(0, 4)}`;
 const hours = (n) => `${num(n, 0)} h`;
@@ -137,27 +137,18 @@ async function loadCoverage() {
   renderCoverage();
 }
 
-/** Źródło do narysowania: opublikowana mapa + statusy na żywo, gdy Mac właśnie pobiera Dukascopy. */
+/** Mapa całej historii świec Yahoo (opublikowana przez Maca). */
 function currentSource() {
-  const pairs = Object.keys(PAIRS);
-  const src = cov?.sources?.[covSrc];
-  const beat = store.state.beat;
-  // D-031: statusy na żywo wysyła pobieracz `ia5 fetch` (runner/heartbeat.fetch.sync)
-  const f = fetchState(beat);
-  const live = covSrc === 'dukascopy' && f.online && f.sync?.pairs ? f.sync : null;
-  const merged = mergeLive(src, live, pairs);
-  return merged && { ...merged, meta: src || {} };
+  return sourceView(cov?.sources?.yahoo, Object.keys(PAIRS));
 }
 
 function cellTitle(pair, key, r) {
   const parts = [`${PAIRS[pair].label} · ${monthName(key)}`, STATUS_LABEL[r[0]]];
-  if (r[0] === INCOMPLETE) parts.push(`pobrano ${num(100 * (r[1] || 0) / Math.max(1, (r[1] || 0) + (r[6] || 0)), 0)}% godzin sesji, brakuje ${num(r[6] || 0, 0)} h`);
-  if (r[3] != null && r[0] !== EMPTY) {
+  if (r[0] !== NONE) {
     parts.push(`${num(r[2], 0)} z ${num(r[1], 0)} h`);
     if (r[3]) parts.push(`dziury ${hours(r[3])}`);
-    if (r[4]) parts.push(`wspólne luki ${hours(r[4])}`);
-    if (r[5]) parts.push(`cienkie ${num(r[5], 0)}`);
-  } else if (r[0] === FULL || r[0] === PARTIAL) parts.push('luki policzy ia5 start (do 30 min)');
+    if (r[4]) parts.push(`granica tygodnia / bez ruchu ${hours(r[4])}`);
+  }
   return parts.join(' · ');
 }
 
@@ -197,66 +188,63 @@ function drawMap(box, data, lay) {
   box.innerHTML = `<svg class="covsvg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Mapa pokrycia: pary × miesiące">${svg}</svg>`;
 }
 
-function gapRow(g, pair, other) {
-  const [a, b, n, kind, conf] = g;
-  const confText = conf < 0 ? `${other}: poza zakresem` : `${other} ma ${conf} z ${n} h`;
+/** Skutek luki w liczeniu (D8, B12): dziura ≤ 3 h uzupełniona, dłuższa anuluje transakcje; pozostałe bez skutku. */
+const gapEffect = (kind, n) => (kind !== 'p' ? 'bez skutku dla liczenia' : n <= 3 ? 'uzupełniona do liczenia' : 'przerwa — transakcje anulowane');
+
+function gapRow(g, pair) {
+  const [a, b, n, kind] = g;
   return h('li', { class: `gap ${kind}` },
     h('span', { class: 'mono' }, fmtRange(a, b)),
     pair ? h('b', {}, PAIRS[pair]?.label || pair) : '',
     h('span', { class: 'mono r' }, hours(n)),
     h('span', {}, KIND_LABEL[kind]),
-    h('span', { class: conf > 0 && kind === 'p' ? 'warn' : 'dimmed' }, confText));
+    h('span', { class: kind === 'p' && n > 3 ? 'warn' : 'dimmed' }, gapEffect(kind, n)));
 }
 
 function covDetail(data) {
-  const other = data.meta.other || 'drugie źródło';
   const title = (t, sub) => h('div', { class: 'phead' }, h('h3', {}, t), sub ? h('span', { class: 'hint' }, sub) : '');
   if (sel && sel.i != null) {
     const key = data.keys[sel.i], row = data.pairs[sel.pair].m[sel.i];
     const gaps = gapsInMonth(data.pairs[sel.pair].gaps, key);
     let note;
-    if (row[0] === NONE) note = 'Jeszcze nie pobrany — ia5 start na Macu dociągnie go przy najbliższym uruchomieniu.';
-    else if (row[0] === FAILED) note = 'Pobieranie nie powiodło się (sieć albo serwer Dukascopy). Ponowi się przy następnym ia5 start.';
-    else if (row[0] === INCOMPLETE) note = `Pobrany częściowo: brakuje ${hours(row[6] || 0)} sesji w dniach, których nie udało się pobrać. Pobrane dni są już zapisane i używane; resztę dociągnie ia5 start.`;
-    else if (row[0] === EMPTY) note = 'Dukascopy nie ma notowań tej pary w tym miesiącu — to nie jest luka do uzupełnienia.';
-    else if (row[3] == null) note = 'Pobrany przed chwilą — luki policzy ia5 start przy najbliższym sprawdzeniu (do 30 min).';
+    if (row[0] === NONE) note = 'Brak świec Yahoo w tym miesiącu — przed początkiem historii w bazie.';
     else if (!gaps.length) note = 'Wszystkie godziny sesji są na miejscu.';
-    const facts = row[3] != null && row[0] !== EMPTY
-      ? `${STATUS_LABEL[row[0]]} · ${num(row[2], 0)} z ${num(row[1], 0)} godzin sesji · dziury ${hours(row[3])} · wspólne ${hours(row[4])}${data.meta.thin ? ` · cienkie ${num(row[5], 0)}` : ''}`
+    const facts = row[0] !== NONE
+      ? `${STATUS_LABEL[row[0]]} · ${num(row[2], 0)} z ${num(row[1], 0)} godzin sesji · dziury ${hours(row[3])} · granica tygodnia / bez ruchu ${hours(row[4])}`
       : STATUS_LABEL[row[0]];
     return [title(`${PAIRS[sel.pair].label} · ${monthName(key)}`, facts),
       note ? h('p', { class: 'hint' }, note) : '',
-      gaps.length ? h('ul', { class: 'gaplist' }, ...gaps.map((g) => gapRow(g, null, other))) : ''];
+      gaps.length ? h('ul', { class: 'gaplist' }, ...gaps.map((g) => gapRow(g, null))) : ''];
   }
   if (sel) {
     const gaps = data.pairs[sel.pair].gaps;
     const holes = gaps.filter((g) => g[3] === 'p').sort((x, y) => y[0] - x[0]);
-    const common = gaps.filter((g) => g[3] === 'w');
+    const common = gaps.filter((g) => g[3] !== 'p');
     const s = summarize(data.pairs[sel.pair].m);
-    return [title(`${PAIRS[sel.pair].label} · wszystkie dziury`, `${holes.length} dziur, ${hours(s.holes)} · wspólne luki: ${common.length}, ${hours(s.common)}`),
-      holes.length ? h('ul', { class: 'gaplist' }, ...holes.slice(0, 200).map((g) => gapRow(g, null, other)))
-        : h('p', { class: 'hint' }, 'Ta para nie ma dziur w pobranych miesiącach.')];
+    return [title(`${PAIRS[sel.pair].label} · wszystkie dziury`, `${holes.length} dziur, ${hours(s.holes)} · granica tygodnia / bez ruchu: ${common.length}, ${hours(s.common)}`),
+      holes.length ? h('ul', { class: 'gaplist' }, ...holes.slice(0, 200).map((g) => gapRow(g, null)))
+        : h('p', { class: 'hint' }, 'Ta para nie ma dziur.')];
   }
   const top = biggestHoles(data.pairs);
-  return [title('Największe dziury', 'tylko jednej pary — kliknij miesiąc albo parę, żeby zobaczyć szczegóły'),
-    top.length ? h('ul', { class: 'gaplist' }, ...top.map(({ pair, g }) => gapRow(g, pair, other)))
-      : h('p', { class: 'hint' }, 'Brak dziur w pobranych miesiącach.')];
+  return [title('Największe dziury', 'kliknij miesiąc albo parę, żeby zobaczyć szczegóły'),
+    top.length ? h('ul', { class: 'gaplist' }, ...top.map(({ pair, g }) => gapRow(g, pair)))
+      : h('p', { class: 'hint' }, 'Brak dziur.')];
 }
 
 function renderCoverage() {
   const panel = $('#covpanel');
   if (!panel) return;
   const keepScroll = $('.covscroll', panel)?.scrollLeft;
-  const seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Źródło danych' },
-    ...[['dukascopy', 'Dukascopy · backtesty'], ['yahoo', 'Yahoo · monitoring']].map(([v, l]) =>
+  const seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Zakres mapy' },
+    ...[['day', 'Ostatnia doba'], ['history', 'Cała historia']].map(([v, l]) =>
       h('button', { class: covSrc === v ? 'on' : '', 'aria-pressed': covSrc === v, onclick: () => { covSrc = v; sel = null; renderCoverage(); } }, l)));
-  const head = h('div', { class: 'phead' }, h('h3', {}, 'Mapa pokrycia danych'), seg);
-  if (covSrc === 'yahoo') { renderYahooAudit(panel, head); return; }
+  const head = h('div', { class: 'phead' }, h('h3', {}, 'Świece Yahoo — pokrycie'), seg);
+  if (covSrc === 'day') { renderYahooAudit(panel, head); return; }
   const data = currentSource();
   if (!data) {
     const msg = cov === undefined && !covErr ? 'Wczytywanie mapy…'
       : covErr ? `Nie udało się wczytać mapy z GitHub: ${covErr}`
-        : 'Mapy jeszcze nie ma. Policzy ją i opublikuje Mac przy najbliższym ia5 start (po git pull). W trakcie pierwszego pobierania wypełnia się na żywo.';
+        : 'Mapy jeszcze nie ma. Policzy ją i opublikuje Mac przy najbliższym ia5 start.';
     panel.replaceChildren(head, h('p', { class: 'hint' }, msg));
     return;
   }
@@ -264,15 +252,10 @@ function renderCoverage() {
   const per = Object.fromEntries(pairs.map((p) => [p, summarize(data.pairs[p].m)]));
   const all = summarize(pairs.flatMap((p) => data.pairs[p].m));
   const line = [
-    `${covSrc === 'yahoo' ? 'w bazie' : 'pobrane'} ${num(all.done, 0)} z ${num(all.months, 0)} miesięcy`,
-    all.left || all.incomplete ? `brakuje ${all.left ? `${num(all.left, 0)} mies.` : ''}${all.left && all.incomplete ? ' + ' : ''}${all.incomplete ? `dni w ${num(all.incomplete, 0)} mies.` : ''} (${hours(all.leftHours)} sesji)` : 'niczego nie brakuje',
-    all.failed ? `<span class="neg">błędy ${num(all.failed, 0)}</span>` : '',
+    `od ${monthName(data.keys[0])} · ${num(all.pres, 0)} świec`,
     `dziury ${hours(all.holes)} w ${num(all.holeMonths, 0)} mies.`,
-    `wspólne luki ${hours(all.common)}`,
-    data.meta.thin ? `cienkie godziny ${num(all.thin, 0)}` : '',
-  ].filter(Boolean).join(' · ');
-  const live = data.live ? h('p', { class: 'covlive' }, h('i', { class: 'dot ok' }), 'Mac pobiera teraz — mapa wypełnia się na żywo',
-    all.uncounted ? h('span', { class: 'dimmed' }, ` · ${num(all.uncounted, 0)} świeżo pobranych miesięcy czeka na policzenie luk`) : '') : '';
+    `granica tygodnia / bez ruchu ${hours(all.common)}`,
+  ].join(' · ');
   const gen = cov?.generated ? h('span', { class: 'hint' }, `policzone ${local(cov.generated)}`) : '';
 
   const labels = h('div', { class: 'covlabels' });
@@ -280,7 +263,7 @@ function renderCoverage() {
     ...pairs.map((p) => h('button', { class: `covpair ${sel?.pair === p && sel.i == null ? 'on' : ''}`, style: { height: `${ROW}px` },
       title: `Wszystkie dziury ${PAIRS[p].label}`, onclick: () => { sel = sel?.pair === p && sel.i == null ? null : { pair: p }; renderCoverage(); } }, PAIRS[p].label))];
   const sums = h('div', { class: 'covsums' }, h('div', { class: 'hint', style: { height: `${AXIS}px` } }, 'pokrycie · dziury'),
-    ...pairs.map((p) => h('div', { class: 'mono', style: { height: `${ROW}px` }, title: per[p].left ? `brakuje ${per[p].left} miesięcy` : '' },
+    ...pairs.map((p) => h('div', { class: 'mono', style: { height: `${ROW}px` } },
       per[p].pct == null ? '—' : `${num(per[p].pct * 100, per[p].pct > 0.999 && per[p].pct < 1 ? 2 : 1)}%`,
       h('span', { class: 'dimmed' }, '\u00a0·\u00a0'), h('span', { class: per[p].holes ? 'warn' : 'dimmed' }, hours(per[p].holes)))));
   const scroll = h('div', { class: 'covscroll', onclick: (e) => {
@@ -291,17 +274,14 @@ function renderCoverage() {
     renderCoverage();
   } });
   const legend = h('div', { class: 'covlegend' },
-    ...[['f-ok', 'bez dziur'], ['f-h1', 'dziury 1–5 h'], ['f-h2', '6–47 h'], ['f-h3', '≥ 48 h'], ...(data.live ? [['f-fresh', 'pobrany, luki wkrótce']] : []),
-      ['o-incomplete', 'pobrany częściowo (wysokość = ile)'], ['o-partial', 'bieżący miesiąc'], ['o-none', 'nie pobrany'], ['o-failed', 'błąd'],
-      ['o-empty', 'Dukascopy nie ma']]
+    ...[['f-ok', 'bez dziur'], ['f-h1', 'dziury 1–5 h'], ['f-h2', '6–47 h'], ['f-h3', '≥ 48 h'], ['o-partial', 'bieżący miesiąc'], ['o-none', 'brak świec']]
       .map(([k, l]) => h('span', {}, h('i', { class: `sw ${k}` }), l)));
-  panel.replaceChildren(head, h('p', { class: 'covsum', html: line }), live,
+  panel.replaceChildren(head, h('p', { class: 'covsum', html: line }),
     h('div', { class: 'covmap' }, labels, scroll, sums), legend,
     h('div', { class: 'covdetail' }, ...covDetail(data)),
-    h('p', { class: 'hint' }, 'Liczone na Macu z surowych danych wobec kalendarza sesji (weekendy i święta 25.12, 1.01 nie są oczekiwane). ',
-      'Wysokość kafelka = ile miesiąca pobrano, kolor = jak duże dziury. Dziura = brakuje godziny, w której rynek działał (inne pary mają notowania) i cena się ruszała. ',
-      'Nie są dziurami: rynek nieczynny (brakuje jej co najmniej połowie par) i luka bez ruchu ceny (≤ 3 h, cena po niej taka sama jak przed). ',
-      data.meta.thin ? `Cienka godzina = świeca z mniej niż ${cov?.thin_minutes ?? 30} minut z notowaniami. ` : '', gen));
+    h('p', { class: 'hint' }, 'Liczone na Macu z kopii świec Yahoo wobec kalendarza sesji (weekendy i święta 25.12, 1.01 nie są oczekiwane). ',
+      'Dziura = brakuje godziny sesji (także we wszystkich parach naraz — to przerwa Yahoo, rynek w tygodniu działa). Do liczenia dziura ≤ 3 h jest uzupełniana, dłuższa to przerwa w danych — transakcje na niej są anulowane (D8, B12). ',
+      'Nie są dziurami: granica tygodnia (≤ 3 h tuż przy weekendzie albo święcie — Yahoo zaczyna i kończy tydzień inaczej niż kalendarz) i luka bez ruchu ceny (≤ 3 h, cena po niej taka sama jak przed). ', gen));
   const lay = layoutBands(data.keys, scroll.clientWidth);
   labels.replaceChildren(...lay.bands.flatMap((_, bi) => labelBlock(bi)));
   drawMap(scroll, data, lay);
@@ -312,7 +292,7 @@ function renderCoverage() {
 
 const AUDIT_LABEL = { ok: 'jest', late: 'spóźniona (> 20 min po zamknięciu)', flag: 'z flagą jakości (korekta Yahoo albo zła świeca)',
   wait: 'pełna godzina wybiła, świecy jeszcze nie ma', now: 'godzina trwa — świeca zamknie się o pełnej godzinie',
-  closed: 'rynek zamknięty (weekend, święto)', allgap: 'brak we wszystkich parach — rynek nieczynny albo przerwa Yahoo' };
+  closed: 'rynek zamknięty (weekend, święto)', allgap: 'brak we wszystkich parach — przerwa Yahoo albo otwarcie tygodnia' };
 const WDAY = ['nd', 'pn', 'wt', 'śr', 'cz', 'pt', 'sb'];
 const PL = { timeZone: 'Europe/Warsaw' };
 const plHour = (ts) => new Date(ts * 1000).toLocaleTimeString('pl-PL', { ...PL, hour: '2-digit', minute: '2-digit' });
@@ -417,12 +397,11 @@ export function initStats() {
   store.on('beat', (b) => {
     if (prev === 'syncing' && b?.state !== 'syncing') { refreshData(); cov = undefined; if (onStats()) loadCoverage(); }
     prev = b?.state;
-    if (onStats() && b?.fetch?.sync) renderCoverage();
   });
   // audyt Yahoo (D-033): zegary co sekundę; nowa kolumna, gdy wybije pełna godzina
   let hour = Math.floor(Date.now() / 1000 / HOUR);
   setInterval(() => {
-    if (!onStats() || covSrc !== 'yahoo') return;
+    if (!onStats() || covSrc !== 'day') return;
     const now = Date.now() / 1000;
     if (Math.floor(now / HOUR) !== hour) { hour = Math.floor(now / HOUR); renderCoverage(); } else tickTimers(now);
   }, 1000);

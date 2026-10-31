@@ -250,14 +250,12 @@ table.daily tr.short .meter i { background: var(--warn); }
 .a-ok { fill: var(--ok); fill-opacity: .55; }
 .a-late { fill: var(--warn); fill-opacity: .55; }
 .a-flag { fill: var(--warn); }
-.a-missing { fill: var(--bad); }
-.a-pending { fill: transparent; stroke: var(--muted); stroke-dasharray: 2 1; }
 .a-closed { fill: var(--line); fill-opacity: .5; }
 .a-allgap { fill: var(--line-2); }
 .covlegend .sw.a-allgap { background: var(--line-2); }
 .covlegend .sw.a-ok { background: var(--ok); opacity: .55; } .covlegend .sw.a-late { background: var(--warn); opacity: .55; }
-.covlegend .sw.a-flag { background: var(--warn); } .covlegend .sw.a-missing { background: var(--bad); }
-.covlegend .sw.a-pending { background: none; border: 1px dashed var(--muted); } .covlegend .sw.a-closed { background: var(--line); }
+.covlegend .sw.a-flag { background: var(--warn); }
+.covlegend .sw.a-closed { background: var(--line); }
 .gaplist.audit li { grid-template-columns: 170px 70px 1fr; }
 /* audyt Yahoo — ostatnia doba (D-033): kolumna = świeca, podpis = godzina otwarcia (czas polski) */
 .aud { display: grid; gap: 2px; margin: 10px 0 6px; }
@@ -286,7 +284,6 @@ table.daily tr.short .meter i { background: var(--warn); }
 
 /* mapa pokrycia (D-022): szary = jest, bursztyn = dziura tej pary, obrys = brak pliku, czerwony obrys = błąd */
 .covsum { margin: 0 0 6px; color: var(--muted); font-size: 12.5px; }
-.covlive { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 12.5px; }
 .covmap { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0 12px; margin: 10px 0 8px; }
 .covlabels, .covsums { display: grid; align-content: start; }
 .covpair { font: 500 12.5px Inter, system-ui, sans-serif; color: var(--muted); background: none; border: 0; padding: 0; text-align: left;
@@ -312,21 +309,14 @@ table.daily tr.short .meter i { background: var(--warn); }
 /* D-028: tło = miesiąc, wypełnienie od dołu = ile pobrano, kolor = jak duże dziury */
 .c-bg { fill: var(--line); }
 .o-none { fill: transparent; stroke: var(--line-2); }
-.o-failed { fill: rgba(255, 77, 79, .15); stroke: var(--bad); }
-.o-incomplete { stroke: var(--warn); stroke-dasharray: 2 1; }
 .o-partial { stroke: var(--muted); stroke-dasharray: 2 1; }
-.o-empty { fill: var(--panel); stroke: var(--line); }
 .f-ok { fill: var(--ok); fill-opacity: .55; }
 .f-h1 { fill: var(--warn); fill-opacity: .5; }
 .f-h2 { fill: var(--warn); }
 .f-h3 { fill: var(--bad); }
-.f-fresh { fill: var(--ok); fill-opacity: .25; }
 .covlegend .sw.f-ok { background: var(--ok); opacity: .55; } .covlegend .sw.f-h1 { background: var(--warn); opacity: .5; }
 .covlegend .sw.f-h2 { background: var(--warn); } .covlegend .sw.f-h3 { background: var(--bad); }
-.covlegend .sw.f-fresh { background: var(--ok); opacity: .25; }
-.covlegend .sw.o-incomplete { background: linear-gradient(to top, rgba(61, 220, 132, .55) 50%, var(--line) 50%); border: 1px dashed var(--warn); }
 .covlegend .sw.o-partial { background: none; border: 1px dashed var(--muted); } .covlegend .sw.o-none { background: none; border: 1px solid var(--line-2); }
-.covlegend .sw.o-failed { background: rgba(255, 77, 79, .15); border: 1px solid var(--bad); } .covlegend .sw.o-empty { background: var(--panel); border: 1px solid var(--line); }
 .covsvg rect:hover { stroke: var(--text); }
 .covlegend { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--muted); font-size: 11.5px; margin-bottom: 12px; }
 .covlegend span { display: inline-flex; align-items: center; gap: 6px; }

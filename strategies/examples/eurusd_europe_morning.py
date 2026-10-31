@@ -2,7 +2,7 @@ HYPOTHESIS = """Sezonowość w ciągu doby: waluta słabnie w godzinach pracy w�
 „Intraday patterns in FX returns and order flow”). Europejskie firmy i fundusze sprzedają euro rano, gdy otwiera
 się Londyn i Frankfurt, a po południu przejmuje Nowy Jork. Stąd short EUR/USD od otwarcia Londynu na kilka godzin.
 Efekt znaleziony na niezależnych danych brokera MT 2012–2022 (8 par): tylko EUR/USD przebija spread, w obu
-połowach próby i w 10 z 11 lat; tu sprawdzamy go na Dukascopy 2003–2026 — innym źródle i dłuższym okresie."""
+połowach próby i w 10 z 11 lat; tu sprawdzamy go na świecach Yahoo — innym źródle i okresie, którego badanie nie widziało."""
 
 PARAMS = {
     "start": [6, 7, 8],      # godzina wejścia w czasie Londynu (z czasem letnim); 7:00 = otwarcie Londynu

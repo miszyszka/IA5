@@ -28,6 +28,17 @@ def is_expected_bar(ts: int) -> bool:
     return True
 
 
+BOUNDARY_H = 3  # D-039: Yahoo otwiera tydzień 1–2 h później niż kalendarz (niedziela 22:00 UTC) — to nie brak danych
+
+
+def week_open_grace(last_ts: int, now: int) -> bool:
+    """Czy brakuje tylko pierwszych ≤ 3 godzin po weekendzie albo święcie (granica tygodnia, jak w clean.py)."""
+    if not last_ts or now - last_ts > 5 * 86400:
+        return False
+    missing = [t for t in range(int(last_ts) + H, last_closed_ts(now) + H, H) if is_expected_bar(t)]
+    return 0 < len(missing) <= BOUNDARY_H and not is_expected_bar(missing[0] - H)
+
+
 def in_trading_hours(ts, hours=None, tz=None):
     """B11 (D-028): czy świeca otwarta o ts (UTC) zaczyna się w oknie handlu czasu polskiego.
 

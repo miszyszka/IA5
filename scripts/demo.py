@@ -1,6 +1,6 @@
 """Strategia DEMO na przykładowych danych EUR/USD H1 (kwiecień 2017 – luty 2018) z pakietu backtesting.py.
 
-To jedyne prawdziwe świece FX dostępne w sesji Claude (Dukascopy, Yahoo i Firestore są tam niedostępne).
+To jedyne prawdziwe świece FX dostępne w sesji Claude (Yahoo i Firestore są tam niedostępne).
 Wynik trafia na gałąź `data` jako results/demo-sma200-rsi/ i jest oznaczony jako DEMO. Usuwa się go
 z dashboardu jak każdą inną strategię.
 """

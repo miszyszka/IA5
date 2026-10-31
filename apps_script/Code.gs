@@ -187,9 +187,12 @@ function fetchRound_(mode, todo, state, startedAt, round) {
         if (nb && Math.abs(nb.c - old.c) > 0.5 * p.pip) flags.push('revised@' + old.ts);
       });
       for (let i = 1; i < bars.length; i++) {
-        for (let t = bars[i - 1].ts + H; t < bars[i].ts; t += H) {
-          if (isExpectedBar(t)) { flags.push('luka@' + t); break; }
-        }
+        const miss = [];
+        for (let t = bars[i - 1].ts + H; t < bars[i].ts; t += H) if (isExpectedBar(t)) miss.push(t);
+        // D-039: ≤ 3 h tuż przy weekendzie/święcie to granica tygodnia (Yahoo otwiera tydzień później niż kalendarz), nie luka
+        const boundary = miss.length && miss.length <= 3 &&
+          (!isExpectedBar(miss[0] - H) || !isExpectedBar(miss[miss.length - 1] + H));
+        if (miss.length && !boundary) flags.push('luka@' + miss[0]);
       }
 
       writeBars_(p.name, bars);

@@ -180,8 +180,8 @@ function renderVerdict() {
       rowKV('PBO', num(pb.pbo, 3), `szansa, że najlepszy IS wypada poniżej mediany poza próbą (${num(pb.variants, 0)} wariantów, ${num(pb.combinations, 0)} podziałów)`),
       rowKV('Walk-forward', `${signed(wf.mean_r)} R`, `${num(wf.trades, 0)} transakcji; wariant wybierany tylko z przeszłości`),
       rowKV('Bootstrap 95% (OOS)', `[${signed(bs.oos?.low)}; ${signed(bs.oos?.high)}]`, 'pips/transakcję'),
-      rowKV('Spread ×1 / ×1,5 / ×2', `${signed(sp.x1)} / ${signed(sp.x1_5)} / ${signed(sp.x2)}`, sp.real != null ? `faktyczny: ${signed(sp.real)}` : 'pips/transakcję'),
-      rowKV('TP i SL w tej samej świecy', `${num(v.ambiguous_pct)}%`, S.manifest.m1_resolver ? 'nierozstrzygnięte na M1 → SL' : 'bez M1 → zawsze SL'))));
+      rowKV('Spread ×1 / ×1,5 / ×2', `${signed(sp.x1)} / ${signed(sp.x1_5)} / ${signed(sp.x2)}`, 'pips/transakcję'),
+      rowKV('TP i SL w tej samej świecy', `${num(v.ambiguous_pct)}%`, 'kolejność nieznana → SL (B5)'))));
   if ((wf.windows || []).length) {
     $('#valid').append(h('table', { class: 'data compact' },
       h('thead', {}, h('tr', {}, ...['okno', 'wybrany wariant', 'R w nauce', 'transakcje', 'R w oknie'].map((x) => h('th', {}, x)))),
@@ -355,7 +355,7 @@ async function renderCandles(t, focus = null) {
   candleView = candles(el, bars, t.filter((x) => x.pair === pair));
   const n = candleView.shown.length;
   S.tradeIdx = focus ? candleView.shown.findIndex((x) => x.trade === focus) : n - 1;
-  $('#cd-note').textContent = `${S.manifest.candles === 'pełne' ? 'Pełna historia świec.' : `Świece: ${S.manifest.candles} — dane Dukascopy nie są publikowane w całości (D-010), więc wykres składa się z osobnych okien; pusty pas między nimi = pominięty okres, nie ruch ceny.`} `
+  $('#cd-note').textContent = `${S.manifest.candles === 'pełne' ? 'Pełna historia świec.' : `Świece: ${S.manifest.candles} — wykres składa się z osobnych okien; pusty pas między nimi = pominięty okres, nie ruch ceny.`} `
     + `Strzałka = wejście (L/S), kółko = wyjście z wynikiem w pipsach.${candleView.hidden ? ` ${candleView.hidden} transakcji wybranego wariantu nie ma na wykresie (świece opublikowane tylko dla 10 najlepszych wariantów).` : ''} Wykres: TradingView Lightweight Charts™.`;
   if (focus && S.tradeIdx < 0) candleView.focus(focus.entry_ts - 48 * 3600, focus.exit_ts + 48 * 3600);
   else if (focus) goTrade(S.tradeIdx);

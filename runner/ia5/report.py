@@ -67,7 +67,7 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
          if m.get("hours") == "bez okna" else
          "- Wejście na open świecy po sygnale, tylko w oknie handlu 07:00–17:00 czasu polskiego (B11 — najniższe spready); ")
         + "wyjście na dowolnej świecy, także po nocy i weekendzie (D-032). TP i SL w tej samej świecy: "
-        + ("rozstrzygane na M1, w tej samej minucie — SL." if m["m1_resolver"] else "przyjęty SL (brak danych M1)."),
+        + "przyjęty SL (pesymistycznie — świece H1 nie mówią, co padło pierwsze; transakcja z flagą `ambiguous`, B5).",
         f"- Spread raz na transakcję (pips): {spreads}. Swapy pominięte.",
         (f"- Dokładanie (D-034): do {m['pyramid']} pozycji naraz w parze, tylko w jednym kierunku; każda pozycja ma własne "
          "TP i limit czasu, wyjście wskaźnikowe zamyka wszystkie naraz. Waga pozycji (|sygnał|) mnoży depozyt w symulacji "
@@ -120,12 +120,14 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
             f"- **Bootstrap 95%** średnich pipsów: całość [{_f(v['bootstrap']['all']['low'])}; {_f(v['bootstrap']['all']['high'])}], "
             f"OOS [{_f(v['bootstrap']['oos']['low'])}; {_f(v['bootstrap']['oos']['high'])}].",
             f"- **Spread**: ×1 {_f(v['spread']['x1'])}, ×1,5 {_f(v['spread']['x1_5'])}, ×2 {_f(v['spread']['x2'])}"
-            + (f", faktyczny {_f(v['spread']['real'])}" if "real" in v["spread"] else "") + " pips/transakcję.",
+            + " pips/transakcję.",
             f"- TP i SL w tej samej świecy bez rozstrzygnięcia: {_f(v['ambiguous_pct'])}% transakcji.",
         ]
     parts += [
         "## Znane ograniczenia",
-        "- Brak swapów. Spread stały z tabeli. Przy nierozstrzygniętej kolejności TP/SL przyjmowany SL.",
+        "- Dane: świece H1 Yahoo (jedno źródło, D-039) — historia od ok. 2 lat wstecz i rośnie; krótka historia = mało transakcji "
+        "w OOS, a wyniki są wrażliwe na jeden reżim rynku. Yahoo nie podaje bid/ask ani wolumenu.",
+        "- Brak swapów. Spread stały z tabeli. TP i SL w tej samej świecy H1 — przyjmowany SL (brak danych wewnątrz świecy).",
         "- Kapitał: zwrot liczony na nominale w walucie kwotowanej (dla EUR/GBP, EUR/JPY, USD/JPY, USD/CHF, USD/CAD "
         "przybliżenie — pomija zmianę kursu przeliczenia w trakcie transakcji).",
         "- Benchmark losowy nie stosuje reguły jednej pozycji na parę.",
@@ -140,15 +142,14 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
 
 
 def _clean_line(m: dict) -> str:
-    """D-031: na jakich danych liczono — zatwierdzone miesiące, uzupełnione świece, długie luki."""
+    """D8: na jakich danych liczono — świece odrzucone, uzupełnione i przerwy w danych."""
     dc = m.get("data_clean") or {}
     if not dc:
         return "- Dane bez warstwy czyszczenia (brak informacji o lukach)."
     parts = []
     for p, d in dc.items():
-        months = f"{d['months']}/{d['months_total']} mies. zatwierdzonych, " if d.get("months") is not None else ""
-        parts.append(f"{p}: {months}{d.get('filled', 0)} świec uzupełnionych (dziury ≤ 3 h w pobranych dniach), "
-                     f"{d.get('gaps', 0)} przerw w dostępie do danych ({d.get('gap_hours', 0)} h)")
-    return ("- Dane tylko z zatwierdzonych miesięcy (D-031): " + "; ".join(parts)
-            + ". Transakcja nachodząca na przerwę w dostępie do danych albo na świecę uzupełnioną jest anulowana; "
-            "weekendy, święta i godziny bez notowań nie są przerwą (D-032).")
+        parts.append(f"{p}: odrzucone {d.get('rejected', 0)}, uzupełnione {d.get('filled', 0)} (luki ≤ 3 h), "
+                     f"{d.get('gaps', 0)} przerw w danych ({d.get('gap_hours', 0)} h)")
+    return ("- Świece H1 Yahoo po warstwie czyszczenia (D8, D-039): " + "; ".join(parts)
+            + ". Transakcja nachodząca na przerwę w danych albo na świecę uzupełnioną jest anulowana; "
+            "weekendy, święta i godziny, których brakuje we wszystkich parach, nie są przerwą (B12).")

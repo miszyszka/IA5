@@ -2,13 +2,11 @@
 // Nasłuch 2 dokumentów — meta/status i runner/heartbeat (Z2). Szczegóły: zakładka Stats (stats.js).
 import { HEARTBEAT_OK_S } from './config.js';
 import { watchDoc } from './fb.js';
-import { fetchState, fetchText, pairLabel } from './downloader.js';
 import { healthView, problemWord } from './health.js';
 import { PAIRS } from './metrics.js';
-import { elapsed, expectedTs, H, isExpectedBar, lastClosedTs, nextClose, waitingSince } from './session.js';
-import { $, ago, dateUTC, esc, num, store } from './util.js';
+import { elapsed, expectedTs, H, isExpectedBar, lastClosedTs, nextClose, waitingSince, weekOpenGrace } from './session.js';
+import { $, ago, dateUTC, esc, store } from './util.js';
 
-export { fetchState };
 
 const hm = (ts) => new Date(ts * 1000).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
 function dayWord(ts) {
@@ -35,6 +33,10 @@ export function dataState(s = status, now = Date.now() / 1000) {
   const pairs = s.pairs || {};
   const lastTs = Math.min(...Object.keys(PAIRS).map((p) => pairs[p]?.lastTs || 0));
   const exp = expectedTs(now);
+  // D-039: Yahoo otwiera tydzień 1–2 h później niż kalendarz — pierwsze godziny po weekendzie to nie awaria
+  if (lastTs < exp && Object.keys(PAIRS).every((p) => (pairs[p]?.lastTs || 0) >= exp || weekOpenGrace(pairs[p]?.lastTs || 0, now))) {
+    return { state: 'mute', word: 'otwarcie tygodnia', lastTs };
+  }
   const closed = !isExpectedBar(lastClosedTs(now) + H) && !isExpectedBar(lastClosedTs(now));
   const missing = lastTs >= exp ? 0 : now - (exp + H);
   if (missing <= 0 && closed) return { state: 'mute', word: 'rynek zamknięty', lastTs };
@@ -64,7 +66,7 @@ function renderData() {
   const waitN = Object.keys(PAIRS).filter((p) => waitingSince(status.pairs?.[p]?.lastTs, now) != null).length;
   if (d.state === 'ok' && Number.isFinite(since)) sub = `${last}<span class="wait"> · czeka ${waitN}/${Object.keys(PAIRS).length} <span class="mono">${elapsed(since, now)}</span></span>`;
   else if (d.state === 'ok') sub = `${last}<span class="cd"> · nowa za <span class="mono">${clock(Math.max(0, Math.round(nextClose(now) - now)))}</span></span>`;
-  else if (d.state === 'mute') sub = `rynek zamknięty · ${last}`;
+  else if (d.state === 'mute') sub = `${d.word} · ${last}`;
   else sub = `${d.word} · brak świecy od ${d.missingMin} min`;
   setInd('data', d.state, sub,
     `Dane (Yahoo → Firestore): ${d.word}\nostatnia świeca ${d.lastTs ? dateUTC(d.lastTs, true) + ' UTC' : '—'}\nszczegóły: zakładka Stats`);
@@ -74,20 +76,11 @@ function renderMac() {
   const hb = heartbeatState();
   if (hb.online) {
     const what = hb.state === 'computing' ? `liczy${hb.job?.name ? ` · ${esc(hb.job.name)}` : ''} · <span class="mono">${hb.job?.progress ?? 0}%</span>`
-      : hb.state === 'syncing' ? 'przygotowuje dane' : 'połączony · liczy na pobranych';
+      : hb.state === 'syncing' ? 'sprawdza dane' : 'połączony · czeka na strategie';
     setInd('mac', 'ok', what, `Mac (ia5 start — liczenie strategii): połączony\n${beat?.host ? 'host ' + beat.host : ''}`);
   } else {
     setInd('mac', 'mute', `rozłączony${hb.seen ? ' · ' + ago(hb.seen) : ''}`, 'Mac rozłączony — uruchom „ia5 start” w terminalu');
   }
-}
-
-function renderFetch() {
-  const f = fetchState(beat);
-  const t = fetchText(f);
-  const per = Object.entries(f.pairs).map(([p, v]) => `${pairLabel(p)} ${num(v, 1)}%`).join('\n');
-  setInd('fetch', t.state, t.sub, f.online
-    ? `Pobieranie Dukascopy (ia5 fetch): para po parze do końca\n${per || ''}\nliczenie bierze tylko zatwierdzone miesiące`
-    : 'Pobieracz wyłączony — uruchom „ia5 fetch” w osobnym terminalu');
 }
 
 function renderFlags() {
@@ -113,7 +106,6 @@ function renderPairs() {
 function render() {
   renderData();
   renderMac();
-  renderFetch();
   renderFlags();
 }
 

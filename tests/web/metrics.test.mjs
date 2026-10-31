@@ -56,34 +56,25 @@ test('dziennik świec: oczekiwane wg kalendarza sesji, braki, dzień w toku i so
   assert.deepEqual(parseFlag('luka@1793016000'), { kind: 'luka', ts: 1793016000 });
 });
 
-test('mapa pokrycia: statusy na żywo, podsumowanie, luki w miesiącu', async () => {
+test('mapa pokrycia: widok źródła, podsumowanie, luki w miesiącu', async () => {
   const c = await import('../../web/js/coverage.js');
   assert.deepEqual(c.monthKeys('2003-11', 3), ['2003-11', '2003-12', '2004-01']);
   assert.equal(c.monthIndex('2003-05', '2004-02'), 9);
-  const src = { start: '2024-01', pairs: { EURUSD: { m: [[1, 500, 495, 2, 3, 1], [0, 480, 0, 0, 0, 0], [2, 100, 100, 0, 0, 0]],
+  const src = { start: '2024-01', pairs: { EURUSD: { m: [[1, 500, 495, 2, 3, 0, 0], [0, 480, 0, 0, 0, 0, 0], [2, 100, 100, 0, 0, 0, 0]],
     gaps: [[Date.UTC(2024, 0, 31, 22) / 1000, Date.UTC(2024, 1, 1, 2) / 1000, 4, 'p', -1]] } } };
-  // bez heartbeatu: opublikowana mapa
-  let m = c.mergeLive(src, null, ['EURUSD']);
+  const m = c.sourceView(src, ['EURUSD', 'USDJPY']);
   assert.deepEqual(m.keys, ['2024-01', '2024-02', '2024-03']);
-  assert.equal(c.cellKind(m.pairs.EURUSD.m[0]), 'holes1');
-  // heartbeat: luty właśnie pobrany (jeszcze bez liczb), marzec w toku, a dla USDJPY jest tylko heartbeat
-  m = c.mergeLive(src, { start: '2024-01', pairs: { EURUSD: 'oo~', USDJPY: 'x.~' } }, ['EURUSD', 'USDJPY']);
-  assert.equal(m.live, true);
-  assert.equal(c.cellKind(m.pairs.EURUSD.m[1]), 'fresh');
-  assert.deepEqual(m.pairs.EURUSD.m[2], [2, 100, 100, 0, 0, 0]);
-  assert.equal(c.cellKind(m.pairs.USDJPY.m[0]), 'failed');
-  const s = c.summarize(m.pairs.EURUSD.m);
-  assert.equal(s.done, 3); assert.equal(s.left, 0); assert.equal(s.uncounted, 1);
-  assert.equal(s.exp, 600); assert.equal(s.pres, 595); assert.equal(s.holes, 2);
-  const s0 = c.summarize(src.pairs.EURUSD.m); // bez heartbeatu: luty niepobrany = brakuje 480 h
-  assert.equal(s0.left, 1); assert.equal(s0.leftHours, 480); assert.ok(Math.abs(s0.pct - 595 / (1080 - 3)) < 1e-12); // wspólne luki nie obniżają pokrycia
+  assert.deepEqual(m.pairs.USDJPY.m[0], [0, null, 0, 0, 0, 0, 0]);   // para bez danych w mapie — puste miesiące
+  assert.equal(c.sourceView(null, ['EURUSD']), null);
+  const s = c.summarize(src.pairs.EURUSD.m);
+  assert.equal(s.done, 2); assert.equal(s.exp, 600); assert.equal(s.pres, 595); assert.equal(s.holes, 2);
+  assert.ok(Math.abs(s.pct - 595 / (600 - 3)) < 1e-12); // wspólne luki nie obniżają pokrycia
   // luka przez północ 31.01→01.02 należy do obu miesięcy
   assert.equal(c.gapsInMonth(src.pairs.EURUSD.gaps, '2024-01').length, 1);
   assert.equal(c.gapsInMonth(src.pairs.EURUSD.gaps, '2024-02').length, 1);
   assert.equal(c.gapsInMonth(src.pairs.EURUSD.gaps, '2024-03').length, 0);
   assert.equal(c.biggestHoles(src.pairs)[0].pair, 'EURUSD');
 });
-
 test('przegląd zdrowia: brak przeglądu, nieaktualny przegląd, liczenie problemów', async () => {
   const z = await import('../../web/js/health.js');
   assert.equal(z.healthView(null, 1000, true).problems, 1);
@@ -97,56 +88,13 @@ test('przegląd zdrowia: brak przeglądu, nieaktualny przegląd, liczenie proble
   assert.deepEqual([1, 2, 5, 12, 22].map(z.problemWord), ['problem', 'problemy', 'problemów', 'problemów', 'problemy']);
 });
 
-test('mapa pokrycia: miesiąc pobrany częściowo (D-025)', async () => {
-  const c = await import('../../web/js/coverage.js');
-  const m = c.mergeLive({ start: '2024-01', pairs: { EURUSD: { m: [[5, 480, 470, 0, 0, 0, 24]], gaps: [] } } }, null, ['EURUSD']);
-  assert.equal(c.cellKind(m.pairs.EURUSD.m[0]), 'incomplete');
-  const s = c.summarize(m.pairs.EURUSD.m);
-  assert.equal(s.done, 1); assert.equal(s.incomplete, 1); assert.equal(s.leftHours, 24);
-  const live = c.mergeLive(null, { start: '2024-01', pairs: { EURUSD: '!' } }, ['EURUSD']);
-  assert.equal(c.cellKind(live.pairs.EURUSD.m[0]), 'incomplete');
-});
-
-test('audyt Yahoo świeca po świecy (D-027)', async () => {
-  const { recentCells } = await import('../../web/js/session.js');
-  const start = Date.UTC(2026, 9, 23, 18) / 1000; // pt 18:00
-  const now = start + 6 * 3600 + 60;               // sb 00:01 → zamknięte świece 18…23
-  const r = recentCells({ start, pairs: { EURUSD: '1l....' } }, now);
-  assert.equal(r.hours.length, 6);
-  assert.deepEqual(r.pairs.EURUSD, ['ok', 'late', 'missing', 'closed', 'closed', 'closed']);
-  const fresh = recentCells({ start, pairs: { EURUSD: '1l' } }, start + 3 * 3600 + 120);
-  assert.deepEqual(fresh.pairs.EURUSD, ['ok', 'late', 'pending']); // 20:00 zamknięta 2 min temu
-  const pend = recentCells({ start, pairs: { EURUSD: '1l.' } }, start + 3 * 3600 + 300 + 3600);
-  assert.equal(pend.pairs.EURUSD[2], 'missing');
-  assert.equal(recentCells({ start: start - 3600, pairs: { EURUSD: '11.' } }, start + 2 * 3600 + 600).pairs.EURUSD[2], 'pending');
-});
-
-test('mapa: wypełnienie = ile pobrano, kolor = dziury; audyt: brak we wszystkich parach to nie brak pary (D-028)', async () => {
+test('mapa: kolor = dziury, bieżący miesiąc obrysem, brak świec pusty', async () => {
   const c = await import('../../web/js/coverage.js');
   assert.deepEqual(c.cellView([1, 500, 500, 0, 0, 0, 0]), { fill: 1, color: 'ok', outline: '' });
   assert.equal(c.cellView([1, 500, 450, 50, 0, 0, 0]).color, 'h3');
-  const inc = c.cellView([5, 300, 300, 2, 0, 0, 100]);
-  assert.equal(inc.outline, 'incomplete'); assert.equal(inc.fill, 0.75); assert.equal(inc.color, 'h1');
+  assert.deepEqual(c.cellView([2, 300, 298, 2, 0, 0, 0]), { fill: 1, color: 'h1', outline: 'partial' });
   assert.equal(c.cellView([0, 500, 0, 0, 0, 0, 0]).fill, 0);
-  const { recentCells } = await import('../../web/js/session.js');
-  const start = Date.UTC(2026, 9, 21, 10) / 1000; // śr 10:00
-  const r = recentCells({ start, pairs: { A: '1.1', B: '..1', C: '1.1', D: '1.1' } }, start + 3 * 3600 + 3600);
-  assert.deepEqual(r.pairs.A.slice(0, 3), ['ok', 'allgap', 'ok']);
-  assert.equal(r.pairs.B[0], 'missing');
 });
-
-test('pobieracz ia5 fetch: stan i tekst wskaźnika (D-031)', async () => {
-  const { fetchState, fetchText } = await import('../../web/js/downloader.js');
-  const now = 1e9;
-  const on = (f) => fetchState({ fetch: { lastSeen: { seconds: now - 10 }, ...f } }, now);
-  assert.equal(fetchText(on({ state: 'naprawia', pair: 'EURUSD', progress: 99.6 }), now).sub, 'EUR/USD <span class="mono">99,6%</span> · dociąga braki');
-  assert.deepEqual(fetchText(on({ state: 'czeka', pair: 'USDJPY', progress: 20, until: now + 600 }), now),
-    { state: 'warn', sub: 'USD/JPY <span class="mono">20%</span> · przerwa 10 min' });
-  assert.equal(fetchText(on({ state: 'komplet' }), now).state, 'ok');
-  assert.equal(fetchState({ fetch: { lastSeen: { seconds: now - 200 }, state: 'pobiera' } }, now).online, false);
-  assert.equal(fetchText(fetchState({}, now), now).state, 'mute');
-});
-
 test('audyt doby i zegar oczekiwania na świecę (D-033)', async () => {
   const { auditCells, waitingSince, elapsed } = await import('../../web/js/session.js');
   const H = 3600;
@@ -194,4 +142,13 @@ test('wycinki świec: okna, przerwy i transakcje tylko w swoim oknie (D-033)', a
   const d = seriesData(bars, w);
   assert.equal(d.filter((x) => x.open === undefined).length, 16);   // 8 pustych miejsc po każdym z dwóch okien
   assert.ok(d.every((x, i) => i === 0 || x.time > d[i - 1].time));
+});
+
+test('otwarcie tygodnia: Yahoo zaczyna później niż kalendarz — bez czerwonego zegara (D-039)', async () => {
+  const { weekOpenGrace, waitingSince } = await import('../../web/js/session.js');
+  const H = 3600, fri20 = Date.UTC(2025, 9, 31, 20) / 1000, sun22 = Date.UTC(2025, 10, 2, 22) / 1000;
+  assert.equal(weekOpenGrace(fri20, sun22 + 2 * H + 120), true);
+  assert.equal(waitingSince(fri20, sun22 + 2 * H + 120), null);
+  assert.equal(weekOpenGrace(fri20, sun22 + 4 * H + 120), false);
+  assert.equal(waitingSince(fri20, sun22 + 4 * H + 120), sun22 + H);
 });

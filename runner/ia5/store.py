@@ -5,7 +5,12 @@ from pathlib import Path
 
 HOME = Path(os.environ.get("IA5_HOME", Path.home() / ".ia5"))
 DATA = HOME / "data"
-READY = DATA / "h1_ready"   # D-031: H1 tylko z zatwierdzonych miesięcy, po warstwie czyszczenia — jedyne wejście silnika
+YAHOO = DATA / "yahoo"      # D-039: kopia świec H1 Yahoo z Firestore — jedyne źródło cen
+READY = DATA / "h1_ready"   # H1 Yahoo po warstwie czyszczenia (clean.py) — jedyne wejście silnika i skanera
+RESULTS = HOME / "results"
+SCANS = HOME / "scans"
+# D-039: pozostałości po źródle Dukascopy (usuwane przy starcie za zgodą Michała z 2026-10-31)
+LEGACY = (DATA / "m1", DATA / "h1", DATA / "h1_scan")
 SERVICE_ACCOUNT = HOME / "service-account.json"
 CONFIG = HOME / "config.json"
 DATA_REPO = HOME / "data-repo"

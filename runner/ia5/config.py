@@ -14,7 +14,6 @@ TRADING_HOURS = (7, 17)        # wejście na open świecy otwartej o 07:00 … 1
 class Pair:
     name: str
     yahoo: str
-    dukascopy: str
     pip: float
     spread_pips: float
     quote_ccy: str
@@ -23,20 +22,19 @@ class Pair:
 PAIRS = {
     p.name: p
     for p in (
-        Pair("EURUSD", "EURUSD=X", "EURUSD", 0.0001, 0.9, "USD"),
-        Pair("USDJPY", "JPY=X", "USDJPY", 0.01, 1.4, "JPY"),
-        Pair("GBPUSD", "GBPUSD=X", "GBPUSD", 0.0001, 1.5, "USD"),
-        Pair("EURGBP", "EURGBP=X", "EURGBP", 0.0001, 1.7, "GBP"),
-        Pair("AUDUSD", "AUDUSD=X", "AUDUSD", 0.0001, 1.7, "USD"),
-        Pair("USDCHF", "CHF=X", "USDCHF", 0.0001, 1.9, "CHF"),
-        Pair("USDCAD", "CAD=X", "USDCAD", 0.0001, 2.0, "CAD"),
-        Pair("EURJPY", "EURJPY=X", "EURJPY", 0.01, 2.1, "JPY"),
+        Pair("EURUSD", "EURUSD=X", 0.0001, 0.9, "USD"),
+        Pair("USDJPY", "JPY=X", 0.01, 1.4, "JPY"),
+        Pair("GBPUSD", "GBPUSD=X", 0.0001, 1.5, "USD"),
+        Pair("EURGBP", "EURGBP=X", 0.0001, 1.7, "GBP"),
+        Pair("AUDUSD", "AUDUSD=X", 0.0001, 1.7, "USD"),
+        Pair("USDCHF", "CHF=X", 0.0001, 1.9, "CHF"),
+        Pair("USDCAD", "CAD=X", 0.0001, 2.0, "CAD"),
+        Pair("EURJPY", "EURJPY=X", 0.01, 2.1, "JPY"),
     )
 }
 
 
-# D-038 (zmiana D8 przez Michała 2026-10-27): strategie liczymy na wszystkich parach, które mają zatwierdzone miesiące;
-# para bez zatwierdzonych miesięcy jest pomijana (ready.build). Kolejność = kolejność pobierania (EUR/USD pierwsza).
+# D-038: strategie liczymy na wszystkich parach; para bez danych do liczenia jest pomijana (ready.build).
 COMPUTE_PAIRS = tuple(PAIRS)
 
 

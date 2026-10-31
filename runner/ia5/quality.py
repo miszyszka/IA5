@@ -48,14 +48,3 @@ def cross_check(h1: dict[str, pd.DataFrame]) -> dict:
         dev = (j["EURGBP"] - j["EURUSD"] / j["GBPUSD"]).abs() / PAIRS["EURGBP"].pip
         res["EURGBP"] = {"median": float(dev.median()), "p99": float(dev.quantile(0.99)), "n": len(j)}
     return res
-
-
-def compare_sources(duka: pd.DataFrame, yahoo: pd.DataFrame, pair: str) -> dict | None:
-    """Dukascopy vs Yahoo na wspólnych świecach: różnica zamknięć w pipsach."""
-    if duka.empty or yahoo.empty:
-        return None
-    j = duka[["ts", "close"]].merge(yahoo[["ts", "close"]], on="ts", suffixes=("_d", "_y"))
-    if j.empty:
-        return {"n": 0}
-    dev = (j["close_d"] - j["close_y"]).abs() / PAIRS[pair].pip
-    return {"n": len(j), "median": float(dev.median()), "p99": float(dev.quantile(0.99))}

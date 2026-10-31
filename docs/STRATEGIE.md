@@ -51,7 +51,7 @@ def signals(df, p, ind):       # WYMAGANE — dokładnie ta nazwa i te trzy argu
 
 | Element | Szczegóły |
 |---|---|
-| `df` | Świece H1 **jednej** pary: kolumny `open`, `high`, `low`, `close` (ceny mid z Dukascopy). Indeks `DatetimeIndex` w UTC = czas **otwarcia** świecy. Tylko zamknięte świece. Funkcja jest wołana osobno dla każdej z 8 par. |
+| `df` | Świece H1 **jednej** pary: kolumny `open`, `high`, `low`, `close` (świece H1 Yahoo po warstwie czyszczenia, D8). Indeks `DatetimeIndex` w UTC = czas **otwarcia** świecy. Tylko zamknięte świece. Funkcja jest wołana osobno dla każdej z 8 par. |
 | `df.attrs["pair"]` | Nazwa pary, np. `"EURUSD"` — gdy reguła dotyczy tylko niektórych par albo ma inny kierunek dla każdej (D-037). |
 | `p` | Słownik z jedną kombinacją `PARAMS` (np. `{"level": 25, "n": 20}`); `{}` gdy brak `PARAMS`. |
 | `ind` | Biblioteka wskaźników (sekcja 3). Własnych RSI/ATR/EMA nie piszemy (B9). |
@@ -62,6 +62,8 @@ def signals(df, p, ind):       # WYMAGANE — dokładnie ta nazwa i te trzy argu
 | czas | Limit 30 min na całe liczenie sygnałów. |
 
 Silnik dodatkowo: pomija sygnały, gdy w danej parze jest już otwarta pozycja tego wariantu (B8), pomija wejścia w okresie rozgrzewki ATR, odrzuca strategię z look-ahead (B2).
+
+**Krótka historia (D-039).** Dane to świece Yahoo od ok. 2024-10 (~12 tys. świec na parę, rośnie z każdą godziną). Wskaźnik z długą rozgrzewką zjada dużą część próby: SMA200 na D1 to ~40% historii, a OOS (ostatnie 25%) to tylko ~6 miesięcy. Preferuj okresy liczone w godzinach i dniach, nie w miesiącach; mało wariantów (`PARAMS` ≤ ~12), bo każdy kolejny przy tak krótkiej próbie mocniej podnosi poprzeczkę DSR. TP i SL w tej samej świecy zawsze liczone jako SL (B5) — bardzo ciasne TP/SL w ATR częściej dają `ambiguous`.
 
 ---
 

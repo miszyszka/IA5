@@ -31,64 +31,90 @@ def keep_awake():
     return None
 
 
-def load_frames(folder) -> dict:
-    import pandas as pd
+def migrate_legacy(log=print) -> bool:
+    """D-039 (Michał, 2026-10-31): „usuń wszystkie dane pochodzące z Dukascopy z bazy lokalnej”.
 
-    out = {}
-    for p in PAIRS:
-        f = folder / f"{p}.parquet"
-        out[p] = pd.read_parquet(f) if f.exists() else pd.DataFrame(columns=["ts", "open", "high", "low", "close", "minutes"])
-    return out
+    Usuwa z ~/.ia5 świece M1/H1 Dukascopy, dane do liczenia i skanu zbudowane z nich oraz lokalne wyniki i skany
+    policzone na nich. Zwraca True, dopóki nie ma znacznika ~/.ia5/source.json — wtedy ia5 start usuwa też z gałęzi
+    `data` wyniki i skany policzone na Dukascopy (historia gita zostaje, G4), wysyła policzone strategie do ponownego
+    liczenia na świecach Yahoo i dopiero po udanym przejściu zapisuje znacznik (mark_source). Każdy następny start:
+    tylko sprzątanie (nic nie znajdzie).
+    """
+    import shutil
+
+    from .ready import SOURCE
+    from .store import LEGACY, READY, RESULTS, SCANS
+
+    marker = HOME / "source.json"
+    try:
+        first = json.loads(marker.read_text()).get("source") != SOURCE
+    except (FileNotFoundError, ValueError):
+        first = True
+    targets = list(LEGACY) + ([READY, RESULTS, SCANS] if first else [])
+    for d in targets:
+        if not d.exists():
+            continue
+        size = sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
+        shutil.rmtree(d)
+        log(f"Usunięto {d} ({size / 1e9:.2f} GB) — dane pochodzące z Dukascopy (D-039)")
+    return first
 
 
-def raw_signature() -> str:
-    """Podpis surowych H1 (pisze je `ia5 fetch`) — zmiana = nowe dane do przeliczenia mapy, kontroli i forward testu."""
-    parts = []
-    for f in sorted((DATA / "h1").glob("*.parquet")):
-        st = f.stat()
-        parts.append(f"{f.name}:{st.st_size}:{st.st_mtime_ns}")
-    return "|".join(parts)
+def mark_source() -> None:
+    from .ready import SOURCE
+
+    (HOME / "source.json").write_text(json.dumps({"source": SOURCE, "since": int(time.time())}))
 
 
 def do_prepare(progress=None) -> dict:
-    """`ia5 start` bez pobierania (D-031): świece do liczenia z zatwierdzonych miesięcy, Yahoo, kontrole, mapa, publikacja.
-    Dukascopy pobiera osobny proces `ia5 fetch`; tutaj tylko czytamy to, co już jest na dysku."""
-    from datetime import UTC, datetime, timedelta
-
+    """Weryfikacja aktualności danych (D-039): kopia świec Yahoo z Firestore → kontrola jakości (D5) → dane do liczenia
+    (warstwa czyszczenia, D8) → mapa pokrycia → publikacja na gałąź data. Zwraca kontekst dla przeglądu zdrowia."""
     from . import cloud, coverage, quality, ready
-    from .config import COMPUTE_PAIRS
-    from .store import READY
+    from .session import H, expected_ts
+    from .store import READY, YAHOO
 
+    if progress:
+        progress("Kopia świec Yahoo z Firestore", 10)
     log("Stan bazy (Firestore)…")
-    st = cloud.read_status()
-    log(f"  świece Yahoo w bazie: {st.get('totalBars', 0):,}")
-    until = datetime.now(UTC).date() - timedelta(days=1)
+    try:
+        st = cloud.read_status()
+    except Exception as e:  # noqa: BLE001
+        log(f"  Firestore niedostępny ({e}).")
+        st = {}
+    log(f"  świece Yahoo w bazie: {st.get('totalBars', 0):,}; ostatnie pobranie Apps Script: "
+        f"{'OK' if (st.get('lastRun') or {}).get('ok', True) else 'BŁĄD — ' + str(st['lastRun'].get('error'))}")
+    log("Kopia świec Yahoo na Macu…")
+    try:
+        yahoo = cloud.sync_yahoo(YAHOO, log=lambda m: log(m))
+    except Exception as e:  # noqa: BLE001 — bez sieci liczymy na kopii lokalnej; przegląd zdrowia to pokaże
+        log(f"  Nie udało się pobrać świec z Firestore ({e}) — używam kopii lokalnej.")
+        yahoo = cloud.load_yahoo(YAHOO)
+
     if progress:
-        progress("Przygotowanie danych do liczenia", 10)
-    log(f"Dane do liczenia (tylko zatwierdzone miesiące, D-031): {', '.join(COMPUTE_PAIRS)}…")
-    rdy = ready.build(DATA, READY, until=until, log=log)
-    h1 = load_frames(DATA / "h1")
-    for pair, df in h1.items():
-        if len(df):
-            f = quality.bar_flags(df)
-            log(f"  {pair} H1 (wszystko na dysku): {len(df):,} świec · luki {f['gaps']} · OHLC {f['ohlc']} · ts {f['ts']}")
-        else:
-            log(f"  {pair} H1: jeszcze brak — pobierze `ia5 fetch`")
+        progress("Kontrola danych", 40)
+    now = int(time.time())
+    exp = expected_ts(now)
+    late = [p for p in PAIRS if not len(yahoo.get(p, [])) or int(yahoo[p]["ts"].max()) < exp]
+    if late:
+        log(f"  Uwaga: brak świecy {time.strftime('%Y-%m-%d %H:%M', time.gmtime(exp))}–{time.strftime('%H:%M', time.gmtime(exp + H))} UTC "
+            f"w {len(late)} parach ({', '.join(late)}) — Apps Script jeszcze jej nie zapisał albo Yahoo ma przerwę.")
+    else:
+        log(f"  Dane aktualne: każda para ma świecę {time.strftime('%Y-%m-%d %H:%M', time.gmtime(exp))} UTC (ostatnia zamknięta w sesji).")
+    for pair, df in yahoo.items():
+        f = quality.bar_flags(df)
+        if f["ohlc"] or f["price"] or f["ts"] or f["gaps"]:
+            log(f"  {pair}: luki w sesji {f['gaps']} · złe OHLC {f['ohlc']} · cena ≤ 0 {f['price']} · czas poza pełną godziną {f['ts']}")
+    for k, v in quality.cross_check(yahoo).items():
+        log(f"  trójkąt {k}: mediana {v['median']:.2f} pips, p99 {v['p99']:.2f} pips ({v['n']:,} świec)")
+
     if progress:
-        progress("Kontrola danych", 50)
-    log("Yahoo z Firestore…")
-    yahoo = cloud.sync_yahoo(DATA / "yahoo", log=lambda m: log(m))
-    full = {p: df for p, df in h1.items() if len(df)}
-    log("Kontrola: trójkąty (Dukascopy)")
-    for k, v in quality.cross_check(full).items():
-        log(f"  {k}: mediana {v['median']:.2f} pips, p99 {v['p99']:.2f} pips ({v['n']:,} świec)")
-    log("Kontrola: Dukascopy vs Yahoo (zamknięcia)")
-    for pair in full:
-        c = quality.compare_sources(full[pair], yahoo[pair], pair)
-        if c and c.get("n"):
-            log(f"  {pair}: mediana {c['median']:.2f} pips, p99 {c['p99']:.2f} pips ({c['n']:,} wspólnych)")
-    log("Mapa pokrycia (luki wobec kalendarza sesji)…")
-    cov = coverage.build(DATA, h1, yahoo, until=until)
+        progress("Dane do liczenia", 60)
+    log("Dane do liczenia (warstwa czyszczenia, D8)…")
+    rdy = ready.build(yahoo, READY, log=log)
+    log("Mapa pokrycia…")
+    cov = coverage.build(yahoo)
+    if progress:
+        progress("Publikacja", 80)
     log("Publikacja na gałąź data…")
     publish_error = None
     try:
@@ -101,48 +127,7 @@ def do_prepare(progress=None) -> dict:
     except Exception as e:  # noqa: BLE001 — brak publikacji nie zatrzymuje programu; zgłasza go przegląd zdrowia
         publish_error = str(e)[:300]
         log(f"  publikacja nie powiodła się: {publish_error}")
-    until_ts = int(datetime(until.year, until.month, until.day, tzinfo=UTC).timestamp()) + 86400
-    return {"h1": h1, "yahoo": yahoo, "cov": cov, "until_ts": until_ts, "publish_error": publish_error,
-            "ready": rdy, "raw_sig": raw_signature()}
-
-
-def cmd_fetch(_args) -> int:
-    """Pobieracz Dukascopy (D-031): osobny terminal, działa bez końca; para po parze do końca, potem nowe dni co godzinę."""
-    from . import cloud, fetch
-
-    HOME.mkdir(parents=True, exist_ok=True)
-    caff = keep_awake()
-    stop = threading.Event()
-    state: dict = {"state": "pobiera"}
-    live: dict = {}
-
-    def beat_now():
-        cloud.fetch_heartbeat({k: v for k, v in {**state, "sync": live or None}.items() if v is not None})
-
-    def beat():
-        while not stop.wait(30):
-            try:
-                beat_now()
-            except Exception as e:  # noqa: BLE001
-                log(f"heartbeat: {e}")
-
-    threading.Thread(target=beat, daemon=True).start()
-
-    def bye(*_):
-        stop.set()
-        try:
-            cloud.fetch_heartbeat(None)
-        finally:
-            if caff:
-                caff.terminate()
-            log("Pobieranie zatrzymane.")
-            os._exit(0)
-
-    signal.signal(signal.SIGINT, bye)
-    signal.signal(signal.SIGTERM, bye)
-    log(f"IA5 fetch · kolejność: {', '.join(fetch.order())} · każda para do końca, zanim ruszy następna")
-    fetch.run_forever(DATA, log=log, state=state, live=live)
-    return 0
+    return {"yahoo": yahoo, "cov": cov, "ready": rdy, "publish_error": publish_error}
 
 
 def do_health(ctx: dict, beat_state: str | None = None, write: bool = True) -> dict:
@@ -153,9 +138,8 @@ def do_health(ctx: dict, beat_state: str | None = None, write: bool = True) -> d
         docs = cloud.list_strategies()
     except Exception:  # noqa: BLE001
         docs = None
-    h = health.run(cloud.read_status(), ctx["h1"], ctx["yahoo"], ctx["cov"], ctx["until_ts"], docs=docs,
-                   beat_state=beat_state, publish_error=ctx.get("publish_error"), home=HOME,
-                   ready=ctx.get("ready"))
+    h = health.run(cloud.read_status(), ctx["yahoo"], ctx["cov"], docs=docs, beat_state=beat_state,
+                   publish_error=ctx.get("publish_error"), home=HOME, ready=ctx.get("ready"))
     if write:
         cloud.write_health(h)
     bad = [c for c in h["checks"] if c["state"] != "ok"]
@@ -164,14 +148,18 @@ def do_health(ctx: dict, beat_state: str | None = None, write: bool = True) -> d
 
 
 def cmd_start(_args) -> int:
+    """Jedyny proces (D-039): weryfikacja aktualności danych, potem nasłuch strategii do policzenia.
+    Co godzinę (5 min po pełnej godzinie — Apps Script zdąży zapisać świecę) nowa kopia świec i przegląd zdrowia;
+    co 6 h ponowne liczenie zamrożonych strategii (forward test, W4)."""
     from . import cloud
 
     HOME.mkdir(parents=True, exist_ok=True)
     caff = keep_awake()
     stop = threading.Event()
+    state = {"now": "syncing"}
 
     def beat_now():
-        cloud.heartbeat(state["now"], state.get("job"), state.get("sync"))
+        cloud.heartbeat(state["now"], state.get("job"))
 
     def beat():
         while not stop.wait(30):
@@ -180,7 +168,6 @@ def cmd_start(_args) -> int:
             except Exception as e:  # noqa: BLE001
                 log(f"heartbeat: {e}")
 
-    state = {"now": "syncing"}
     threading.Thread(target=beat, daemon=True).start()
 
     def bye(*_):
@@ -196,16 +183,19 @@ def cmd_start(_args) -> int:
     signal.signal(signal.SIGINT, bye)
     signal.signal(signal.SIGTERM, bye)
 
-    log(f"IA5 start · silnik {ENGINE_VERSION} · liczenie na danych już pobranych (pobieranie: `ia5 fetch` w osobnym terminalu)")
+    log(f"IA5 start · silnik {ENGINE_VERSION} · dane: świece H1 Yahoo (Firestore)")
+    first = migrate_legacy(log)
 
     def sync_progress(name, pct):
         state["job"] = {"id": "sync", "name": name, "progress": pct}
 
     ctx = do_prepare(progress=sync_progress)
     state["job"] = None
+    owner = config().get("owner_uid")
+    if first and requeue_after_source_change(owner):
+        mark_source()
     safe_health(ctx, "idle")
 
-    owner = config().get("owner_uid")
     jobs: queue.Queue = queue.Queue()
     seen: set = set()
 
@@ -223,33 +213,28 @@ def cmd_start(_args) -> int:
 
     cloud.watch_queue(on_job)
     state["now"] = "idle"
-    cloud.heartbeat("idle")
+    beat_now()
     enqueue_frozen(jobs, owner)
     log("Połączony. Czekam na strategie (Ctrl+C kończy).")
-    last_sync = last_health = last_check = time.time()
+    next_sync, last_forward = next_sync_time(), time.time()
     while True:
         try:
-            sid, data = jobs.get(timeout=60)
+            sid, data = jobs.get(timeout=30)
         except queue.Empty:
-            if time.time() - last_health > HEALTH_SECONDS:
-                safe_health(ctx, state["now"])
-                last_health = time.time()
-            # nowe dane od `ia5 fetch` (co 30 min) albo co 6 h (Yahoo) → przygotowanie, mapa, forward test zamrożonych (W4)
-            due = time.time() - last_sync > RESYNC_SECONDS
-            if not due and time.time() - last_check > CHECK_SECONDS:
-                last_check = time.time()
-                due = raw_signature() != ctx.get("raw_sig")
-            if due:
+            if time.time() >= next_sync:
                 state["now"] = "syncing"
-                ctx = do_prepare(progress=sync_progress)
+                try:
+                    ctx = do_prepare(progress=sync_progress)
+                except Exception as e:  # noqa: BLE001 — chwilowy brak sieci nie zatrzymuje nasłuchu
+                    log(f"Synchronizacja nieudana: {e} — ponowię za godzinę")
                 state["job"] = None
-                safe_health(ctx, "idle")
-                last_health = time.time()
-                last_sync = time.time()
                 state["now"] = "idle"
-                enqueue_frozen(jobs, owner)
+                safe_health(ctx, "idle")
+                next_sync = next_sync_time()
+                if time.time() - last_forward > FORWARD_SECONDS:  # nowe świece → forward test zamrożonych (W4)
+                    enqueue_frozen(jobs, owner)
+                    last_forward = time.time()
             continue
-        state["queue"] = jobs.qsize()
         if data.get("status") == "do_usuniecia":
             handle_delete(sid)
         else:
@@ -257,9 +242,36 @@ def cmd_start(_args) -> int:
         seen.discard((sid, data.get("status")))
 
 
-RESYNC_SECONDS = 6 * 3600
-CHECK_SECONDS = 1800   # co tyle sprawdzamy, czy `ia5 fetch` dopisał dane
-HEALTH_SECONDS = 3600
+def next_sync_time(now: float | None = None) -> float:
+    """SYNC_OFFSET sekund po najbliższej pełnej godzinie (Apps Script zdąży zapisać nową świecę)."""
+    now = time.time() if now is None else now
+    t = int(now) // 3600 * 3600 + SYNC_OFFSET
+    return t if t > now else t + 3600
+
+
+def requeue_after_source_change(owner: str | None) -> bool:
+    """D-039: wyniki policzone na Dukascopy znikają z gałęzi data, a strategie wracają do kolejki — policzą się
+    na świecach Yahoo. Zwraca True po udanym przejściu (wtedy znacznik; inaczej ponowienie przy następnym starcie)."""
+    from . import cloud, publish
+
+    if not owner:
+        log(f"Przejście na Yahoo: brak owner_uid w {HOME / 'config.json'} (S1) — stare wyniki zostają do następnego startu.")
+        return False
+    try:
+        n = publish.purge_dukascopy_results(log=log)
+        log(f"Gałąź data: usunięto {n} wyników i skany policzone na Dukascopy (historia gita zostaje).")
+        for sid, data in cloud.computed_strategies():
+            if data.get("createdBy") == owner:
+                cloud.update_strategy(sid, {"status": "do_policzenia", "result": None, "error": None})
+                log(f"Strategia „{data.get('name', sid)}”: do ponownego liczenia na świecach Yahoo")
+    except Exception as e:  # noqa: BLE001 — ponowimy przy następnym starcie
+        log(f"Przejście na Yahoo nie dokończone ({e}) — ponowię przy następnym starcie.")
+        return False
+    return True
+
+
+FORWARD_SECONDS = 6 * 3600   # W4: forward test zamrożonych strategii
+SYNC_OFFSET = 300            # kopia świec 5 min po pełnej godzinie
 
 
 def safe_health(ctx: dict, beat_state: str | None) -> None:
@@ -303,8 +315,7 @@ def handle_job(sid: str, data: dict, state: dict) -> None:
     try:
         from .store import READY
 
-        out = run_file(data.get("code", ""), name, READY, HOME / "results", m1_dir=DATA / "m1",
-                       log=step, source="dukascopy", strategy_id=sid)
+        out = run_file(data.get("code", ""), name, READY, HOME / "results", log=step, source="yahoo", strategy_id=sid)
         sha = publish.publish_result(out, log=log)
         v = json.loads((out / "validation.json").read_text(encoding="utf-8"))
         cloud.update_strategy(sid, {"status": "policzona", "result": {"sha": sha, "path": f"results/{sid}",
@@ -332,33 +343,16 @@ def handle_delete(sid: str) -> None:
         cloud.delete_strategy(sid)
 
 
-def cmd_sync(_args) -> int:
-    """Jednorazowo: jeden obieg pobierania (po 2 rundy na parę), potem przygotowanie danych i przegląd zdrowia."""
-    from . import cloud, fetch
-
-    fetch.run_forever(DATA, log=log, once=True)
-    safe_health(do_prepare(), None)
-    cloud.heartbeat("offline")
-    return 0
-
-
 def cmd_health(_args) -> int:
-    """Opisowy przegląd zdrowia na danych lokalnych, bez pobierania; wynik też na dashboard (Stats)."""
-    from datetime import UTC, datetime, timedelta
+    """Opisowy przegląd zdrowia na kopii lokalnej (bez synchronizacji świec); wynik też na dashboard (Stats)."""
+    from . import cloud, coverage, health, ready
+    from .store import READY, YAHOO
 
-    import pandas as pd
-
-    from . import coverage, health
-
-    load = lambda d: {p: pd.read_parquet(d / f"{p}.parquet") for p in PAIRS if (d / f"{p}.parquet").exists()}  # noqa: E731
-    from . import ready
-    from .store import READY
-
-    rdy = ready.build(DATA, READY, log=log)
-    h1, yahoo = load(DATA / "h1"), load(DATA / "yahoo")
-    until = datetime.now(UTC).date() - timedelta(days=1)
-    ctx = {"h1": h1, "yahoo": yahoo, "cov": coverage.build(DATA, h1, yahoo, until=until) if h1 else None,
-           "until_ts": int(datetime(until.year, until.month, until.day, tzinfo=UTC).timestamp()) + 86400, "ready": rdy}
+    yahoo = cloud.load_yahoo(YAHOO)
+    if not yahoo:
+        print("Na Macu nie ma jeszcze świec — uruchom ia5 start.")
+        return 1
+    ctx = {"yahoo": yahoo, "cov": coverage.build(yahoo), "ready": ready.build(yahoo, READY, log=log)}
     h = do_health(ctx)
     print(health.report(h))
     return 0 if h["state"] != "bad" else 1
@@ -376,11 +370,10 @@ def cmd_run(args) -> int:
 
     h1_dir = Path(args.h1) if args.h1 else READY
     if not any(h1_dir.glob("*.parquet")):
-        print(f"Brak świec do liczenia w {h1_dir} — najpierw `ia5 fetch` (pobieranie), potem `ia5 start` albo `ia5 health`.")
+        print(f"Brak świec do liczenia w {h1_dir} — najpierw ia5 start (zrobi kopię świec Yahoo).")
         return 1
     try:
-        run_file(path.read_text(encoding="utf-8"), args.name or path.stem, h1_dir, HOME / "results",
-                 m1_dir=DATA / "m1", log=log)
+        run_file(path.read_text(encoding="utf-8"), args.name or path.stem, h1_dir, HOME / "results", log=log, source="yahoo")
     except StrategyError as e:
         print(f"Błąd strategii: {e}")
         return 1
@@ -396,7 +389,7 @@ def cmd_check(args) -> int:
 
     h1_dir = Path(args.h1) if args.h1 else READY
     if not any(h1_dir.glob("*.parquet")):
-        print(f"Brak świec do liczenia w {h1_dir} — najpierw `ia5 fetch`, potem `ia5 start`.")
+        print(f"Brak świec do liczenia w {h1_dir} — najpierw ia5 start (zrobi kopię świec Yahoo).")
         return 1
     res = check_code_on(Path(args.file).read_text(encoding="utf-8"), h1_dir)
     print(format_result(res, str(h1_dir)))
@@ -404,28 +397,27 @@ def cmd_check(args) -> int:
 
 
 def cmd_scan(args) -> int:
-    """Skaner hipotez (D-037): szerokie przeszukanie prostych reguł na wszystkich parach z zatwierdzonymi miesiącami.
+    """Skaner hipotez (D-037): szerokie przeszukanie prostych reguł na danych do liczenia (świece Yahoo po czyszczeniu).
     Ostatnie 25% historii jest pomijane (zostaje na OOS silnika). Wynik: ~/.ia5/scans/{run}/ + gałąź data scans/{run}/."""
-    from datetime import UTC, datetime, timedelta
+    from datetime import UTC, datetime
 
-    import pandas as pd
+    from . import cloud, ready, scan
+    from .store import READY, SCANS, YAHOO
 
-    from . import ready, scan
-
-    until = datetime.now(UTC).date() - timedelta(days=1)
     pairs = [p.upper() for p in args.pary] if args.pary else list(PAIRS)
-    folder = DATA / "h1_scan"
-    log(f"Dane do skanu (tylko zatwierdzone miesiące): {', '.join(pairs)}…")
-    ready.build(DATA, folder, pairs=pairs, until=until, log=log)
-    frames = {f.stem: pd.read_parquet(f) for f in sorted(folder.glob("*.parquet"))}
-    frames = {p: df for p, df in frames.items() if len(df) > 24 * 365}
+    yahoo = cloud.load_yahoo(YAHOO)
+    if not yahoo:
+        print("Brak świec na Macu — najpierw ia5 start.")
+        return 1
+    ready.build(yahoo, READY, log=log)
+    frames = {p: df for p, df in ready.load(READY, pairs).items() if len(df) > 24 * 120}
     if not frames:
-        print("Brak danych do skanu — najpierw `ia5 fetch`.")
+        print("Za mało danych do skanu (potrzeba ≥ ok. 6 miesięcy świec na parę).")
         return 1
     log(f"Skan: {len(frames)} par, siatka {'duża (~160 tys. reguł na parę)' if args.duzy else 'standardowa'}…")
     out = scan.run(frames, big=args.duzy, log=log)
     run_id = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    dst = scan.save(out, HOME / "scans" / run_id)
+    dst = scan.save(out, SCANS / run_id)
     print(scan.report(out, top=15))
     log(f"Zapisano: {dst}")
     if not args.lokalnie:
@@ -441,7 +433,7 @@ def cmd_scan(args) -> int:
 def cmd_status(_args) -> int:
     print(f"IA5 runner · silnik {ENGINE_VERSION}")
     print("Pary:", ", ".join(PAIRS))
-    print("Katalog danych:", DATA)
+    print("Dane: świece H1 Yahoo (Firestore) → kopia", DATA / "yahoo")
     return 0
 
 
@@ -451,13 +443,11 @@ def main(argv=None) -> int:
     os.environ.setdefault("GLOG_minloglevel", "2")
     parser = argparse.ArgumentParser(prog="ia5")
     sub = parser.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("start", help="liczenie strategii na pobranych danych + heartbeat + kolejka").set_defaults(func=cmd_start)
-    sub.add_parser("fetch", help="pobieranie Dukascopy, para po parze do końca (osobny terminal)").set_defaults(func=cmd_fetch)
-    sub.add_parser("sync", help="jeden obieg pobierania + przygotowanie danych").set_defaults(func=cmd_sync)
+    sub.add_parser("start", help="weryfikacja danych (świece Yahoo) + nasłuch strategii do policzenia").set_defaults(func=cmd_start)
     p_run = sub.add_parser("run", help="policz strategię z pliku .py lokalnie")
     p_run.add_argument("file")
     p_run.add_argument("--name")
-    p_run.add_argument("--h1", help="katalog ze świecami H1 (domyślnie ~/.ia5/data/h1)")
+    p_run.add_argument("--h1", help="katalog ze świecami H1 (domyślnie ~/.ia5/data/h1_ready)")
     p_run.set_defaults(func=cmd_run)
     p_chk = sub.add_parser("check", help="sprawdź kod strategii (kontrakt, look-ahead, sygnały)")
     p_chk.add_argument("file")
@@ -465,7 +455,7 @@ def main(argv=None) -> int:
     p_chk.set_defaults(func=cmd_check)
     p_scan = sub.add_parser("scan", help="skaner hipotez: tysiące–miliony prostych reguł z kontrolą FDR (D-037)")
     p_scan.add_argument("--duzy", action="store_true", help="duża siatka: ~160 tys. reguł na parę (~1,3 mln na 8 par)")
-    p_scan.add_argument("--pary", nargs="*", help="np. EURUSD GBPUSD (domyślnie wszystkie z zatwierdzonymi miesiącami)")
+    p_scan.add_argument("--pary", nargs="*", help="np. EURUSD GBPUSD (domyślnie wszystkie)")
     p_scan.add_argument("--lokalnie", action="store_true", help="bez publikacji na gałąź data")
     p_scan.set_defaults(func=cmd_scan)
     sub.add_parser("status").set_defaults(func=cmd_status)

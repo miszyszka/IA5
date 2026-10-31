@@ -52,13 +52,16 @@ def test_report_and_save(tmp_path):
 
 
 def test_cli_scan_local(tmp_path, monkeypatch, capsys):
-    from ia5 import cli, ready
+    from ia5 import cloud, ready, store
 
-    (tmp_path / "data" / "h1_scan").mkdir(parents=True)
-    synth(years=6, effect=0.0006).to_parquet(tmp_path / "data" / "h1_scan" / "EURUSD.parquet", index=False)
-    monkeypatch.setattr(cli, "DATA", tmp_path / "data")
-    monkeypatch.setattr(cli, "HOME", tmp_path)
+    (tmp_path / "ready").mkdir(parents=True)
+    synth(years=6, effect=0.0006).to_parquet(tmp_path / "ready" / "EURUSD.parquet", index=False)
+    monkeypatch.setattr(store, "READY", tmp_path / "ready")
+    monkeypatch.setattr(store, "SCANS", tmp_path / "scans")
+    monkeypatch.setattr(cloud, "load_yahoo", lambda folder: {"EURUSD": pd.DataFrame()})
     monkeypatch.setattr(ready, "build", lambda *a, **k: {})
+    from ia5 import cli
+
     assert cli.main(["scan", "--lokalnie", "--pary", "EURUSD"]) == 0
     assert "Skan hipotez" in capsys.readouterr().out
     assert len(list((tmp_path / "scans").glob("*/scan.md"))) == 1

@@ -24,11 +24,11 @@ cd ~/IA5 && uv tool install -e runner        # komenda `ia5` w terminalu
 
 # klucz z kroku 4 musi leżeć w ~/.ia5/service-account.json
 ia5 status                                   # sprawdzenie instalacji
-ia5 start                                    # pierwszy raz: pobieranie Dukascopy trwa kilka godzin
+ia5 start                                    # kopia świec Yahoo z Firestore (sekundy), potem nasłuch strategii
 ```
 
 - Aktualizacja programu: `cd ~/IA5 && git pull`.
-- Pierwsze `ia5 start` można przerwać (Ctrl+C) i wznowić — gotowe miesiące się nie powtarzają.
+- `ia5 start` można przerwać (Ctrl+C) i uruchomić ponownie w każdej chwili — kopia świec dociąga tylko brakujące miesiące.
 - Push na gałąź `data` używa Twoich danych logowania do GitHub (np. `gh auth login`).
 
 ### Windows (wiersz poleceń `cmd`)
@@ -45,5 +45,5 @@ ia5 status
 ia5 start
 ```
 
-- Repo i dane trzymamy poza OneDrive (`%USERPROFILE%\IA5`, `%USERPROFILE%\.ia5`) — kilka GB danych nie powinno się synchronizować.
+- Repo i dane trzymamy poza OneDrive (`%USERPROFILE%\IA5`, `%USERPROFILE%\.ia5`) — wyniki strategii zajmują miejsce i nie powinny się synchronizować.
 - Aktualizacja: `cd /d %USERPROFILE%\IA5 && git pull`.

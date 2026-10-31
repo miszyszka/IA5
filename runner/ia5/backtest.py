@@ -5,7 +5,7 @@ Pliki w katalogu wyników (to samo trafia na gałąź `data` pod results/{id}/):
   variants.json    metryki per wariant + zakres wierszy w trades.parquet (row_start, row_end)
   trades.parquet   wszystkie transakcje wszystkich wariantów, posortowane po variant_id
   validation.json  benchmark losowy, DSR, PBO, walk-forward, bootstrap, spread, kapitał, werdykt
-  candles/{PARA}.parquet  świece do wykresu (D-010: dla danych Dukascopy tylko wycinki wokół transakcji)
+  candles/{PARA}.parquet  wszystkie świece użyte w liczeniu (Yahoo po czyszczeniu, D-039) — do wykresu
   report.md        raport dla Claude
   strategy.py      kod strategii
 """
@@ -22,8 +22,8 @@ import numpy as np
 import pandas as pd
 
 from . import ENGINE_VERSION
-from .config import DEFAULT_SIZING, PAIRS
-from .engine import Exit, default_exits, m1_resolver_lazy, run, summarize
+from .config import DEFAULT_SIZING
+from .engine import Exit, default_exits, run, summarize
 from .portfolio import equity_stats, simulate_equity
 from .report import write_report
 from .sandbox import run_strategy_code
@@ -52,7 +52,7 @@ def data_hash(h1_dir: Path) -> str:
 
 
 def data_clean_info(h1_dir: Path, h1: dict) -> dict:
-    """D-031: opis warstwy czyszczenia per para (plik {PARA}.json obok świec, z prepare_ready w cli)."""
+    """D8: opis warstwy czyszczenia per para (plik {PARA}.json obok świec, z ready.build)."""
     out = {}
     for pair, df in h1.items():
         f = h1_dir / f"{pair}.json"
@@ -64,9 +64,9 @@ def data_clean_info(h1_dir: Path, h1: dict) -> dict:
                 info = {}
         filled = int(df["filled"].sum()) if "filled" in df else 0
         gaps = int((df["gap_before"] > 0).sum()) if "gap_before" in df else 0
-        out[pair] = {"version": info.get("version"), "filled": filled, "gaps": gaps,
+        out[pair] = {"version": info.get("version"), "source": info.get("source"), "filled": filled, "gaps": gaps,
                      "gap_hours": int(df["gap_before"].sum()) if "gap_before" in df else 0,
-                     "months": info.get("months"), "months_total": info.get("months_total")}
+                     "rejected": info.get("rejected", 0), "closed_hours": info.get("closed_hours", 0)}
     return out
 
 
@@ -151,10 +151,7 @@ def validate_best(res: dict, variants: pd.DataFrame, trades: pd.DataFrame, exits
     out["walk_forward"] = walk_forward(trades[["variant_id", "r_net", "pips_net", "entry_ts"]])
     out["bootstrap"] = {"all": bootstrap_ci(bt["pips_net"].to_numpy(float)),
                         "oos": bootstrap_ci(oos["pips_net"].to_numpy(float))}
-    real = None
-    if all("spread_avg" in df for df in h1.values()):
-        real = np.array([h1[p]["spread_avg"].iloc[i] / PAIRS[p].pip for p, i in zip(bt["pair"], bt["entry_i"])])
-    out["spread"] = spread_stress(bt, real)
+    out["spread"] = spread_stress(bt)
     out["ambiguous_pct"] = float(bt["ambiguous"].mean() * 100)
     out["equity"] = {}
     for pct in sizing:
@@ -186,8 +183,8 @@ def candle_slices(h1: dict, trades: pd.DataFrame, variants: pd.DataFrame, full: 
     return out
 
 
-def run_file(code: str, name: str, h1_dir: Path, out_root: Path, m1_dir: Path | None = None, log=print,
-             source: str | None = None, full_candles: bool = False, strategy_id: str | None = None,
+def run_file(code: str, name: str, h1_dir: Path, out_root: Path, log=print,
+             source: str | None = None, full_candles: bool = True, strategy_id: str | None = None,
              extra: dict | None = None) -> Path:
     t_start = time.time()
     log("Sygnały (osobny proces, detektor look-ahead)…")
@@ -207,12 +204,10 @@ def run_file(code: str, name: str, h1_dir: Path, out_root: Path, m1_dir: Path | 
     exits = exits_from(meta.get("exits"))
     sizing = [float(x) for x in (meta.get("sizing") or DEFAULT_SIZING)]
     log(f"Silnik: {len(meta['params'])} wariant(y) wejścia × {len(exits)} wyjść × {len(h1)} par…")
-    use_m1 = m1_dir is not None and m1_dir.exists() and any(m1_dir.iterdir())
-    resolver = m1_resolver_lazy(m1_dir) if use_m1 else None
     hours = meta.get("hours")  # D-034: None = okno z config (B11), False = bez okna, [od, do] = własne
     hours = tuple(hours) if isinstance(hours, list) else hours
     pyramid = int(meta.get("pyramid") or 1)
-    res = run(h1, signals, meta["params"], exits=exits, resolver=resolver, hours=hours, pyramid=pyramid)
+    res = run(h1, signals, meta["params"], exits=exits, hours=hours, pyramid=pyramid)
     variants = variant_table(res)
     trades = trades_table(res)
     validation = validate_best(res, variants, trades, exits, signals, h1, sizing, log=log, hours=hours)
@@ -236,7 +231,7 @@ def run_file(code: str, name: str, h1_dir: Path, out_root: Path, m1_dir: Path | 
     manifest = {
         "id": sid, "name": name, "run_id": run_id, "engine_version": ENGINE_VERSION,       # D6
         "code_hash": hashlib.sha256(code.encode()).hexdigest()[:16], "data_hash": data_hash(h1_dir),
-        "data_source": source or ("dukascopy" if use_m1 else "inne"), "m1_resolver": resolver is not None,
+        "data_source": source or "inne",
         "candles": "pełne" if full_candles else f"wycinki ±{CANDLE_PAD} świec wokół transakcji {TOP_FOR_CANDLES} najlepszych wariantów",
         "pairs": sorted(h1), "params": meta["params"], "n_variants": res["n_variants"], "n_exits": len(exits),
         "oos_cutoff": int(res["cutoff"]), "sizing": sizing, "pyramid": pyramid,

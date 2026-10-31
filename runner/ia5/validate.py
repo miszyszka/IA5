@@ -168,13 +168,11 @@ def bootstrap_ci(x: np.ndarray, n: int = 2000, seed: int = 11) -> dict:
     return {"low": float(np.percentile(means, 2.5)), "high": float(np.percentile(means, 97.5)), "n": int(len(x))}
 
 
-def spread_stress(t: pd.DataFrame, real_spread_pips: np.ndarray | None = None) -> dict:
+def spread_stress(t: pd.DataFrame) -> dict:
+    """Średni wynik netto przy spreadzie z tabeli × 1, × 1,5 i × 2 (sekcja 9: stabilność wobec kosztów)."""
     sp = t["pair"].map({p: c.spread_pips for p, c in PAIRS.items()}).to_numpy(float)
     g = t["pips_gross"].to_numpy(float)
-    out = {"x1": float((g - sp).mean()), "x1_5": float((g - 1.5 * sp).mean()), "x2": float((g - 2 * sp).mean())}
-    if real_spread_pips is not None and not np.all(np.isnan(real_spread_pips)):
-        out["real"] = float(np.nanmean(g - real_spread_pips))
-    return out
+    return {"x1": float((g - sp).mean()), "x1_5": float((g - 1.5 * sp).mean()), "x2": float((g - 2 * sp).mean())}
 
 
 # ---------- werdykt ----------

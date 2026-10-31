@@ -1,51 +1,83 @@
-"""Warstwa czyszczenia H1 do backtestu (D4, D5, D-031) — jawna, wersjonowana, nigdy cicha.
+"""Warstwa czyszczenia H1 do backtestu (D4, D5, D8) — jawna, wersjonowana, nigdy cicha.
 
-Wejście: świece H1 zbudowane z zatwierdzonych miesięcy M1 (dukascopy.month_ready).
-Wyjście: te same świece + dwie kolumny:
+Wejście: kopia świec Yahoo H1 z Firestore (data/yahoo/{PARA}.parquet), wszystkie pary naraz.
+Wyjście (data/h1_ready/{PARA}.parquet): te same świece + dwie kolumny:
   filled      — True dla świecy uzupełnionej (nie istniała w danych, wstawiona tutaj);
-  gap_before  — ile oczekiwanych godzin sesji brakuje tuż przed tą świecą i NIE zostało uzupełnionych (0 = brak luki).
+  gap_before  — ile oczekiwanych godzin sesji brakuje tuż przed tą świecą i NIE zostało uzupełnionych (0 = brak przerwy).
 
-Zasady (D-032):
-  * Barierą jest wyłącznie przerwa w DOSTĘPIE do danych: dzień, którego nie udało się pobrać (uznany za niedostępny),
-    albo miesiąc niezatwierdzony (`unavailable`). Pierwsza świeca po takiej przerwie dostaje gap_before = liczba
-    brakujących godzin sesji; silnik anuluje każdą transakcję, która na nią nachodzi (engine.data_cancel).
-  * Weekend, święto, godzina bez notowań w pobranym dniu NIE są barierą — następna świeca jest po prostu kolejną
-    (po ostatniej piątkowej świecy przychodzi pierwsza niedzielna/poniedziałkowa).
-  * Krótka dziura w pobranym dniu (≤ FILL_MAX godzin sesji bez notowań) → uzupełniona: ceny idą liniowo od zamknięcia
-    ostatniej świecy przed dziurą do otwarcia pierwszej po niej (high/low = max/min z nich), spread = ostatni znany,
-    minutes = 0, filled = True. Dłuższa dziura w pobranym dniu zostaje bez uzupełniania i bez bariery.
-  * Świeca uzupełniona zna otwarcie następnej świecy (przyszłość), więc silnik anuluje transakcje, których świeca
+Zasady (D-039):
+  * Świeca łamiąca D5 (brak ceny, cena ≤ 0, high < max(open, close), low > min(open, close), czas poza pełną godziną)
+    jest odrzucana i liczona w opisie — jej godzina staje się brakującą.
+  * Świeca poza sesją jest odrzucana, gdy rynek na pewno nie działał (sobota, święta 25.12 i 1.01) albo gdy jest płaska
+    (high = low) poza kalendarzem sesji — Yahoo dopisuje takie świece po piątkowym zamknięciu i w święta, powtarzając
+    starą cenę (sprawdzone na danych 2024–2026, D-039). Poza sesją zostają tylko świece z ruchem ceny (np. piątek
+    21:00 UTC zimą, gdy rynek jeszcze działa).
+  * Brakujące godziny sesji (kalendarz D-028) dzielimy na serie. Seria ≤ BOUNDARY_H godzin przylegająca do weekendu
+    albo święta (godzina tuż przed nią albo tuż po niej jest poza sesją) to granica tygodnia — Yahoo zaczyna i kończy
+    tydzień o godzinę–dwie inaczej niż kalendarz (czas letni w USA). Jak weekend: ani uzupełnienie, ani bariera,
+    następna świeca jest kolejną.
+  * Każda inna seria ≤ FILL_MAX godzin → uzupełniona: ceny liniowo od zamknięcia ostatniej świecy przed nią
+    do otwarcia pierwszej po niej (high/low = max/min z nich), filled = True.
+  * Dłuższa seria = przerwa w dostępie do danych (także gdy brakuje jej we wszystkich parach naraz — rynek FX w tygodniu
+    nie zamyka się na kilka godzin, to przerwa Yahoo): pierwsza świeca po niej dostaje gap_before = liczba brakujących
+    godzin; silnik anuluje każdą transakcję, która na nią nachodzi (B12, engine.data_cancel).
+  * Świeca uzupełniona zna otwarcie następnej świecy (przyszłość), więc silnik anuluje też transakcje, których świeca
     sygnału, wejścia albo wyjścia jest uzupełniona. Strategie widzą tylko OHLC (bez tych kolumn).
-Surowe dane (M1, H1 z M1) zostają nietknięte; ten plik tworzy osobną kopię w data/h1_ready/.
+Kopia surowa (data/yahoo) zostaje nietknięta.
 """
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 
-from .coverage import expected_mask
+from .coverage import BOUNDARY_H, closed_mask, expected_mask
 
-CLEAN_VERSION = "2"
-FILL_MAX = 3   # D-031: uzupełniamy najwyżej 3 kolejne godziny bez notowań w pobranym dniu
+CLEAN_VERSION = "5"
+FILL_MAX = 3   # D8: uzupełniamy najwyżej 3 kolejne brakujące godziny jednej pary
 H = 3600
+COLS = ["ts", "open", "high", "low", "close"]
 
 
-def clean_h1(raw: pd.DataFrame, unavailable: list | None = None) -> tuple[pd.DataFrame, dict]:
-    """Zwraca (świece z kolumnami filled i gap_before, opis).
+def invalid_mask(df: pd.DataFrame) -> np.ndarray:
+    """Świece łamiące D5 (te same reguły co quality.bar_flags)."""
+    o, h, lo, c = (df[k].to_numpy(float) for k in ("open", "high", "low", "close"))
+    ts = df["ts"].to_numpy(np.int64)
+    with np.errstate(invalid="ignore"):
+        bad = ~np.isfinite(np.c_[o, h, lo, c]).all(axis=1)
+        bad |= np.minimum.reduce([o, h, lo, c]) <= 0
+        bad |= (h < np.maximum(o, c) - 1e-12) | (lo > np.minimum(o, c) + 1e-12)
+    return bad | (ts % H != 0)
 
-    unavailable — zakresy [od, do) czasu bez dostępu do danych (niepobrane dni, niezatwierdzone miesiące).
-    """
-    info = {"version": CLEAN_VERSION, "fill_max": FILL_MAX, "bars": 0, "filled": 0, "fill_runs": 0,
-            "gaps": [], "gap_hours": 0, "quiet_runs": 0, "quiet_hours": 0}
-    ua = np.array(sorted(unavailable or []), dtype=np.int64).reshape(-1, 2)
+
+def off_session_mask(df: pd.DataFrame) -> np.ndarray:
+    """Świece poza sesją do odrzucenia: sobota/święto albo płaska świeca poza kalendarzem sesji."""
+    ts = df["ts"].to_numpy(np.int64)
+    flat = df["high"].to_numpy(float) <= df["low"].to_numpy(float)
+    return closed_mask(ts) | (~expected_mask(ts) & flat)
+
+
+def clean_h1(raw: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    """Zwraca (świece z kolumnami filled i gap_before, opis)."""
+    info = {"version": CLEAN_VERSION, "fill_max": FILL_MAX, "bars": 0, "rejected": 0, "rejected_ts": [], "off_session": 0,
+            "filled": 0, "fill_runs": 0, "gaps": [], "gap_hours": 0, "closed_runs": 0, "closed_hours": 0}
     if raw is None or raw.empty:
-        out = pd.DataFrame(columns=list(raw.columns if raw is not None else []) + ["filled", "gap_before"])
-        return out, info
-    df = raw.sort_values("ts").drop_duplicates("ts").reset_index(drop=True)
+        return pd.DataFrame(columns=COLS + ["filled", "gap_before"]), info
+    df = raw[COLS].sort_values("ts").drop_duplicates("ts", keep="last").reset_index(drop=True)
+    bad = invalid_mask(df)
+    if bad.any():
+        info["rejected"] = int(bad.sum())
+        info["rejected_ts"] = [int(t) for t in df["ts"].to_numpy()[bad][:50]]
+        df = df[~bad].reset_index(drop=True)
+    off = off_session_mask(df)
+    if off.any():
+        info["off_session"] = int(off.sum())
+        df = df[~off].reset_index(drop=True)
+    if df.empty:
+        return pd.DataFrame(columns=COLS + ["filled", "gap_before"]), info
+    df["ts"] = df["ts"].astype(np.int64)
     ts = df["ts"].to_numpy(np.int64)
     hours = np.arange(ts[0], ts[-1] + H, H, dtype=np.int64)
-    present = np.isin(hours, ts)
-    grid = hours[present | expected_mask(hours)]          # oś: świece istniejące + oczekiwane godziny sesji
+    grid = hours[np.isin(hours, ts) | expected_mask(hours)]   # oś: świece istniejące + oczekiwane godziny sesji
     miss = ~np.isin(grid, ts)
     # serie kolejnych brakujących godzin na tej osi (weekend nie przerywa serii — nie ma go na osi)
     edges = np.diff(np.concatenate([[0], miss.astype(np.int8), [0]]))
@@ -53,45 +85,34 @@ def clean_h1(raw: pd.DataFrame, unavailable: list | None = None) -> tuple[pd.Dat
     pos = {int(t): i for i, t in enumerate(ts)}
     new_rows, gap_before = [], np.zeros(len(df), np.int64)
     o, c = df["open"].to_numpy(float), df["close"].to_numpy(float)
-    spr = df["spread_avg"].to_numpy(float) if "spread_avg" in df else np.zeros(len(df))
     for a, b in zip(starts, ends):
         n = int(b - a)
-        prev_i, next_i = pos[int(grid[a - 1])], pos[int(grid[b])]   # luka zawsze między dwiema świecami
-        t_a, t_b = int(grid[a]), int(grid[b - 1]) + H
-        access = bool(len(ua)) and bool(((ua[:, 0] < t_b) & (ua[:, 1] > t_a)).any())
-        if access:  # przerwa w dostępie do danych — bariera dla transakcji
-            gap_before[next_i] = n
-            info["gaps"].append([t_a, t_b, n])
-            info["gap_hours"] += n
+        prev_i, next_i = pos[int(grid[a - 1])], pos[int(grid[b])]   # seria zawsze między dwiema świecami
+        run = grid[a:b]
+        boundary = not expected_mask([run[0] - H])[0] or not expected_mask([run[-1] + H])[0]
+        if boundary and n <= BOUNDARY_H:  # granica weekendu / święta — jak weekend
+            info["closed_runs"] += 1
+            info["closed_hours"] += n
         elif n <= FILL_MAX:
             p0, p1 = c[prev_i], o[next_i]
             for k in range(n):
                 op = p0 + (p1 - p0) * k / n
                 cl = p0 + (p1 - p0) * (k + 1) / n
-                new_rows.append({"ts": int(grid[a + k]), "open": op, "high": max(op, cl), "low": min(op, cl), "close": cl,
-                                 "spread_avg": spr[prev_i], "spread": spr[prev_i]})
+                new_rows.append({"ts": int(run[k]), "open": op, "high": max(op, cl), "low": min(op, cl), "close": cl})
             info["fill_runs"] += 1
-        else:  # dłuższa godzina bez notowań w pobranym dniu — jak weekend: następna świeca jest kolejną
-            info["quiet_runs"] += 1
-            info["quiet_hours"] += n
+        else:  # przerwa w dostępie do danych tej pary — bariera dla transakcji (B12)
+            gap_before[next_i] = n
+            info["gaps"].append([int(run[0]), int(run[-1]) + H, n])
+            info["gap_hours"] += n
     out = df.copy()
     out["filled"] = False
     out["gap_before"] = gap_before
     if new_rows:
         add = pd.DataFrame(new_rows)
-        s = add.pop("spread")
-        if "bid_close" in out:
-            add["bid_close"] = add["close"] - s / 2
-            add["ask_close"] = add["close"] + s / 2
-        if "minutes" in out:
-            add["minutes"] = 0
         add["filled"] = True
         add["gap_before"] = 0
-        out = pd.concat([out, add[[c_ for c_ in out.columns if c_ in add]]], ignore_index=True)
-        out = out.sort_values("ts").reset_index(drop=True)
+        out = pd.concat([out, add[out.columns]], ignore_index=True).sort_values("ts").reset_index(drop=True)
     out["ts"] = out["ts"].astype("int64")
-    if "minutes" in out:
-        out["minutes"] = out["minutes"].astype("int16")
     out["filled"] = out["filled"].astype(bool)
     out["gap_before"] = out["gap_before"].astype("int64")
     info["bars"] = int(len(out))
