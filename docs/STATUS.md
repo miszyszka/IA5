@@ -10,6 +10,10 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 - **OOS koszyka otwarty raz** (drugie otwarcie OOS 2026-05-03 – 2026-11-03 po `ia5 search` gigant — liczone w chmurze, nie ma go w `~/.ia5/oos_ledger.json`): 1 210 transakcji, −0,03 R, 2/7 miesięcy na plusie, obsunięcie −67 R (w IS −19 R).
 - RSI 2 (#12): poza przestrzenią `ia5 search` (bez okna B11, dokładanie do 5 pozycji z wagą do 3, wyjście „seria RSI”, trend jako nachylenie EMA w ATR). IS t = 3,2 — słabiej niż najlepsze z poszukiwania (4,55); różnica jest w OOS. Profil: 71% wygranych, warianty ze stopem ≈ 0 w IS (przewaga = brak stopu), 5 najgorszych epizodów dokładania = −32% całego zysku, najgorszy −465 pipsów × waga (USD/JPY 29.09.2025).
 
+- Dwie nowe strategie do dashboardu (sesja 7, na prośbę Michała):
+  - `strategies/examples/simple_v2_wszystkie_pary.py` — „simple” na 8 parach: spadek w jednostkach ATR14·√okno (nie w pipsach), okno 10/20 świec, spadek 1,0/1,35/1,7, wejście po 1. albo 2. zielonej; 12 × 233 = 2796 wariantów. Na Yahoo 85–1 892 sygnałów na wariant (wersja 1: 8 transakcji OOS).
+  - `strategies/examples/rsi_trend_v3_bez_cad_gbp.py` — RSI 2 bez USD/CAD i EUR/GBP (najwyższy spread względem ATR; najsłabsze też w IS). Pary wybrane po obejrzeniu OOS wersji 2 — OOS nie jest czysty, łącznie 1 + 24 + 24 prób.
+
 **Następne (Michał)**
 1. Nie liczyć kolejnych przeszukiwań na OOS 2026-05 – 2026-11 (otwarty dwa razy).
 2. Zamrozić RSI 2 #12 i/lub dać go inwestorowi z małym % — forward test.
