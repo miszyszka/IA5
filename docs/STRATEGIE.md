@@ -1,5 +1,7 @@
 # STRATEGIE — jak pisać kod strategii dla IA5
 
+Wersja 0.30 · 2026-11-03 (dodane: strategie z `ia5 search`, sekcja 9)
+
 > Ten plik jest **regułą dla Claude**. Gdy Michał mówi „zrób mi strategię …”, Claude postępuje dokładnie według sekcji 1 i zwraca kod, który bez zmian wkleja się do okna „Nowa strategia” w dashboardzie i który program `ia5` na Macu zrozumie.
 > Kontrakt jest egzekwowany w kodzie: `runner/ia5/sandbox.py` (wykonanie), `runner/ia5/check.py` (kontrola), `web/js/metrics.js` → `checkStrategyCode` (kontrola w przeglądarce).
 
@@ -187,3 +189,15 @@ Każde wyjście musi mieć SL albo limit czasu (B7).
 3. Sygnały liczone w osobnym procesie, detektor look-ahead, silnik, walidacja.
 4. Wyniki trafiają na gałąź `data` (`results/{id}/`) → status `policzona` → karta strategii.
 5. Błąd w kodzie → status `blad` z komunikatem; w dashboardzie „Popraw kod”.
+
+---
+
+## 9. Strategia z głębokiego poszukiwania (`ia5 search`, D-044)
+
+Gdy Michał chce „setek tysięcy kombinacji”, **nie** piszemy strategii z ogromnym `PARAMS` (K1, pamięć, kara w DSR). Zamiast tego:
+1. Na Macu: `ia5 search --rozmiar duzy --zero 5` (albo `gigant`, więcej przebiegów zerowych = dłużej i uczciwiej). Wybór wyłącznie na IS; OOS otwierany raz dla K konfiguracji ustalonych z góry.
+2. Wynik: `~/.ia5/searches/{run}/search.md` + `strategy.py` — ≤ 12 najlepszych konfiguracji IS (`CONFIGS`, `PARAMS = {"cfg": …}`, własne `EXITS`, sekcja reguł skopiowana z `runner/ia5/search_rules.py`). Ten plik wkleja się do dashboardu bez zmian.
+3. Ocena: najpierw test zerowy i OOS **całej listy K** w `search.md`, potem karta w dashboardzie (benchmark losowy, PBO, walk-forward, spread ×1,5). DSR w karcie liczy tylko warianty tej strategii — prawdziwa liczba prób jest w `search.md`.
+4. Nie wybieramy z listy K tej konfiguracji, która wyszła najlepiej na OOS (W1). Rozstrzyga forward test po zamrożeniu (W4).
+5. Nowy wyzwalacz albo filtr dopisujemy w `search_rules.py` (sekcja między znacznikami — tylko `numpy`, `pandas`, `math`, `ind`) z testem look-ahead w `tests/test_search.py`.
+

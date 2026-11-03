@@ -176,6 +176,23 @@ def publish_scan(folder: Path, run_id: str, log=print) -> str:
     return sha
 
 
+def publish_search(folder: Path, run_id: str, log=print) -> str:
+    """Wynik poszukiwania (D-044) na gałąź data: searches/{run_id}/ — bez all_is.parquet (zostaje lokalnie)."""
+    import shutil
+
+    ensure_repo()
+    dst = DATA_REPO / "searches" / run_id
+    if dst.exists():
+        shutil.rmtree(dst)
+    shutil.copytree(folder, dst, ignore=shutil.ignore_patterns("all_is.parquet"))
+    _git("add", "-A")
+    _git("commit", "-q", "-m", f"poszukiwanie {run_id}")
+    _git("push", "-q", "origin", "data")
+    sha = _git("rev-parse", "HEAD")
+    log(f"  opublikowano searches/{run_id} ({sha[:7]})")
+    return sha
+
+
 def delete_result(strategy_id: str, log=print) -> str | None:
     """Usuwa wynik strategii z gałęzi data i z indeksu (historia gita zostaje — G4)."""
     import shutil

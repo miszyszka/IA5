@@ -2,6 +2,22 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-03 — sesja 5
+
+**Zrobione (D-044: głębokie poszukiwanie)**
+- `ia5 search` (`runner/ia5/search.py`, `search_rules.py`): 13 rodzin wyzwalaczy × za/przeciw × wyjścia silnika × trend × zmienność × sesja × dni × kierunek; siatki `szybki` 7 tys., `duzy` 0,71 mln, `gigant` 3,1 mln konfiguracji (każda na 8 parach naraz). IS-A (FDR 5%) → IS-B (t ≥ 2) → ≥ 5/8 par → płaskowyż → K = 20 wybranych tylko po IS → raz OOS (dziennik `~/.ia5/oos_ledger.json`). `--zero N`: całe poszukiwanie na danych bez przewagi (świece odbite z losowym znakiem), przed OOS. Wynik + `strategy.py` (≤ 12 konfiguracji) do dashboardu.
+- Ten sam model co silnik: testy — transakcje = `engine.run` co do pipsa; zmiana cen w OOS nie zmienia rankingu IS; wygenerowana strategia przechodzi `check_code_on` i `checkStrategyCode`, sygnały = sygnały poszukiwania; reguły bez look-ahead; test zerowy zachowuje |ruchy|; podłożony efekt znaleziony, szum — nic.
+- **Próba na prawdziwych świecach (kopia z gałęzi `data`, 8 par, do 2026-11-03 06:00 UTC), `duzy`, tylko IS, 2 przebiegi zerowe, OOS NIE otwarty:** 714 816 konfiguracji, 150 431 z wystarczającą liczbą transakcji, 10,7 min na 2 rdzeniach. Po FDR **0 odkrytych** (potrzeba t IS-A ≥ 4,97; najlepsze 4,55). Tylko 20% konfiguracji ma dodatnie R w IS-A po spreadzie, 7,7% w obu połówkach IS. Najlepszy min(t IS-A, t IS-B) = 2,91 vs 2,56 / 2,78 w danych bez przewagi. Wniosek: w tej przestrzeni reguł H1 nie ma przewagi, która przetrwa uczciwą korektę — najbliżej: Bollinger(20, 3) przeciw, wejście 13–17, wyjście po 96 świecach; impuls 1 świecy > 1,5 ATR za ruchem, 07–10.
+
+**Następne (Michał)**
+1. `git pull`, `uv tool install -e runner --force`.
+2. `ia5 search --rozmiar gigant --zero 30` — 31 przebiegów (prawdziwy + 30 zerowych) po ok. 4–6 min na 8 rdzeniach (zmierzone: 3,6 min na parę na 1 rdzeniu) ≈ 2–3 h; 30 przebiegów zerowych daje p-wartość z rozdzielczością 1/31. OOS otwierany raz, na końcu. Wynik w `~/.ia5/searches/{run}/search.md`.
+3. Dopiero potem ewentualnie `strategy.py` z tego katalogu do dashboardu.
+
+**Znane problemy**
+- Przy 1,5 roku IS i ~12 tys. świec na parę próg FDR dla setek tysięcy prób to t ≈ 5 — rzadko osiągalny dla prostych reguł H1. Gęstsza siatka podnosi próg, nie szanse.
+- DSR w karcie dashboardu dla `strategy.py` widzi tylko jej warianty — prawdziwa liczba prób jest w `search.md`.
+
 ## 2026-10-31 — sesja 4
 
 **Zrobione (D-039: tylko świece Yahoo)**

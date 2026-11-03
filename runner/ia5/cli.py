@@ -459,6 +459,48 @@ def cmd_scan(args) -> int:
     return 0
 
 
+def cmd_search(args) -> int:
+    """Głębokie poszukiwanie (D-044): setki tysięcy – miliony konfiguracji na IS, test zerowy, jeden raz OOS dla
+    K wybranych po IS. Wynik: ~/.ia5/searches/{run}/ (+ gałąź data searches/{run}/) i strategy.py do dashboardu."""
+    from datetime import UTC, datetime
+
+    from . import cloud, ready, search
+    from .store import HOME, READY, SEARCHES, YAHOO
+
+    pairs = [p.upper() for p in args.pary] if args.pary else list(PAIRS)
+    yahoo = cloud.load_yahoo(YAHOO)
+    if not yahoo:
+        print("Brak świec na Macu — najpierw ia5 start.")
+        return 1
+    ready.build(yahoo, READY, log=log)
+    frames = {p: df for p, df in ready.load(READY, pairs).items() if len(df) > 24 * 120}
+    if not frames:
+        print("Za mało danych (potrzeba ≥ ok. 6 miesięcy świec na parę).")
+        return 1
+    caffeinate = None
+    if sys.platform == "darwin":   # Mac nie może usnąć w trakcie wielogodzinnego liczenia
+        caffeinate = subprocess.Popen(["caffeinate", "-i", "-w", str(os.getpid())])
+    try:
+        out = search.run(frames, size=args.rozmiar, top=args.top, workers=args.procesy, log=log, null=args.zero,
+                         open_oos=not args.bez_oos)
+    finally:
+        if caffeinate:
+            caffeinate.terminate()
+    run_id = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    count = search.ledger_add(HOME, run_id, out) if out.get("oos") is not None else None
+    dst = search.save(out, SEARCHES / run_id, run_id, count)
+    print(search.report(out, count))
+    log(f"Zapisano: {dst}" + (" · strategia do dashboardu: strategy.py" if (dst / "strategy.py").exists() else ""))
+    if not args.lokalnie:
+        try:
+            from . import publish
+
+            publish.publish_search(dst, run_id, log=log)
+        except Exception as e:  # noqa: BLE001 — wynik jest lokalnie, publikacja się nie udała
+            log(f"  publikacja nieudana ({e}) — wynik jest lokalnie w {dst}")
+    return 0
+
+
 def cmd_status(_args) -> int:
     print(f"IA5 runner · silnik {ENGINE_VERSION}")
     print("Pary:", ", ".join(PAIRS))
@@ -487,6 +529,16 @@ def main(argv=None) -> int:
     p_scan.add_argument("--pary", nargs="*", help="np. EURUSD GBPUSD (domyślnie wszystkie)")
     p_scan.add_argument("--lokalnie", action="store_true", help="bez publikacji na gałąź data")
     p_scan.set_defaults(func=cmd_scan)
+    p_srch = sub.add_parser("search", help="głębokie poszukiwanie: setki tysięcy konfiguracji na IS, potem OOS (D-044)")
+    p_srch.add_argument("--rozmiar", choices=["szybki", "duzy", "gigant"], default="duzy",
+                        help="szybki ~7 tys., duzy ~0,7 mln, gigant ~3,1 mln konfiguracji")
+    p_srch.add_argument("--top", type=int, default=20, help="ile konfiguracji (wybranych po IS) otworzyć na OOS")
+    p_srch.add_argument("--zero", type=int, default=0, help="przebiegi zerowe na danych bez przewagi (każdy = całe poszukiwanie)")
+    p_srch.add_argument("--procesy", type=int, help="równoległe procesy (domyślnie liczba rdzeni, max 8)")
+    p_srch.add_argument("--pary", nargs="*", help="np. EURUSD GBPUSD (domyślnie wszystkie)")
+    p_srch.add_argument("--bez-oos", action="store_true", help="tylko IS — OOS zostaje zamknięty")
+    p_srch.add_argument("--lokalnie", action="store_true", help="bez publikacji na gałąź data")
+    p_srch.set_defaults(func=cmd_search)
     sub.add_parser("status").set_defaults(func=cmd_status)
     sub.add_parser("health", help="opisowy przegląd zdrowia danych i projektu").set_defaults(func=cmd_health)
     args = parser.parse_args(argv)
