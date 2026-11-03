@@ -1,6 +1,36 @@
 {
  "strategies": [
   {
+   "id": "c1NcRLKwkR5F1TfYbqsq",
+   "name": "4H",
+   "run_id": "20261103-175512",
+   "created": 1793728512,
+   "verdict": "red",
+   "verdict_note": "brak przewagi",
+   "n_variants": 24,
+   "hypothesis": "Power of 3 / „knot świecy 4H” (wg filmu: akumulacja → manipulacja → dystrybucja). Gdy dzienny kierunek jest\nwzrostowy, nowa świeca 4H zwykle najpierw robi dolny knot (fałszywy ruch w dół, który zbiera płynność pod ważnym\ndołkiem), a potem zamyka się wysoko. Wchodzimy long, gdy w pierwszych godzinach nowej świecy 4H cena zebrała dołek\n(poprzedniej świecy 4H albo ostatnich 24 h), a świeca H1 zamyka się z powrotem nad nim (zmiana kierunku). Lustrzanie short.\nRóżnice (ograniczenia IA5): tylko H1 (autor wchodzi na 1 min po luce FVG i „zmianie stanu dostawy”); stop „pod dołkiem\nświecy 4H” i cel przybliżone przez ATR14 albo wyjście na koniec świecy 4H (2–4 świece H1).",
+   "pairs": [
+    "AUDUSD",
+    "EURGBP",
+    "EURJPY",
+    "EURUSD",
+    "GBPUSD",
+    "USDCAD",
+    "USDCHF",
+    "USDJPY"
+   ],
+   "data_from": 1730073600,
+   "data_to": 1793721600,
+   "source": "yahoo",
+   "engine_version": "0.9.0",
+   "best_exit": "ATR14 TP 2× SL 1× max 24",
+   "is_mean_r": -0.126931,
+   "oos_mean_r": -0.194637,
+   "oos_mean_pips": -1.78796,
+   "oos_trades": 649,
+   "demo": false
+  },
+  {
    "id": "7V4brQfDOVLvr8QEYMcX",
    "name": "clean average",
    "run_id": "20261103-175349",
