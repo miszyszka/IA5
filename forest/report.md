@@ -8,7 +8,7 @@
 
 - [bad] Manager (TEST): 377 transakcji, −1,28 pipsa netto na transakcję, pewność t = −0,3. Żeby uznać to za przewagę, t musi wynosić co najmniej 2.
 - [bad] Po doliczeniu nocy (0,5 pipsa za noc, średnio 2,8 nocy na transakcję): −2,65 pipsa. Model silnika nocy nie liczy.
-- [bad] Progi (5 głosów, 90% zgody) kontra bez progów (TEST): −1,28 vs +1,10 pipsa netto.
+- [bad] Progi (5 głosów, 90% zgody) kontra bez progów (TEST): −1,28 vs +1,50 pipsa netto.
 - [warn] Szczęście: warunki spełnia średnio 601 reguł na prawdziwych danych i 161 na danych bez przewagi. Około 27% wyboru mogło być przypadkiem. Spełnienie warunków nie oznacza zysku na kolejnych świecach.
 
 ## Księgi
@@ -18,7 +18,7 @@
 | Manager | HISTORIA | 643 | 50.4 | 5.96 | 4.32 | 1.1 | 2.94 | 2009.0 |
 | Manager | TEST | 377 | 48.5 | 0.37 | -1.28 | -0.3 | -2.65 | -1952.0 |
 | Kontrola | HISTORIA | 779 | 51.1 | 2.2 | 0.55 | 0.17 | -0.8 | -800.0 |
-| Kontrola | TEST | 523 | 50.3 | 2.75 | 1.1 | 0.34 | -0.18 | 53.0 |
+| Kontrola | TEST | 525 | 50.5 | 3.15 | 1.5 | 0.45 | 0.22 | 224.0 |
 
 ## Wszystkie progi (nie wybieraj najlepszego po fakcie)
 
@@ -56,11 +56,11 @@
 
 | głosy ≥ | zgoda ≥ | n | netto | t |
 |---|---|---|---|---|
-| 1 | 50% | 526 | -0.45 | -0.09 |
-| 1 | 60% | 526 | -0.37 | -0.07 |
-| 1 | 70% | 521 | -1.12 | -0.21 |
-| 1 | 80% | 520 | -2.22 | -0.5 |
-| 1 | 90% | 514 | -3.54 | -0.84 |
+| 1 | 50% | 528 | -0.05 | -0.01 |
+| 1 | 60% | 528 | 0.04 | 0.01 |
+| 1 | 70% | 523 | -0.71 | -0.13 |
+| 1 | 80% | 522 | -1.81 | -0.4 |
+| 1 | 90% | 516 | -3.11 | -0.74 |
 | 3 | 50% | 468 | -2.01 | -0.69 |
 | 3 | 60% | 468 | -1.76 | -0.58 |
 | 3 | 70% | 457 | -3.02 | -0.95 |
@@ -82,15 +82,45 @@
 | 20 | 80% | 207 | -4.72 | -0.79 |
 | 20 | 90% | 204 | -6.16 | -1.03 |
 
+### LIVE
+
+| głosy ≥ | zgoda ≥ | n | netto | t |
+|---|---|---|---|---|
+| 1 | 50% | 0 | None | None |
+| 1 | 60% | 0 | None | None |
+| 1 | 70% | 0 | None | None |
+| 1 | 80% | 0 | None | None |
+| 1 | 90% | 0 | None | None |
+| 3 | 50% | 0 | None | None |
+| 3 | 60% | 0 | None | None |
+| 3 | 70% | 0 | None | None |
+| 3 | 80% | 0 | None | None |
+| 3 | 90% | 0 | None | None |
+| 5 | 50% | 0 | None | None |
+| 5 | 60% | 0 | None | None |
+| 5 | 70% | 0 | None | None |
+| 5 | 80% | 0 | None | None |
+| 5 | 90% | 0 | None | None |
+| 10 | 50% | 0 | None | None |
+| 10 | 60% | 0 | None | None |
+| 10 | 70% | 0 | None | None |
+| 10 | 80% | 0 | None | None |
+| 10 | 90% | 0 | None | None |
+| 20 | 50% | 0 | None | None |
+| 20 | 60% | 0 | None | None |
+| 20 | 70% | 0 | None | None |
+| 20 | 80% | 0 | None | None |
+| 20 | 90% | 0 | None | None |
+
 ### RAZEM
 
 | głosy ≥ | zgoda ≥ | n | netto | t |
 |---|---|---|---|---|
-| 1 | 50% | 1312 | -0.38 | -0.13 |
-| 1 | 60% | 1310 | -1.55 | -0.55 |
-| 1 | 70% | 1297 | -0.54 | -0.19 |
-| 1 | 80% | 1281 | -1.2 | -0.46 |
-| 1 | 90% | 1249 | 1.34 | 0.52 |
+| 1 | 50% | 1314 | -0.22 | -0.08 |
+| 1 | 60% | 1312 | -1.39 | -0.49 |
+| 1 | 70% | 1299 | -0.37 | -0.13 |
+| 1 | 80% | 1283 | -1.04 | -0.39 |
+| 1 | 90% | 1251 | 1.51 | 0.59 |
 | 3 | 50% | 1231 | -2.41 | -1.03 |
 | 3 | 60% | 1231 | -2.5 | -1.09 |
 | 3 | 70% | 1204 | -1.86 | -0.76 |
