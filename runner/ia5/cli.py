@@ -10,6 +10,7 @@ import subprocess
 import sys
 import threading
 import time
+from pathlib import Path
 
 from . import ENGINE_VERSION
 from .config import PAIRS
@@ -156,6 +157,32 @@ def do_prepare(progress=None) -> dict:
     return {"yahoo": yahoo, "cov": cov, "ready": rdy, "publish_error": publish_error}
 
 
+REPO_ROOT = Path(__file__).resolve().parents[2]   # folder repozytorium IA5, z którego działa program
+
+
+def _git_repo(*args) -> str:
+    r = subprocess.run(["git", "-C", str(REPO_ROOT), *args], capture_output=True, text=True, timeout=30)
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
+STARTED_SHA = None   # commit, którym wystartował ia5 start (kod wczytany do pamięci)
+
+
+def code_info(fetch: bool = True) -> dict | None:
+    """D-046: commit wczytany przy starcie, commit na dysku i ile zmian jest na GitHub (origin/main) ponad niego."""
+    try:
+        head = _git_repo("rev-parse", "HEAD")
+        if not head:
+            return None
+        behind = None
+        if fetch and _git_repo("fetch", "-q", "origin", "main") == "" and _git_repo("rev-parse", "--verify", "-q", "origin/main"):
+            n = _git_repo("rev-list", "--count", "HEAD..origin/main")
+            behind = int(n) if n.isdigit() else None
+        return {"repo": str(REPO_ROOT).replace(str(Path.home()), "~"), "head": head, "loaded": STARTED_SHA, "behind": behind}
+    except Exception:  # noqa: BLE001 — brak gita albo sieci nie może zatrzymać przeglądu
+        return None
+
+
 def do_health(ctx: dict, beat_state: str | None = None, write: bool = True) -> dict:
     """Przegląd zdrowia (D-023) na danych z ostatniej synchronizacji i świeżym meta/status."""
     from . import cloud, health
@@ -165,7 +192,7 @@ def do_health(ctx: dict, beat_state: str | None = None, write: bool = True) -> d
     except Exception:  # noqa: BLE001
         docs = None
     h = health.run(cloud.read_status(), ctx["yahoo"], ctx["cov"], docs=docs, beat_state=beat_state,
-                   publish_error=ctx.get("publish_error"), home=HOME, ready=ctx.get("ready"))
+                   publish_error=ctx.get("publish_error"), home=HOME, ready=ctx.get("ready"), code=code_info())
     if write:
         cloud.write_health(h)
     bad = [c for c in h["checks"] if c["state"] != "ok"]
@@ -209,7 +236,10 @@ def cmd_start(_args) -> int:
     signal.signal(signal.SIGINT, bye)
     signal.signal(signal.SIGTERM, bye)
 
-    log(f"IA5 start · silnik {ENGINE_VERSION} · dane: świece H1 Yahoo (Firestore)")
+    global STARTED_SHA
+    STARTED_SHA = _git_repo("rev-parse", "HEAD") or None
+    sha = STARTED_SHA[:7] if STARTED_SHA else "?"
+    log(f"IA5 start · silnik {ENGINE_VERSION} · kod {sha} z {REPO_ROOT} · dane: świece H1 Yahoo (Firestore)")
     first = migrate_legacy(log)
     enforce_local_data(log)
 
@@ -352,10 +382,19 @@ def handle_job(sid: str, data: dict, state: dict) -> None:
     from .sandbox import StrategyError
 
     name = data.get("name") or sid
-    log(f"Strategia „{name}” ({sid}): liczenie…")
+    forward = data.get("status") == "forward"   # W4: zamrożona strategia na nowych świecach
+    log(f"Strategia „{name}” ({sid}): {'forward test' if forward else 'liczenie'}…")
     state["now"] = "computing"
     state["job"] = {"id": sid, "name": name, "progress": 0, "phase": "start"}
     cloud.update_strategy(sid, {"status": "liczy_sie", "error": None})
+
+    def failed(msg: str) -> None:
+        # D-046: nieudany forward test nie zmienia strategii w „błąd” — zostaje policzona (z poprzednim wynikiem)
+        # i wraca do forward testu za 6 h; błąd widać w karcie, na liście i w przeglądzie zdrowia
+        if forward and data.get("result"):
+            cloud.update_strategy(sid, {"status": "policzona", "forwardError": {"at": int(time.time()), "message": msg[:2000]}})
+        else:
+            cloud.update_strategy(sid, {"status": "blad", "error": msg[:2000]})
 
     def step(msg):
         log(msg)
@@ -371,14 +410,15 @@ def handle_job(sid: str, data: dict, state: dict) -> None:
                        require_source="yahoo")
         sha = publish.publish_result(out, log=log)
         v = json.loads((out / "validation.json").read_text(encoding="utf-8"))
-        cloud.update_strategy(sid, {"status": "policzona", "result": {"sha": sha, "path": f"results/{sid}",
-                                    "run_id": out.name, "verdict": v.get("verdict", {}).get("color")}})
+        cloud.update_strategy(sid, {"status": "policzona", "forwardError": None, "forwardAt": int(time.time()) if forward else None,
+                                    "result": {"sha": sha, "path": f"results/{sid}",
+                                               "run_id": out.name, "verdict": v.get("verdict", {}).get("color")}})
         log(f"Strategia „{name}”: gotowa.")
     except (StrategyError, SystemExit) as e:
-        cloud.update_strategy(sid, {"status": "blad", "error": str(e)[:2000]})
+        failed(str(e))
         log(f"Strategia „{name}”: błąd — {e}")
     except Exception as e:  # noqa: BLE001 — błąd nie może zatrzymać programu
-        cloud.update_strategy(sid, {"status": "blad", "error": f"{type(e).__name__}: {e}"[:2000]})
+        failed(f"{type(e).__name__}: {e}")
         log(f"Strategia „{name}”: nieoczekiwany błąd — {e}")
     finally:
         state["now"] = "idle"
@@ -531,7 +571,7 @@ def cmd_scan(args) -> int:
 
 
 def cmd_search(args) -> int:
-    """Głębokie poszukiwanie (D-045): setki tysięcy – miliony konfiguracji na IS, test zerowy, jeden raz OOS dla
+    """Głębokie poszukiwanie (D-044): setki tysięcy – miliony konfiguracji na IS, test zerowy, jeden raz OOS dla
     K wybranych po IS. Wynik: ~/.ia5/searches/{run}/ (+ gałąź data searches/{run}/) i strategy.py do dashboardu."""
     from datetime import UTC, datetime
 

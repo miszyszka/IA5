@@ -324,15 +324,37 @@ def strategies(docs: list[dict] | None, beat_state: str | None, now: int) -> dic
     detail = [f"{d.get('name', d['id'])}: błąd — {str(d.get('error', ''))[:120]}" for d in errs]
     detail += [f"{d.get('name', d['id'])}: oznaczona „liczy się”, a Mac nic nie liczy" for d in stuck]
     detail += [f"{d.get('name', d['id'])}: czeka w kolejce ponad godzinę" for d in waiting]
+    fwd = [d for d in docs if d.get("frozenAt") and d.get("forwardError")]   # D-046
+    detail += [f"{d.get('name', d['id'])}: forward test nieudany — {str((d.get('forwardError') or {}).get('message', ''))[:120]}"
+               for d in fwd]
     counts = {}
     for d in docs:
         counts[d.get("status")] = counts.get(d.get("status"), 0) + 1
     text = ", ".join(f"{n} {STATUS_PL.get(s, s)}" for s, n in sorted(counts.items(), key=lambda x: -x[1])) or "Brak strategii."
     if stuck or waiting:
         return check("strategies", "Strategie", "warn", text, detail, "Strategię „utkniętą” wyślij ponownie: karta → Policz ponownie.")
-    if errs:
-        return check("strategies", "Strategie", "warn", text, detail, "Karta strategii → Popraw kod.")
+    if errs or fwd:
+        return check("strategies", "Strategie", "warn", text, detail,
+                     "Karta strategii → Popraw kod." if errs else "Forward test ponowi się sam za 6 h; gdy błąd wraca — wklej go Claude.")
     return check("strategies", "Strategie", "ok", text)
+
+
+def code_version(info: dict | None) -> dict:
+    """D-046: czy ia5 start liczy aktualnym kodem. info = {repo, loaded, head, behind} (cli.code_info).
+    W 2026-10-31 Mac liczył starą wersją przez kilka godzin (git pull w innym folderze) — ta kontrola to pokazuje."""
+    name = "Wersja programu na Macu"
+    if not info or not info.get("head"):
+        return check("code", name, "ok", "Nie sprawdzono (program nie działa z repozytorium git).")
+    repo, head, loaded, behind = info.get("repo"), info["head"][:7], (info.get("loaded") or "")[:7], info.get("behind")
+    if loaded and loaded != head:
+        text = f"Kod w {repo} zmienił się po uruchomieniu ia5 start ({loaded} → {head}) — program liczy starą wersją."
+        return check("code", name, "bad", text, fix="W oknie ia5 start: Ctrl+C, potem ponownie ia5 start.")
+    if behind:
+        word = pl(behind, "nowsza zmiana", "nowsze zmiany", "nowszych zmian")
+        return check("code", name, "warn", f"Na GitHub jest {behind} {word} niż kod w {repo} ({head}).",
+                     fix=f"cd {repo} && git pull, potem Ctrl+C i ponownie ia5 start.")
+    note = "" if behind is not None else " (bez porównania z GitHub — brak sieci)"
+    return check("code", name, "ok", f"Aktualny kod {head} z folderu {repo}{note}.")
 
 
 def disk(path: Path) -> dict:
@@ -394,6 +416,7 @@ def run(
     home: Path | None = None,
     now: int | None = None,
     ready: dict | None = None,
+    code: dict | None = None,
 ) -> dict:
     now = now or int(time.time())
     checks = [
@@ -408,6 +431,8 @@ def run(
         publishing(status, publish_error),
         strategies(docs, beat_state, now),
     ]
+    if code is not None:
+        checks.append(code_version(code))
     if home is not None:
         checks.append(local_data(home, yahoo))
         checks.append(disk(home))

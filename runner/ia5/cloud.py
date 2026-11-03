@@ -129,7 +129,8 @@ def list_strategies() -> list[dict]:
         d = snap.to_dict() or {}
         if hasattr(d.get("createdAt"), "timestamp"):
             d["createdAt"] = int(d["createdAt"].timestamp())
-        out.append({"id": snap.id, **{k: d.get(k) for k in ("name", "status", "error", "createdAt", "frozenAt")}})
+        keys = ("name", "status", "error", "createdAt", "frozenAt", "forwardError", "forwardAt")
+        out.append({"id": snap.id, **{k: d.get(k) for k in keys}})
     return out
 
 
@@ -159,11 +160,18 @@ def computed_strategies() -> list[tuple[str, dict]]:
 
 
 def frozen_strategies() -> list[tuple[str, dict]]:
-    """Policzone strategie z datą zamrożenia (odczyt: tyle dokumentów, ile policzonych strategii)."""
+    """Zamrożone strategie do forward testu (W4): policzone, a także te, które wcześniejszy nieudany forward test
+    zostawił ze statusem „błąd” (przed D-046) — wracają do liczenia zamiast wypaść z forward testu na zawsze.
+    Odczyt: tyle dokumentów, ile strategii policzonych i z błędem."""
     from google.cloud.firestore_v1.base_query import FieldFilter
 
-    q = db().collection("strategies").where(filter=FieldFilter("status", "==", "policzona"))
-    return [(s.id, s.to_dict()) for s in q.stream() if (s.to_dict() or {}).get("frozenAt")]
+    q = db().collection("strategies").where(filter=FieldFilter("status", "in", ["policzona", "blad"]))
+    out = []
+    for s in q.stream():
+        d = s.to_dict() or {}
+        if d.get("frozenAt") and (d.get("status") == "policzona" or d.get("result")):
+            out.append((s.id, d))
+    return out
 
 
 def watch_investors(on_change):

@@ -41,6 +41,8 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
 - **Inwestorzy (D-045, 2026-11-03):** zakładka Inwestorzy — dodawanie (nazwa, kapitał, % na wejście, strategie z wariantem), usuwanie, stan INWESTOR DZIAŁA, wykres kapitału, chronologiczna lista paper transakcji; liczenie na Macu (`ia5/investors.py`) co godzinę i po każdej zmianie listy; publikacja na gałęzi `data`. Wymaga nowych reguł Firestore (sekcja `investors`).
 
+- **D-046:** nieudany forward test nie wyłącza już zamrożonej strategii na zawsze (RSI 2 wróci do forward testu przy starcie); przegląd zdrowia sprawdza wersję programu na Macu; zwijane panele w kartach.
+
 **Następne (Michał)**
 0. Wkleić nowe `firestore.rules` (Firebase → Firestore → Rules, `<OWNER_UID>` → swój UID → Publish), na Macu `cd ~/IA5 && git pull` i ponownie `ia5 start`.
 1. Wkleić nowy `apps_script/Code.gs` do Apps Script (bez fałszywych flag „luka” na otwarciu tygodnia). Opcjonalnie raz `backfill()` — uzupełni 3 przerwy Yahoo, jeśli Yahoo ma już te świece.

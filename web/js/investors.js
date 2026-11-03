@@ -2,6 +2,7 @@
 // Lista i dodawanie/usuwanie: Firestore `investors` (tylko właściciel). Stan, kapitał i transakcje liczy Mac co godzinę
 // i publikuje na gałęzi data (investors/index.json, investors/{id}/state.json) — Z2: bez cen z Firestore.
 import { disposeAll, equityChart } from './charts.js';
+import { collapsible } from './collapse.js';
 import { getJSON, getText } from './data.js';
 import { createInvestor, deleteInvestor } from './fb.js';
 import { drawdown, investorStatus, investorTrades, mergeInvestors, mergeStrategies, PAIRS, SIZING, toCSV, validateInvestor, variantChoices } from './metrics.js';
@@ -208,6 +209,7 @@ async function renderCard(root, id) {
 
   head.append(kpis);
   root.replaceChildren(back, head, eqPanel, strat, tPanel);
+  collapsible(root, 'inwestor');
   if (st?.curve?.ts?.length > 1) {
     const marks = [{ ts: st.start, label: 'start' }];
     equityChart(chartBox, st.curve, drawdown(st.curve.equity), marks);

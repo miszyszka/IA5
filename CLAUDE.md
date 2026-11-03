@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.31 · 2026-11-03 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku; `ia5 search` (D-044); zakładka Inwestorzy (D-045) — `docs/STATUS.md`
+Wersja 0.32 · 2026-11-03 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku; `ia5 search` (D-044); zakładka Inwestorzy (D-045) — `docs/STATUS.md`
 
 ---
 
@@ -322,7 +322,7 @@ Rozbicia: para, rok, kierunek, sesja (Azja 00–07, Europa 07–13, USA 13–21 
 | Wskaźniki | TA-Lib — zgodność do 1e-9 | CI, każdy push |
 | Silnik | Ręcznie policzone „złote" scenariusze na syntetycznych świecach; testy własności (`hypothesis`), np. netto = brutto − spread zawsze | CI |
 | Silnik vs inny silnik | `backtesting.py` na strategii referencyjnej (przecięcie SMA + wyjście po N świecach) — identyczna lista transakcji. Ręcznie: TradingView Strategy Tester | CI / raz na etap |
-| Dane | Przegląd zdrowia (D-023): świeżość Yahoo, kopia na Macu = Firestore, na Macu tylko dane Yahoo (D-041), trójkąty par godzina po godzinie na całej historii (przesunięcie czasu jednej pary daje ~11% godzin ponad próg), zamrożone notowania w sesji, kompletność i przerwy, poprawność świec | każda synchronizacja (co godzinę) |
+| Dane | Przegląd zdrowia (D-023): wersja programu na Macu (D-046: liczy kodem z dysku i aktualnym z GitHub), świeżość Yahoo, kopia na Macu = Firestore, na Macu tylko dane Yahoo (D-041), trójkąty par godzina po godzinie na całej historii (przesunięcie czasu jednej pary daje ~11% godzin ponad próg), zamrożone notowania w sesji, kompletność i przerwy, poprawność świec | każda synchronizacja (co godzinę) |
 | Look-ahead | Detektor: sygnały liczone na pełnych danych i na danych obciętych w losowych punktach muszą być identyczne do punktu cięcia | przed każdym liczeniem |
 | Przeuczenie | OOS 25% (W1), walk-forward (okna roczne), Deflated Sharpe Ratio, PBO metodą CSCV (16 bloków), bootstrap 95% CI expectancy | każde liczenie |
 | Przypadek | Benchmark losowych wejść, ≥ 1000 losowań → percentyl (W3) | każde liczenie |
@@ -362,6 +362,7 @@ Duże okno: nazwa, hipoteza, kod (pole tekstowe z czcionką o stałej szerokośc
 
 ### 10.5 Karta strategii
 - Nagłówek: werdykt, hipoteza, liczba wariantów, `ENGINE_VERSION`, zakres danych, hashe.
+- **Panele zwijane** (D-046): klik w nagłówek panelu zwija/rozwija, „Zwiń wszystko / Rozwiń wszystko”; stan pamiętany w przeglądarce. Tak samo w karcie inwestora.
 - **Filtry globalne karty:** pary (checkboxy), kierunek, okres, IS / OOS / całość, rodzina wyjść, sesja, wielkość pozycji (5 / 10 / 15 / 20 / 30% lub z `SIZING`).
 - **Ranking wariantów:** tabela sortowalna + paski metryki (styl z inspiracji 3).
 - **Heatmapa TP × SL** (rodzina ATR) i krzywa expectancy względem N (rodzina czasowa).

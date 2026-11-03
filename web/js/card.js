@@ -1,5 +1,6 @@
 // Karta strategii (CLAUDE.md 10.5). Wszystkie liczby z plików wyników na gałęzi data.
 import { candles, disposeAll, equityChart, heatmap, lines } from './charts.js';
+import { collapsible } from './collapse.js';
 import { getJSON, getText, readRows } from './data.js';
 import { openEditor } from './editor.js';
 import { freeze, unfreeze } from './fb.js';
@@ -93,8 +94,11 @@ function filtered() {
 
 function render() {
   const m = S.manifest;
+  let fold = null;
   $('#view-card').replaceChildren(
-    h('a', { class: 'back', href: '#/' }, '← Strategie'),
+    h('div', { class: 'row between backrow' }, h('a', { class: 'back', href: '#/' }, '← Strategie'),
+      h('div', { class: 'row' }, h('button', { class: 'btn ghost small', onclick: () => fold?.setAll(true), title: 'Zwija wszystkie panele — rozwiniesz klikając nagłówek' }, 'Zwiń wszystko'),
+        h('button', { class: 'btn ghost small', onclick: () => fold?.setAll(false) }, 'Rozwiń wszystko'))),
     h('section', { id: 'card-head', class: 'card-head' }),
     h('section', { class: 'grid2' }, h('div', { id: 'verdict', class: 'panel' }), h('div', { id: 'valid', class: 'panel' })),
     h('section', { id: 'filters', class: 'filters panel' }),
@@ -117,6 +121,7 @@ function render() {
     h('section', { class: 'panel' }, h('div', { class: 'phead' }, h('h3', {}, 'Transakcje'), h('div', { id: 'tr-tools', class: 'row' })),
       h('div', { class: 'tablewrap' }, h('table', { id: 'trades', class: 'data' })), h('div', { id: 'tr-pager', class: 'row center' })),
     h('section', { class: 'panel' }, h('details', { id: 'code', ontoggle: loadCode }, h('summary', {}, 'Kod strategii'), h('pre', { class: 'codeview' }, 'Wczytywanie…'))));
+  fold = collapsible($('#view-card'), 'strategia');
   renderHead();
   renderVerdict();
   renderFilters();
@@ -134,7 +139,8 @@ function renderHead() {
     h('div', { class: 'title-row' },
       h('div', {},
         h('h2', {}, m.name, m.demo ? h('span', { class: 'chip demo' }, 'DEMO') : null, frozen ? h('span', { class: 'chip frozen' }, `❄ zamrożona ${dateUTC(frozen)}`) : null,
-          d?.status === 'liczy_sie' ? h('span', { class: 'chip run' }, 'przeliczanie…') : d?.status === 'do_policzenia' ? h('span', { class: 'chip warn' }, 'w kolejce do przeliczenia') : null),
+          d?.status === 'liczy_sie' ? h('span', { class: 'chip run' }, 'przeliczanie…') : d?.status === 'do_policzenia' ? h('span', { class: 'chip warn' }, 'w kolejce do przeliczenia') : null,
+          d?.forwardError ? h('span', { class: 'chip warn', title: d.forwardError.message }, `forward test nieudany ${dateUTC(d.forwardError.at, true)} — ponowi się za 6 h`) : null),
         h('p', { class: 'meta' }, `${m.pairs.map((p) => PAIRS[p]?.label || p).join(', ')} · ${dateUTC(m.data_from)} → ${dateUTC(m.data_to)} · OOS od ${dateUTC(m.oos_cutoff)} · `,
           `źródło: ${m.data_source} · silnik ${m.engine_version} · kod ${m.code_hash} · dane ${m.data_hash} · policzono ${dateUTC(m.created, true)} UTC`)),
       h('div', { class: `verdict-badge ${vc}` }, h('small', {}, 'werdykt'), h('b', {}, vl), h('span', {}, v.verdict?.note || ''))),
@@ -240,7 +246,12 @@ function renderHeat() {
   const v = S.byId.get(S.selected);
   const atrVs = S.variants.filter((x) => x.family === 'ATR' && x.param_id === v.param_id);
   const el = $('#heat');
-  if (!atrVs.length) { el.replaceChildren(h('p', { class: 'hint' }, 'Brak wariantów ATR.')); return; }
+  if (!atrVs.length) {
+    el.replaceChildren(h('p', { class: 'hint' }, 'Ta strategia nie ma wariantów rodziny ATR (własne EXITS) — mapa nie dotyczy.'));
+    el.style.height = 'auto';
+    return;
+  }
+  el.style.height = '';
   const ref = v.family === 'ATR' ? v : atrVs.find((x) => x.rank_is != null) || atrVs[0];
   S.heat.n = S.heat.n ?? ref.x_n;
   S.heat.cap = S.heat.cap ?? ref.x_cap;
@@ -262,7 +273,12 @@ function renderHeat() {
 function renderTimeCurve() {
   const pid = S.byId.get(S.selected)?.param_id ?? 0;
   const tv = S.variants.filter((x) => x.family === 'czas' && x.param_id === pid).sort((a, b) => a.x_n - b.x_n);
-  if (!tv.length) return;
+  if (!tv.length) {   // strategia z własnymi wyjściami (EXITS) bez wyjść czasowych — zamiast pustego wykresu krótka informacja
+    $('#timecurve').replaceChildren(h('p', { class: 'hint' }, 'Ta strategia nie ma wyjść czasowych (własne EXITS) — wykres nie dotyczy.'));
+    $('#timecurve').style.height = 'auto';
+    return;
+  }
+  $('#timecurve').style.height = '';
   lines($('#timecurve'), tv.map((x) => x.x_n), [
     { name: 'IS śr. R', data: tv.map((x) => x.is_exp_r) }, { name: 'OOS śr. R', data: tv.map((x) => x.oos_exp_r) }], 'N świec');
 }

@@ -60,6 +60,7 @@ function row(s, beat) {
         h('h3', {}, s.name),
         r?.demo ? h('span', { class: 'chip demo' }, 'DEMO') : null,
         s.doc?.frozenAt ? h('span', { class: 'chip frozen' }, '❄ zamrożona') : null,
+        s.doc?.forwardError ? h('span', { class: 'chip warn', title: s.doc.forwardError.message }, 'forward: błąd') : null,
         stateChip(s, beat)),
       h('p', { class: 'hyp' }, (r?.hypothesis || s.doc?.hypothesis || '').trim() || '—'),
       s.state === 'running' && job ? h('div', { class: 'progress' }, h('i', { style: { width: `${job.progress || 0}%` } }), h('span', {}, job.phase || '')) : null,

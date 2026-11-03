@@ -82,3 +82,23 @@ def test_stale_yahoo_broken_bar_failed_publish_stuck_strategy():
     s = states(h)
     assert s["yahoo_fresh"] == "bad" and s["bars_valid"] == "bad" and s["publish"] == "bad" and s["strategies"] == "warn"
     assert h["state"] == "bad" and h["summary"].startswith("5 problemów")  # + brak mapy pokrycia
+
+
+def test_code_version_check():
+    """D-046: program liczący starą wersją kodu albo kod starszy niż GitHub — widać to w przeglądzie zdrowia."""
+    from ia5.health import code_version
+
+    assert code_version(None)["state"] == "ok"
+    ok = code_version({"repo": "~/IA5", "head": "abc1234def", "loaded": "abc1234def", "behind": 0})
+    assert ok["state"] == "ok" and "~/IA5" in ok["text"]
+    stale = code_version({"repo": "~/IA5", "head": "bbb", "loaded": "aaa", "behind": 0})
+    assert stale["state"] == "bad" and "Ctrl+C" in stale["fix"]
+    behind = code_version({"repo": "~/IA5", "head": "aaa", "loaded": "aaa", "behind": 3})
+    assert behind["state"] == "warn" and "git pull" in behind["fix"] and "3 nowsze zmiany" in behind["text"]
+
+
+def test_code_info_reads_this_repo():
+    from ia5 import cli
+
+    info = cli.code_info(fetch=False)
+    assert info is None or (len(info["head"]) == 40 and info["behind"] is None)

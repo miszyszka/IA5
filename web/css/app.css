@@ -434,3 +434,15 @@ table.itrades tr.open td { color: var(--text); }
 table.itrades td.run { color: var(--accent); }
 ul.plain { margin: 4px 0 0; padding-left: 18px; }
 @media (max-width: 760px) { .grid2.tight { grid-template-columns: 1fr; } }
+
+/* ---------- zwijane panele (karta strategii i inwestora) ---------- */
+.ctoggle { cursor: pointer; user-select: none; }
+.ctoggle > h3::before, h3.ctoggle::before { content: "▾"; display: inline-block; width: 16px; color: var(--dim); }
+.panel.collapsed > .ctoggle > h3::before, .panel.collapsed > h3.ctoggle::before { content: "▸"; }
+.panel.collapsed { align-self: start; }
+.ctoggle:hover > h3, h3.ctoggle:hover { color: var(--text); }
+.ctoggle:hover > h3::before, h3.ctoggle:hover::before { color: var(--accent); }
+.panel.collapsed > :not(.ctoggle) { display: none !important; }
+.panel.collapsed > .phead { margin-bottom: 0; }
+.panel.collapsed > .phead > :not(h3) { display: none; }
+.backrow { margin: 4px 0; } .backrow .back { margin: 8px 0; }

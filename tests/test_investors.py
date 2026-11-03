@@ -132,3 +132,22 @@ def test_handle_investors_owner_only_and_delete(monkeypatch):
             "c": {"createdBy": "me", "status": "do_usuniecia", "name": "C"}}
     cli.handle_investors(docs, "me", {})
     assert calls["computed"] == ["a"] and calls["published"] == (["a"], ["c"]) and calls["deleted"] == ["c"]
+
+
+def test_failed_forward_keeps_strategy_computed(monkeypatch, tmp_path):
+    """D-046: nieudany forward test zamrożonej strategii nie zamienia jej w „błąd” (wypadłaby z forward testu na zawsze);
+    zwykłe liczenie z błędem nadal kończy się statusem „błąd”."""
+    from ia5 import backtest, cli, cloud
+
+    writes = []
+    monkeypatch.setattr(cloud, "update_strategy", lambda sid, f: writes.append(f))
+    monkeypatch.setattr(cloud, "heartbeat", lambda *a, **k: None)
+
+    def boom(*a, **k):
+        raise RuntimeError("git push: brak sieci")
+
+    monkeypatch.setattr(backtest, "run_file", boom)
+    cli.handle_job("s", {"name": "RSI", "code": "x", "status": "forward", "result": {"sha": "a"}}, {})
+    assert writes[-1]["status"] == "policzona" and "brak sieci" in writes[-1]["forwardError"]["message"]
+    cli.handle_job("s", {"name": "RSI", "code": "x", "status": "do_policzenia"}, {})
+    assert writes[-1]["status"] == "blad" and "brak sieci" in writes[-1]["error"]
