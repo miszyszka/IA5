@@ -1,0 +1,135 @@
+{
+ "id": "FaC8c8947CS977MriiYh",
+ "name": "simple",
+ "run_id": "20261103-125900",
+ "engine_version": "0.8.0",
+ "code_hash": "3caee1102d98b8d9",
+ "data_hash": "31b6742d29a9c1d9",
+ "data_source": "yahoo",
+ "candles": "pełne",
+ "pairs": [
+  "AUDUSD",
+  "EURGBP",
+  "EURJPY",
+  "EURUSD",
+  "GBPUSD",
+  "USDCAD",
+  "USDCHF",
+  "USDJPY"
+ ],
+ "params": [
+  {
+   "drop_pips": 50
+  },
+  {
+   "drop_pips": 80
+  },
+  {
+   "drop_pips": 100
+  },
+  {
+   "drop_pips": 150
+  }
+ ],
+ "n_variants": 932,
+ "n_exits": 233,
+ "oos_cutoff": 1777796100,
+ "sizing": [
+  5.0,
+  10.0,
+  15.0,
+  20.0,
+  30.0
+ ],
+ "pyramid": 1,
+ "hours": "07–17 czasu polskiego (B11)",
+ "data_from": 1730073600,
+ "data_to": 1793703600,
+ "data_clean": {
+  "AUDUSD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 3,
+   "gaps": 3,
+   "gap_hours": 99,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "EURGBP": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 3,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "EURJPY": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 3,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "EURUSD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 5,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "GBPUSD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 4,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "USDCAD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 6,
+   "gaps": 3,
+   "gap_hours": 99,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "USDCHF": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 6,
+   "gaps": 4,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "USDJPY": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 6,
+   "gaps": 3,
+   "gap_hours": 99,
+   "rejected": 0,
+   "closed_hours": 146
+  }
+ },
+ "skipped": {
+  "B8": 2777,
+  "brak_danych": 0,
+  "rozgrzewka": 0,
+  "poza_godzinami": 201,
+  "luka_danych": 57,
+  "swieca_uzupelniona": 0
+ },
+ "hypothesis": "Po gwałtownym spadku EUR/USD w 10 świecach rynek jest wyprzedany: sprzedający kończą, a pierwsza zielona\nświeca pokazuje powrót kupujących. Oczekujemy krótkiego odbicia na long.",
+ "trades_rows": 18369,
+ "created": 1793710740,
+ "seconds": 4.2,
+ "verdict": "yellow"
+}
