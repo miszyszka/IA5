@@ -55,3 +55,23 @@ def test_publish_coverage_only_when_changed(repo):
     assert publish.publish_coverage({**cov, "generated": 2}, log=lambda m: None) is None
     cov["sources"]["dukascopy"]["pairs"]["EURUSD"]["m"][0][2] = 120
     assert publish.publish_coverage(cov, log=lambda m: None)
+
+
+def fake_investor(iid, eq=10_000.0, at=1):
+    return {"id": iid, "name": iid.upper(), "capital": 10_000.0, "pct": 5.0, "start": 0, "computedAt": at, "dataTo": 10,
+            "equity": {"now": eq, "return_pct": 0.0}, "counts": {"closed": 0, "open": 0}, "strategies": [{"name": "S"}],
+            "trades": [], "curve": {"ts": [0], "equity": [10_000.0]}}
+
+
+def test_publish_investors_add_update_remove(repo):
+    """D-045: stan inwestorów na gałęzi data; bez zmian treści — bez commita; usunięty znika z gałęzi i indeksu."""
+    q = lambda m: None  # noqa: E731
+    assert publish.publish_investors({"a": fake_investor("a"), "b": fake_investor("b")}, [], log=q)
+    files = ls_remote_files(repo)
+    assert {"investors/a/state.json", "investors/b/state.json", "investors/index.json"} <= files
+    assert publish.publish_investors({"a": fake_investor("a", at=99), "b": fake_investor("b", at=99)}, [], log=q) is None
+    assert publish.publish_investors({"a": fake_investor("a", eq=10_500.0)}, ["b"], log=q)
+    files = ls_remote_files(repo)
+    assert "investors/b/state.json" not in files
+    idx = json.loads((publish.DATA_REPO / "investors" / "index.json").read_text())
+    assert [(e["id"], e["equity"]) for e in idx["investors"]] == [("a", 10_500.0)]

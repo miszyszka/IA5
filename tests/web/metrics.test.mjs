@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { checkStrategyCode, filterTrades, mergeStrategies, simulateEquity, summarize } from '../../web/js/metrics.js';
+import { checkStrategyCode, filterTrades, investorStatus, investorTrades, mergeInvestors, mergeStrategies, simulateEquity, summarize, validateInvestor, variantChoices } from '../../web/js/metrics.js';
 
 test('kapitał = Python (runner/ia5/portfolio.py) dla każdego depozytu', () => {
   const fx = JSON.parse(readFileSync(process.env.IA5_EQUITY_FIXTURE, 'utf8'));
@@ -158,4 +158,36 @@ test('kalendarz danych dzień po dniu: stany, najgorszy z par, miesiące od najn
   const s = c.calendarSummary(m);
   assert.equal(s.session, 4); assert.equal(s.gap, 3); assert.equal(s.fill, 1);
   assert.equal(new Date(s.from * 1000).toISOString().slice(0, 10), '2026-01-29');
+});
+
+
+test('inwestorzy: stan „INWESTOR DZIAŁA” i jego wyjątki (D-045)', () => {
+  const now = 1_800_000_000, on = { online: true, state: 'idle' }, off = { online: false };
+  const st = { computedAt: now - 600, strategies: [{ name: 'A' }, { name: 'B' }] };
+  assert.equal(investorStatus({ status: 'aktywny' }, st, on, now).word, 'INWESTOR DZIAŁA');
+  assert.equal(investorStatus({ status: 'aktywny' }, st, off, now).word, 'WSTRZYMANY');
+  assert.equal(investorStatus({ status: 'aktywny' }, null, on, now).word, 'URUCHAMIANIE');
+  assert.equal(investorStatus({ status: 'aktywny' }, null, off, now).word, 'CZEKA NA MACA');
+  assert.equal(investorStatus({ status: 'aktywny' }, { ...st, computedAt: now - 4 * 3600 }, on, now).word, 'OPÓŹNIONY');
+  const bad = { ...st, strategies: [{ error: 'x' }, { error: 'y' }] };
+  assert.equal(investorStatus({ status: 'aktywny' }, bad, on, now).state, 'bad');
+  assert.match(investorStatus({ status: 'aktywny' }, { ...st, strategies: [{ error: 'x' }, {}] }, on, now).detail, /1 z 2/);
+});
+
+test('inwestorzy: lista, walidacja, chronologia, wybór wariantu', () => {
+  const docs = { a: { createdAt: 1, status: 'aktywny' }, b: { createdAt: 2, status: 'aktywny' }, c: { createdAt: 3, status: 'do_usuniecia' } };
+  const l = mergeInvestors(docs, [{ id: 'a', equity: 1 }]);
+  assert.deepEqual(l.map((x) => x.id), ['b', 'a']);
+  assert.equal(l[1].st.equity, 1);
+  assert.equal(l[0].st, null);
+  assert.deepEqual(validateInvestor({ name: 'X', capital: 10000, pct: 5, strategies: [{ code: 'c' }] }), []);
+  assert.equal(validateInvestor({ name: '', capital: 50, pct: 0, strategies: [] }).length, 4);
+  const t = investorTrades({ strategies: [{ name: 'S0' }, { name: 'S1' }], trades: [{ entry_ts: 5, strategy: 1 }, { entry_ts: 2, strategy: 0 }] });
+  assert.deepEqual(t.map((x) => [x.n, x.entry_ts, x.strategyName]), [[1, 2, 'S0'], [2, 5, 'S1']]);
+  const vs = [{ variant_id: 7, rank_is: 2, exit: 'e', params: {} }, { variant_id: 3, rank_is: 1, exit: 'e', params: { a: 1 } },
+    { variant_id: 9, rank_is: null, exit: 'e', params: {} }];
+  assert.deepEqual(variantChoices(vs).map((c) => c.id), [3, 7]);
+  const fr = variantChoices(vs, 9);
+  assert.deepEqual(fr.map((c) => c.id), [9, 3, 7]);
+  assert.ok(fr[0].frozen && fr[0].label.startsWith('❄'));
 });

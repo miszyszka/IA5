@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.30 · 2026-11-03 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku; `ia5 search` (D-044) — `docs/STATUS.md`
+Wersja 0.31 · 2026-11-03 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku; `ia5 search` (D-044); zakładka Inwestorzy (D-045) — `docs/STATUS.md`
 
 ---
 
@@ -12,8 +12,8 @@ Wersja 0.30 · 2026-11-03 · Status: E0–E5 zbudowane (kod); uruchomienie na Ma
 IA5 to laboratorium do **szukania i weryfikowania** strategii FX na świecach godzinowych (H1).
 Dashboard ma odpowiadać na dwa pytania naraz: *ile strategia by zarobiła* i *czy to nie przypadek*.
 
-Zakres teraz: system świec + program na Macu (`ia5`) + dashboard (zakładka **Strategie**).
-Zakładka **Inwestorzy** istnieje, ale jest pusta („wkrótce"). Nie budujemy jej bez polecenia.
+Zakres teraz: system świec + program na Macu (`ia5`) + dashboard (zakładki **Strategie**, **Stats**, **Inwestorzy**).
+Zakładka **Inwestorzy** (D-045): wirtualni inwestorzy — paper trading wybranymi strategiami od chwili dodania, na żywych świecach Yahoo.
 
 ---
 
@@ -56,7 +56,7 @@ Zakładka **Inwestorzy** istnieje, ale jest pusta („wkrótce"). Nie budujemy j
 
 ### Budżet zasobów (darmowy plan Firebase: 50 000 odczytów i 20 000 zapisów dziennie)
 - **Z1.** Świece w Firestore grupowane: **1 dokument = 1 para × 1 miesiąc**. Nigdy 1 świeca = 1 dokument (sam backfill ~100 tys. świec zjadłby 5 dni limitu zapisów).
-- **Z2.** Dashboard nie czyta świec ani wyników z Firestore — czyta je z gałęzi `data` na GitHub. Z Firestore czyta tylko `meta/status`, `runner/heartbeat` i listę `strategies` (nasłuch `onSnapshot`, bez odpytywania w pętli).
+- **Z2.** Dashboard nie czyta świec ani wyników z Firestore — czyta je z gałęzi `data` na GitHub. Z Firestore czyta tylko `meta/status`, `runner/heartbeat`, listę `strategies` i listę `investors` (D-045, zgoda Michała z 2026-11-03) (nasłuch `onSnapshot`, bez odpytywania w pętli).
 - **Z3.** Liczniki (np. liczba świec) są przechowywane w `meta/status`, nigdy liczone zapytaniem.
 - **Z4.** Każda nowa funkcja, która czyta lub zapisuje Firestore, ma w commicie oszacowanie dziennego zużycia.
 
@@ -160,6 +160,10 @@ runner/heartbeat
 strategies/{id}
   name, hypothesis, code, status, createdAt, createdBy,
   engineVersion, frozenAt?, result?: { sha, path, summary }, error?
+
+investors/{id}                       # D-045: wirtualny inwestor (paper trading); ustawienia stałe — tylko usunięcie
+  name, capital, pct, status: aktywny|do_usuniecia, createdAt (= start), createdBy,
+  strategies: [{ strategyId, name, code, variantId, variantLabel }]   # kod i wariant zapisane w chwili dodania
 ```
 
 - Zapis świec: REST `PATCH` z `updateMask` na pojedyncze klucze mapy `bars` → bez odczytu przed zapisem, idempotentnie.
@@ -190,6 +194,8 @@ results/{strategyId}/                # ostatni run strategii (poprzedni jest w h
   strategy.py       # kod strategii
 scans/{run}/                         # wyniki skanera hipotez (D-037)
 searches/{run}/                      # głębokie poszukiwanie (D-044): search.md, candidates_is.csv, top_oos.csv, strategy.py
+investors/index.json                 # lista inwestorów: kapitał teraz, wynik, liczba transakcji (D-045)
+investors/{id}/state.json            # stan inwestora: kapitał (zrealizowany + wycena otwartych), krzywa, wszystkie transakcje
 ```
 
 ### Lokalnie na Macu (poza repo)
@@ -237,6 +243,7 @@ searches/{run}/                      # głębokie poszukiwanie (D-044): search.m
   6. Heartbeat co 30 s do `runner/heartbeat`; `caffeinate -i`, żeby Mac nie usnął.
   7. Nasłuch `strategies` ze statusem `do_policzenia` / `do_usuniecia`; kolejka FIFO, jedna strategia na raz.
   8. Co godzinę (5 min po pełnej godzinie) kroki 2–5 od nowa; co 6 h ponowne liczenie zamrożonych strategii (forward test, W4).
+  8a. **Inwestorzy (D-045):** po każdej kopii świec i po każdej zmianie listy `investors` — przeliczenie wszystkich aktywnych inwestorów właściciela (`ia5/investors.py`) i publikacja `investors/` na gałęzi `data`; inwestorzy `do_usuniecia` znikają z gałęzi i z Firestore.
   9. `Ctrl+C` → heartbeat `offline`, czyste wyjście.
 - `ia5 scan [--duzy] [--pary …]` — **skaner hipotez** (D-037): tysiące–miliony prostych reguł na wszystkich parach, FDR 5% w odkryciu (pierwsze 50%), potwierdzenie (50–75%), ostatnie 25% pominięte; wynik `~/.ia5/scans/{run}/` i gałąź `data` `scans/{run}/`. To hipotezy do zbudowania strategii, nie werdykt.
 - `ia5 search [--rozmiar szybki|duzy|gigant] [--zero N] [--top K] [--bez-oos]` — **głębokie poszukiwanie** (D-044): 7 tys. / 0,71 mln / 3,1 mln konfiguracji (wyzwalacz × tryb × wyjście silnika × filtry), jedna konfiguracja = te same zasady na 8 parach. IS-A (FDR 5%) → IS-B (t ≥ 2) → ≥ 5/8 par → płaskowyż; K (domyślnie 20) wybranych **tylko po IS** otwartych raz na OOS i zapisanych w `oos_ledger.json`; `--zero N` = N przebiegów na danych bez przewagi (test szczęścia, liczony przed OOS). Ten sam model co silnik (test zgodności transakcji). Wynik `~/.ia5/searches/{run}/` + `strategy.py` (≤ 12 konfiguracji) do dashboardu.
@@ -340,7 +347,9 @@ Przy jednym wariancie PBO „nie dotyczy” (nie liczy się ani za, ani przeciw)
 - Bez kafli KPI. Liczby (świece w bazie, latencja, flagi, pary) są w zakładce **Stats**.
 
 ### 10.2 Zakładki
-**Strategie** | **Stats** | **Inwestorzy** (pusta, „wkrótce").
+**Strategie** | **Stats** | **Inwestorzy** (D-045).
+
+**Inwestorzy** — wirtualne konta (paper trading). Dodawanie: nazwa, kapitał początkowy (USD), % kapitału jako depozyt na każde wejście, strategie wyłącznie z listy policzonych strategii, każda z wariantem wybranym przy dodaniu (domyślnie zamrożony albo #1 IS); kod i wariant zapisują się w tej wersji. Ustawień nie da się zmienić — tylko usunąć inwestora. Model: te same zasady co silnik (B1–B12), sygnały tylko ze świec zamkniętych po dodaniu, wszystkie strategie na wspólnym kapitale (B4: suma depozytów ≤ 100%, nominał = 30 × depozyt), pozycja bez wyjścia = otwarta, wyceniana po ostatnim zamknięciu. Lista: wskaźnik stanu (INWESTOR DZIAŁA / URUCHAMIANIE / WSTRZYMANY — Mac rozłączony / OPÓŹNIONY / BŁĄD), kapitał teraz, wynik. Karta: stan, kapitał (zrealizowany + wycena otwartych), wykres kapitału z obsunięciem, strategie inwestora, sygnały czekające na wejście i chronologiczna lista wszystkich transakcji (także pominiętych z braku depozytu i anulowanych), eksport CSV. Wskaźnik stanu inwestora to kropka bez poświaty — poświata zostaje tylko w nagłówku (D-019).
 
 **Stats** (`meta/status` + `runner/heartbeat` + `coverage/coverage.json` z gałęzi `data`, 0 dodatkowych odczytów Firestore): **Stan systemu** (D-023) — jedno zdanie o stanie, opis bazy i projektu (ile świec w którym źródle, zakresy, strategie, gałąź `data`) i lista nazwanych kontroli (✓ / ! / ✕) z opisem, szczegółami i „co zrobić”; gdy przegląd jest starszy niż 2 h, strona mówi to wprost; świece w bazie i ostatnie pobranie, latencja (ostatnia, mediana 24 h, mini-wykres), kafelek przeglądu z listą wszystkich problemów (nazwa + zdanie);
 **mapa pokrycia świec Yahoo** (D-022, D-033, D-039) z przełącznikiem: *Ostatnia doba* — 24 zamknięte świece + trwająca godzina (przerywana kratka), nad kolumną godzina otwarcia w czasie polskim; stany: jest / spóźniona > 20 min / z flagą / czeka (czerwony zegar od pełnej godziny do zapisu) / rynek zamknięty; przy każdej parze zegar albo czas ostatniego zapisu; na żywo z `meta/status.recent` i `pairs`; *Cała historia* — 8 par × miesiące od pierwszej świecy: kolor = jak duże dziury, luki rozdzielone na *dziury* (brak danych: ≤ 3 h uzupełniana do liczenia, dłuższa = przerwa, transakcje anulowane), *granicę tygodnia* i *bez ruchu ceny*; klik miesiąc → lista luk co do godziny ze skutkiem dla liczenia, klik para → wszystkie jej dziury; **kalendarz danych dzień po dniu** (D-040) — cała historia, miesiąc pod miesiącem (od najnowszego), 1 kratka = 1 dzień UTC: komplet / pojedyncze braki ≤ 3 h (uzupełnione) / przerwa w danych > 3 h / brak danych / bez sesji / dziś; wszystkie pary (najgorszy stan) albo jedna para; podsumowanie „dane od … do …”, klik w dzień → luki co do godziny; tabela par. Flagi Yahoo nie mają osobnej listy — widać je w audycie jako kafelki „z flagą”, a ich liczbę w przeglądzie zdrowia.
@@ -396,7 +405,7 @@ IA5/
 │  ├─ STRATEGIE.md           # jak pisać strategie + reguła „zrób mi strategię” (K1–K3)
 │  └─ SETUP.md               # kroki do kliknięcia
 ├─ web/                      # dashboard (GitHub Pages): index.html, css/, js/ (app, list, card, charts, editor,
-│                            #   status, stats, session, coverage, health, data, fb, metrics, util, config), vendor/
+│                            #   status, stats, session, coverage, health, data, fb, metrics, util, config, investors), vendor/
 ├─ scripts/                  # check_strategy.py (kontrola kodu bez danych Michała), demo.py
 ├─ research/                 # badania hipotez na niezależnych danych, przed strategią (D-036)
 ├─ apps_script/              # Code.gs + appsscript.json (clasp)
@@ -408,6 +417,7 @@ IA5/
 │           validate.py  portfolio.py  check.py                           # walidacja, kapitał, kontrola (E5)
 │           scan.py                                                       # skaner hipotez (D-037)
 │           search.py  search_rules.py                                    # głębokie poszukiwanie (D-044)
+│           investors.py                                                  # wirtualni inwestorzy — paper trading (D-045)
 ├─ tests/                    # wskaźniki vs TA-Lib, złote scenariusze, zgodność z backtesting.py, walidacja,
 │                            #   strategie, publikacja, przykłady, web/ (Node)
 ├─ strategies/examples/
@@ -429,7 +439,7 @@ Gałąź `data` — osobna, tylko dane (sekcja 4).
 | **E3** Silnik | Wskaźniki + zgodność z TA-Lib, wejścia, siatka wyjść, złote testy, zgodność z backtesting.py | Wszystkie testy zielone |
 | **E4** Dashboard | Status, lista, nowa strategia, karta, raport | Pierwsza strategia policzona od wpisania do raportu |
 | **E5** Walidacja | OOS, walk-forward, benchmark losowy, DSR, PBO, zamrażanie + forward | Werdykt w karcie |
-| **E6** Inwestorzy | Później, osobna specyfikacja | — |
+| **E6** Inwestorzy | Wirtualni inwestorzy (paper trading): dodawanie/usuwanie, kapitał, % na wejście, wiele strategii naraz, wykres kapitału, lista transakcji (D-045) | Pierwszy inwestor liczony na Macu i widoczny na stronie |
 
 Każdy etap: testy zielone → push → `STATUS.md` zaktualizowany → działa na żywej stronie. Aktualny stan etapów: `docs/STATUS.md`.
 

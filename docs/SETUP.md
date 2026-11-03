@@ -9,7 +9,7 @@
    - `https://project-ia5.firebaseapp.com/*` — okno logowania Google (bez tego logowanie nie działa).
 6. **Apps Script:** w arkuszu Google → Rozszerzenia → Apps Script. Kod wgram w E1 (przez `clasp`).
 7. **UID właściciela:** zaloguj się na stronie (prawy górny róg) → kliknij avatar → „Kopiuj mój UID”.
-   - Firebase → Firestore → **Rules**: wklej aktualny [`firestore.rules`](../firestore.rules), zamień `<OWNER_UID>` na swój UID → **Publish**.
+   - Firebase → Firestore → **Rules**: wklej aktualny [`firestore.rules`](../firestore.rules), zamień `<OWNER_UID>` na swój UID → **Publish**. Po każdej zmianie pliku reguł (ostatnio D-045: inwestorzy) — wklej ponownie.
    - Na Macu utwórz `~/.ia5/config.json` z treścią `{"owner_uid": "TWÓJ_UID"}` — bez tego `ia5` nie policzy strategii z dashboardu (S1).
 
 ## E2 — program na Macu lub Windows

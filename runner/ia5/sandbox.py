@@ -159,8 +159,9 @@ def lookahead_cuts(fn, df, p, ind, seed: int = 0) -> list[int]:
     return bad
 
 
-def worker_main(code_path: str, h1_dir: str, out_dir: str) -> None:
-    """Uruchamiane w osobnym procesie. Zapisuje signals.parquet i meta.json w out_dir."""
+def worker_main(code_path: str, h1_dir: str, out_dir: str, param_ids: list[int] | None = None) -> None:
+    """Uruchamiane w osobnym procesie. Zapisuje signals.parquet i meta.json w out_dir.
+    param_ids: liczyć tylko te warianty parametrów (inwestorzy, D-045) — reszta pominięta, numeracja bez zmian."""
     from . import indicators as ind
 
     out = Path(out_dir)
@@ -182,6 +183,8 @@ def worker_main(code_path: str, h1_dir: str, out_dir: str) -> None:
             df = raw.set_index(pd.to_datetime(raw["ts"], unit="s", utc=True))[["open", "high", "low", "close"]]
             df.attrs["pair"] = pair   # D-037: strategia może zależeć od pary (df.attrs["pair"], np. "EURUSD")
             for pid, p in enumerate(params):
+                if param_ids is not None and pid not in param_ids:
+                    continue
                 bad = lookahead_cuts(fn, df, p, ind)
                 if bad:
                     meta["lookahead"].append({"pair": pair, "param_id": pid, "cuts": [int(raw.ts.iloc[c]) for c in bad]})
@@ -206,8 +209,10 @@ def _limit_memory():  # pragma: no cover — zależne od systemu
         pass
 
 
-def run_strategy_code(code: str, h1_dir: Path, timeout: int = 1800) -> tuple[pd.DataFrame, dict]:
-    """Sprawdza kontrakt, uruchamia kod w osobnym procesie, zwraca (sygnały, meta)."""
+def run_strategy_code(code: str, h1_dir: Path, timeout: int = 1800,
+                      param_ids: list[int] | None = None) -> tuple[pd.DataFrame, dict]:
+    """Sprawdza kontrakt, uruchamia kod w osobnym procesie, zwraca (sygnały, meta).
+    param_ids: tylko wybrane warianty parametrów (np. wariant przypisany inwestorowi)."""
     errs = check_code(code)
     if errs:
         raise StrategyError("; ".join(errs))
@@ -216,7 +221,8 @@ def run_strategy_code(code: str, h1_dir: Path, timeout: int = 1800) -> tuple[pd.
         code_path = Path(tmp) / "strategia.py"
         code_path.write_text(code, encoding="utf-8")
         boot = (f"import sys; sys.path.insert(0, {pkg_parent!r}); "
-                f"from ia5.sandbox import worker_main; worker_main({str(code_path)!r}, {str(h1_dir)!r}, {tmp!r})")
+                f"from ia5.sandbox import worker_main; worker_main({str(code_path)!r}, {str(h1_dir)!r}, {tmp!r}, "
+                f"{[int(x) for x in param_ids] if param_ids is not None else None!r})")
         env = {"PATH": os.environ.get("PATH", ""), "HOME": tmp, "TMPDIR": tmp, "PYTHONHASHSEED": "0"}
         if sys.platform == "win32":
             env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT", "")

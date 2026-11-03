@@ -16,5 +16,22 @@ service cloud.firestore {
              .hasOnly(["name", "hypothesis", "code", "status", "frozenAt", "frozenVariant"])
         && request.resource.data.status in ["do_policzenia", "do_usuniecia", "policzona", "blad"];
     }
+    // D-045: wirtualni inwestorzy (paper trading). Ustawień nie da się zmienić — tylko usunąć (status do_usuniecia).
+    match /investors/{id} {
+      allow read: if isOwner();
+      allow create: if isOwner()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.status == "aktywny"
+        && request.resource.data.keys().hasOnly(["name", "capital", "pct", "strategies", "status", "createdAt", "createdBy"])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 80
+        && request.resource.data.capital is number && request.resource.data.capital >= 100 && request.resource.data.capital <= 100000000
+        && request.resource.data.pct is number && request.resource.data.pct > 0 && request.resource.data.pct <= 100
+        && request.resource.data.strategies is list && request.resource.data.strategies.size() >= 1
+        && request.resource.data.strategies.size() <= 10
+        && request.resource.data.createdAt == request.time;
+      allow update: if isOwner()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status"])
+        && request.resource.data.status == "do_usuniecia";
+    }
   }
 }

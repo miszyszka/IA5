@@ -193,6 +193,48 @@ def publish_search(folder: Path, run_id: str, log=print) -> str:
     return sha
 
 
+def publish_investors(states: dict[str, dict], removed: list[str], log=print) -> str | None:
+    """D-045: investors/{id}/state.json + investors/index.json na gałęzi data. Inwestorzy spoza `states` i z `removed`
+    znikają z gałęzi (historia gita zostaje). Push tylko, gdy treść (bez znacznika czasu liczenia) się zmieniła."""
+    import shutil
+
+    from .investors import content_hash, index_entry
+
+    ensure_repo()
+    root = DATA_REPO / "investors"
+    root.mkdir(parents=True, exist_ok=True)
+    changed = False
+    for iid, st in states.items():
+        p = root / iid / "state.json"
+        if p.exists():
+            try:
+                if content_hash(json.loads(p.read_text(encoding="utf-8"))) == content_hash(st):
+                    continue
+            except ValueError:
+                pass
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(st, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        changed = True
+    for d in root.iterdir():
+        if d.is_dir() and (d.name in removed or d.name not in states):
+            shutil.rmtree(d)
+            changed = True
+    if not changed:
+        log("  inwestorzy: bez zmian")
+        return None
+    entries = []
+    for d in sorted(root.iterdir()):
+        if (d / "state.json").exists():
+            entries.append(index_entry(json.loads((d / "state.json").read_text(encoding="utf-8"))))
+    (root / "index.json").write_text(json.dumps({"investors": entries}, ensure_ascii=False, indent=1), encoding="utf-8")
+    _git("add", "-A")
+    _git("commit", "-q", "-m", f"inwestorzy: {len(entries)} (paper trading)")
+    _git("push", "-q", "origin", "data")
+    sha = _git("rev-parse", "HEAD")
+    log(f"  inwestorzy: opublikowani, {sha[:7]}")
+    return sha
+
+
 def delete_result(strategy_id: str, log=print) -> str | None:
     """Usuwa wynik strategii z gałęzi data i z indeksu (historia gita zostaje — G4)."""
     import shutil

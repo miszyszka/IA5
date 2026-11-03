@@ -166,6 +166,19 @@ def frozen_strategies() -> list[tuple[str, dict]]:
     return [(s.id, s.to_dict()) for s in q.stream() if (s.to_dict() or {}).get("frozenAt")]
 
 
+def watch_investors(on_change):
+    """D-045: nasłuch wszystkich inwestorów (kilka dokumentów; odczyt przy starcie + przy każdej zmianie).
+    on_change(lista (id, dane)) dostaje pełną listę po każdej zmianie."""
+    def cb(snaps, _changes, _read_time):
+        on_change([(s.id, s.to_dict() or {}) for s in snaps])
+
+    return db().collection("investors").on_snapshot(cb)
+
+
+def delete_investor(iid: str) -> None:
+    db().collection("investors").document(iid).delete()
+
+
 def watch_queue(on_job):
     """Nasłuch strategii do policzenia i do usunięcia (bez odpytywania w pętli — Z2)."""
     from google.cloud.firestore_v1.base_query import FieldFilter

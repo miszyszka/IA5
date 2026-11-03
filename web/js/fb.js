@@ -117,3 +117,34 @@ export async function unfreeze(id) {
   const { fb } = await need();
   await fb.F.updateDoc(fb.F.doc(fb.db, 'strategies', id), { frozenAt: null, frozenVariant: null });
 }
+
+// ---------- wirtualni inwestorzy (D-045) ----------
+
+/** Nasłuch inwestorów (tylko właściciel — reguły S1; Z2 rozszerzone za zgodą Michała). cb(docs | null, błąd). */
+export async function watchInvestors(cb) {
+  const fb = await firebase();
+  if (!fb) return cb(null, { code: 'brak-firebase' });
+  return fb.F.onSnapshot(fb.F.collection(fb.db, 'investors'), (snap) => {
+    const docs = {};
+    snap.forEach((d) => {
+      const v = d.data();
+      if (v.createdAt?.seconds) v.createdAt = v.createdAt.seconds;
+      docs[d.id] = v;
+    });
+    cb(docs, null);
+  }, (e) => cb(null, e));
+}
+
+/** Nowy inwestor: ustawienia i kod strategii zapisane na stałe (bez edycji — tylko usunięcie). */
+export async function createInvestor({ name, capital, pct, strategies }) {
+  const { fb, u } = await need();
+  const ref = await fb.F.addDoc(fb.F.collection(fb.db, 'investors'), {
+    name, capital, pct, strategies, status: 'aktywny', createdBy: u.uid, createdAt: fb.F.serverTimestamp(),
+  });
+  return ref.id;
+}
+
+export async function deleteInvestor(id) {
+  const { fb } = await need();
+  await fb.F.updateDoc(fb.F.doc(fb.db, 'investors', id), { status: 'do_usuniecia' });
+}

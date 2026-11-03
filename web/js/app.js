@@ -1,7 +1,8 @@
-// IA5 — dashboard. Router: #/ (strategie), #/s/{id} (karta), #/stats, #/inwestorzy.
+// IA5 — dashboard. Router: #/ (strategie), #/s/{id} (karta), #/stats, #/inwestorzy, #/inwestorzy/{id} (D-045).
 import { openCard } from './card.js';
 import { getJSON, refreshData } from './data.js';
-import { login, logout, onUser, watchStrategies } from './fb.js';
+import { login, logout, onUser, watchInvestors, watchStrategies } from './fb.js';
+import { initInvestors, loadInvestors, renderInvestors } from './investors.js';
 import { initList, renderList } from './list.js';
 import { initStats, renderStats } from './stats.js';
 import { initStatus } from './status.js';
@@ -10,8 +11,10 @@ import { $, $$, copy, h, store, toast } from './util.js';
 function route() {
   const hash = location.hash || '#/';
   const m = hash.match(/^#\/s\/(.+)$/);
+  const mi = hash.match(/^#\/inwestorzy\/(.+)$/);
   const r = m ? { view: 'card', id: decodeURIComponent(m[1]) }
-    : hash.startsWith('#/inwestorzy') ? { view: 'investors' } : hash.startsWith('#/stats') ? { view: 'stats' } : { view: 'list' };
+    : mi ? { view: 'investors', id: decodeURIComponent(mi[1]) }
+      : hash.startsWith('#/inwestorzy') ? { view: 'investors' } : hash.startsWith('#/stats') ? { view: 'stats' } : { view: 'list' };
   store.set('route', r);
   $$('.view').forEach((v) => { v.hidden = v.id !== `view-${r.view}`; });
   const tab = { investors: 'investors', stats: 'stats' }[r.view] || 'strategies';
@@ -19,6 +22,7 @@ function route() {
   if (r.view === 'list') renderList();
   if (r.view === 'card') openCard(r.id);
   if (r.view === 'stats') renderStats();
+  if (r.view === 'investors') renderInvestors();
   window.scrollTo(0, 0);
 }
 
@@ -48,22 +52,32 @@ function renderAuth(user) {
   box.replaceChildren(btn, menu);
 }
 
-let unsubDocs = null;
+let unsubDocs = null, unsubInv = null;
 async function start() {
   initStatus();
   initList();
   initStats();
+  initInvestors();
   window.addEventListener('hashchange', route);
   route();
   loadIndex();
+  loadInvestors();
   onUser(async (user) => {
     store.set('user', user);
     renderAuth(user);
     unsubDocs?.();
-    unsubDocs = null;
+    unsubInv?.();
+    unsubDocs = unsubInv = null;
     store.set('docs', null);
     store.set('docsError', null);
+    store.set('invDocs', null);
+    store.set('invDocsError', null);
     if (!user) return;
+    unsubInv = await watchInvestors((docs, err) => {
+      if (err) { store.set('invDocsError', err); return; }
+      store.set('invDocsError', null);
+      store.set('invDocs', docs);
+    });
     let lastResults = '';
     unsubDocs = await watchStrategies((docs, err) => {
       if (err) { store.set('docsError', err); return; }
@@ -80,7 +94,9 @@ async function start() {
   });
   // gdy Mac skończy liczyć, heartbeat wraca do „idle” — odśwież wyniki
   let prev = null;
-  store.on('beat', (b) => { if (prev === 'computing' && b?.state === 'idle') { refreshData(); loadIndex(); } prev = b?.state; });
+  store.on('beat', (b) => { if (prev === 'computing' && b?.state === 'idle') { refreshData(); loadIndex(); loadInvestors(); } prev = b?.state; });
+  // inwestorzy przeliczani co godzinę po kopii świec — co 10 min sprawdzamy, czy na gałęzi data jest nowy stan
+  setInterval(() => { refreshData(); loadInvestors(); }, 10 * 60 * 1000);
 }
 
 start();

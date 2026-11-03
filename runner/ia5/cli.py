@@ -239,6 +239,25 @@ def cmd_start(_args) -> int:
             jobs.put((sid, data))
 
     cloud.watch_queue(on_job)
+
+    # D-045: wirtualni inwestorzy — przeliczani po każdej zmianie listy i po każdej cogodzinnej kopii świec
+    inv_docs: dict = {}
+    inv_seen = {"sig": None, "queued": False}
+
+    def queue_investors():
+        if not inv_seen["queued"]:
+            inv_seen["queued"] = True
+            jobs.put((INVESTORS_JOB, None))
+
+    def on_investors(items):
+        inv_docs.clear()
+        inv_docs.update(dict(items))
+        sig = sorted((i, d.get("status")) for i, d in items)
+        if sig != inv_seen["sig"]:          # nowy, usunięty albo do usunięcia — liczymy od razu
+            inv_seen["sig"] = sig
+            queue_investors()
+
+    cloud.watch_investors(on_investors)
     state["now"] = "idle"
     beat_now()
     enqueue_frozen(jobs, owner)
@@ -261,6 +280,11 @@ def cmd_start(_args) -> int:
                 if time.time() - last_forward > FORWARD_SECONDS:  # nowe świece → forward test zamrożonych (W4)
                     enqueue_frozen(jobs, owner)
                     last_forward = time.time()
+                queue_investors()                                  # nowe świece → paper trading inwestorów (D-045)
+            continue
+        if sid == INVESTORS_JOB:
+            inv_seen["queued"] = False
+            handle_investors(dict(inv_docs), owner, state)
             continue
         if data.get("status") == "do_usuniecia":
             handle_delete(sid)
@@ -298,6 +322,7 @@ def requeue_after_source_change(owner: str | None) -> bool:
 
 
 FORWARD_SECONDS = 6 * 3600   # W4: forward test zamrożonych strategii
+INVESTORS_JOB = "__inwestorzy__"
 SYNC_OFFSET = 300            # kopia świec 5 min po pełnej godzinie
 
 
@@ -355,6 +380,52 @@ def handle_job(sid: str, data: dict, state: dict) -> None:
     except Exception as e:  # noqa: BLE001 — błąd nie może zatrzymać programu
         cloud.update_strategy(sid, {"status": "blad", "error": f"{type(e).__name__}: {e}"[:2000]})
         log(f"Strategia „{name}”: nieoczekiwany błąd — {e}")
+    finally:
+        state["now"] = "idle"
+        state["job"] = None
+        cloud.heartbeat("idle")
+
+
+def handle_investors(docs: dict, owner: str | None, state: dict) -> None:
+    """D-045: przelicza wszystkich aktywnych inwestorów właściciela (S1) na aktualnych danych, publikuje stan na gałęzi
+    data, usuwa inwestorów ze statusem do_usuniecia. Błąd jednego inwestora nie zatrzymuje pozostałych — zostaje jego
+    ostatni opublikowany stan."""
+    from . import cloud, publish
+    from .investors import compute
+    from .store import DATA_REPO, READY
+
+    if not owner:
+        if docs:
+            log(f"Inwestorzy: pomijam — brak owner_uid w {HOME / 'config.json'} (S1)")
+        return
+    mine = {i: d for i, d in docs.items() if d.get("createdBy") == owner}
+    removed = [i for i, d in mine.items() if d.get("status") == "do_usuniecia"]
+    active = {i: d for i, d in mine.items() if d.get("status") == "aktywny"}
+    if not active and not removed and not (DATA_REPO / "investors").exists():
+        return
+    states = {}
+    state["now"] = "computing"
+    try:
+        for n, (iid, d) in enumerate(active.items()):
+            state["job"] = {"id": iid, "name": f"Inwestor: {d.get('name', iid)}", "progress": int(100 * n / max(1, len(active))),
+                            "phase": "paper trading"}
+            cloud.heartbeat("computing", state["job"])
+            try:
+                states[iid] = compute({**d, "id": iid}, READY, log=log)
+                e = states[iid]["equity"]
+                log(f"Inwestor „{d.get('name')}”: kapitał {e['now']:,.2f} USD ({e['return_pct']:+.2f}%), "
+                    f"{states[iid]['counts']['closed']} zamkniętych, {states[iid]['counts']['open']} otwartych")
+            except Exception as e:  # noqa: BLE001 — jeden inwestor nie zatrzymuje pozostałych
+                log(f"Inwestor „{d.get('name', iid)}”: błąd — {e}")
+                prev = DATA_REPO / "investors" / iid / "state.json"
+                if prev.exists():
+                    states[iid] = json.loads(prev.read_text(encoding="utf-8"))
+        publish.publish_investors(states, removed, log=log)
+        for iid in removed:
+            cloud.delete_investor(iid)
+            log(f"Inwestor {iid}: usunięty")
+    except Exception as e:  # noqa: BLE001 — publikacja nie może zatrzymać programu
+        log(f"Inwestorzy: błąd publikacji — {e} (ponowię po następnej kopii świec)")
     finally:
         state["now"] = "idle"
         state["job"] = None
@@ -460,7 +531,7 @@ def cmd_scan(args) -> int:
 
 
 def cmd_search(args) -> int:
-    """Głębokie poszukiwanie (D-044): setki tysięcy – miliony konfiguracji na IS, test zerowy, jeden raz OOS dla
+    """Głębokie poszukiwanie (D-045): setki tysięcy – miliony konfiguracji na IS, test zerowy, jeden raz OOS dla
     K wybranych po IS. Wynik: ~/.ia5/searches/{run}/ (+ gałąź data searches/{run}/) i strategy.py do dashboardu."""
     from datetime import UTC, datetime
 
@@ -529,7 +600,7 @@ def main(argv=None) -> int:
     p_scan.add_argument("--pary", nargs="*", help="np. EURUSD GBPUSD (domyślnie wszystkie)")
     p_scan.add_argument("--lokalnie", action="store_true", help="bez publikacji na gałąź data")
     p_scan.set_defaults(func=cmd_scan)
-    p_srch = sub.add_parser("search", help="głębokie poszukiwanie: setki tysięcy konfiguracji na IS, potem OOS (D-044)")
+    p_srch = sub.add_parser("search", help="głębokie poszukiwanie: setki tysięcy konfiguracji na IS, potem OOS (D-045)")
     p_srch.add_argument("--rozmiar", choices=["szybki", "duzy", "gigant"], default="duzy",
                         help="szybki ~7 tys., duzy ~0,7 mln, gigant ~3,1 mln konfiguracji")
     p_srch.add_argument("--top", type=int, default=20, help="ile konfiguracji (wybranych po IS) otworzyć na OOS")

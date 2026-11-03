@@ -167,3 +167,75 @@ export function checkStrategyCode(code) {
   }
   return { errors, warnings };
 }
+
+// ---------- wirtualni inwestorzy (D-045) ----------
+
+export const INVESTOR_STALE_S = 2 * 3600 + 900;   // liczenie co godzinę po kopii świec — po ponad 2 h coś stoi
+
+/**
+ * Stan inwestora do wskaźnika „INWESTOR DZIAŁA”.
+ * doc — dokument Firestore, st — stan z gałęzi data (investors/{id}/state.json albo wpis indeksu), mac — {online, state, job}.
+ * Zwraca { state: ok|warn|bad|mute, word, detail }.
+ */
+export function investorStatus(doc, st, mac, now = Date.now() / 1000) {
+  if (doc?.status === 'do_usuniecia') return { state: 'mute', word: 'USUWANIE', detail: 'Mac usunie inwestora przy najbliższym przebiegu.' };
+  const busy = mac?.online && mac.state === 'computing' && mac.job?.name?.startsWith('Inwestor');
+  if (!st) {
+    return mac?.online
+      ? { state: 'warn', word: 'URUCHAMIANIE', detail: busy ? 'Mac liczy inwestorów…' : 'Czeka na pierwsze liczenie na Macu.' }
+      : { state: 'mute', word: 'CZEKA NA MACA', detail: 'Mac jest rozłączony — inwestor zacznie działać po uruchomieniu ia5 start.' };
+  }
+  const errs = (st.strategies || []).filter((s) => s.error).length + (st.errors || 0);
+  const all = (st.strategies || []).length;
+  if (!mac?.online) return { state: 'mute', word: 'WSTRZYMANY', detail: 'Mac rozłączony — nowe świece nie są liczone.' };
+  if (all && errs >= all) return { state: 'bad', word: 'BŁĄD', detail: 'Żadna strategia inwestora nie daje się policzyć — szczegóły przy strategiach.' };
+  if (now - (st.computedAt || 0) > INVESTOR_STALE_S) {
+    return { state: 'warn', word: 'OPÓŹNIONY', detail: 'Ostatnie liczenie ponad 2 h temu.' };
+  }
+  return { state: 'ok', word: 'INWESTOR DZIAŁA', detail: errs ? `Uwaga: ${errs} z ${all} strategii z błędem.` : 'Liczony co godzinę po nowej świecy.' };
+}
+
+/** Lista inwestorów = dokumenty Firestore (źródło prawdy o istnieniu) + stan z gałęzi data. */
+export function mergeInvestors(docs, indexEntries) {
+  const idx = new Map((indexEntries || []).map((e) => [e.id, e]));
+  return Object.entries(docs || {})
+    .filter(([, d]) => d.status !== 'do_usuniecia')
+    .map(([id, d]) => ({ id, doc: d, st: idx.get(id) || null }))
+    .sort((a, b) => (b.doc.createdAt || 0) - (a.doc.createdAt || 0));
+}
+
+/** Kontrola formularza nowego inwestora (te same granice co reguły Firestore). */
+export function validateInvestor({ name, capital, pct, strategies }) {
+  const errors = [];
+  if (!name || !name.trim()) errors.push('Podaj nazwę inwestora.');
+  else if (name.trim().length > 80) errors.push('Nazwa może mieć najwyżej 80 znaków.');
+  if (!(capital >= 100 && capital <= 1e8)) errors.push('Kapitał początkowy: od 100 do 100 000 000 USD.');
+  if (!(pct > 0 && pct <= 100)) errors.push('Depozyt na wejście: więcej niż 0% i najwyżej 100% kapitału.');
+  if (!strategies?.length) errors.push('Wybierz co najmniej jedną strategię.');
+  if (strategies?.length > 10) errors.push('Najwyżej 10 strategii na inwestora.');
+  if (strategies?.some((s) => !s.code)) errors.push('Nie udało się wczytać kodu którejś strategii — spróbuj ponownie.');
+  return errors;
+}
+
+/** Transakcje inwestora chronologicznie (po czasie wejścia), z numerem i nazwą strategii. */
+export function investorTrades(st) {
+  const names = (st?.strategies || []).map((s) => s.name);
+  return (st?.trades || []).slice().sort((a, b) => a.entry_ts - b.entry_ts || a.strategy - b.strategy)
+    .map((t, i) => ({ ...t, n: i + 1, strategyName: names[t.strategy] ?? `#${t.strategy + 1}` }));
+}
+
+const paramsLabel = (p) => (p && Object.keys(p).length ? Object.entries(p).map(([k, v]) => `${k}=${v}`).join(', ') : 'bez parametrów');
+
+/** Warianty do wyboru: zamrożony (jeśli jest), potem 10 najlepszych w IS. Domyślny = zamrożony albo #1 IS. */
+export function variantChoices(variants, frozenId = null) {
+  const ranked = (variants || []).filter((v) => v.rank_is != null).sort((a, b) => a.rank_is - b.rank_is);
+  const top = ranked.slice(0, 10);
+  const frozen = frozenId != null ? (variants || []).find((v) => v.variant_id === frozenId) : null;
+  const list = frozen ? [frozen, ...top.filter((v) => v.variant_id !== frozen.variant_id)] : top;
+  return list.map((v) => ({
+    id: v.variant_id, frozen: frozen?.variant_id === v.variant_id,
+    label: `${frozen?.variant_id === v.variant_id ? '❄ zamrożony · ' : ''}#${v.rank_is ?? '—'} IS · ${v.exit} · ${paramsLabel(v.params)}`
+      + ` · OOS ${v.oos_exp_pips == null ? '—' : `${v.oos_exp_pips > 0 ? '+' : ''}${v.oos_exp_pips.toFixed(1)} pips`}`,
+  }));
+}
+

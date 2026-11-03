@@ -39,7 +39,10 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
 - **RSI 2** (24 warianty): 🟡 4/5 — płaskowyż (8/8 wariantów bez stopu dodatnich w IS i OOS), PBO 0,03, percentyl 99,8; stop cenowy i filtr szoku nie pomogły, łagodniejszy trend dał 599 transakcji zamiast 358. Najlepszy wariant w oknie 07–17 (`rsi_trend_v2_okno.py`, liczone na kopii z gałęzi `data`): 286 transakcji, OOS +6,8 pipsa, percentyl 95,2, werdykt formalnie 🟢 — ale wariant wybrany po 25 próbach. Do zamrożenia: wersja 1, RSI 2 #1, wersja w oknie.
 
+- **Inwestorzy (D-045, 2026-11-03):** zakładka Inwestorzy — dodawanie (nazwa, kapitał, % na wejście, strategie z wariantem), usuwanie, stan INWESTOR DZIAŁA, wykres kapitału, chronologiczna lista paper transakcji; liczenie na Macu (`ia5/investors.py`) co godzinę i po każdej zmianie listy; publikacja na gałęzi `data`. Wymaga nowych reguł Firestore (sekcja `investors`).
+
 **Następne (Michał)**
+0. Wkleić nowe `firestore.rules` (Firebase → Firestore → Rules, `<OWNER_UID>` → swój UID → Publish), na Macu `cd ~/IA5 && git pull` i ponownie `ia5 start`.
 1. Wkleić nowy `apps_script/Code.gs` do Apps Script (bez fałszywych flag „luka” na otwarciu tygodnia). Opcjonalnie raz `backfill()` — uzupełni 3 przerwy Yahoo, jeśli Yahoo ma już te świece.
 2. Na Macu: zatrzymać `ia5 fetch` i `ia5 start` (Ctrl+C), `git pull`, potem tylko `ia5 start` (jeden terminal). Pierwszy start usunie dane Dukascopy i przeliczy strategie.
 
