@@ -232,7 +232,7 @@ def probe_main(code_path: str, h1_dir: str, out_dir: str, param_id: int, moves: 
                 x.attrs["pair"] = f.stem
                 v = float(_as_signal(ns["signals"](x, p, ind), x)[-1])
                 if v:
-                    out["hits"].append({"pair": f.stem, "k": k, "level": c, "dir": int(np.sign(v)), "atr14": atr, "atr5": float(ind.atr(df, 5).iloc[-1])})
+                    out["hits"].append({"pair": f.stem, "k": k, "level": c, "dir": int(np.sign(v))})
     except Exception as e:  # noqa: BLE001
         out["errors"].append(f"{type(e).__name__}: {e}")
     (Path(out_dir) / "probe.json").write_text(json.dumps(out))

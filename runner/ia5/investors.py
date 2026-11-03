@@ -75,7 +75,7 @@ def paper_trades(P: dict, sig: np.ndarray, ex, pair: str, start: int, hours=None
 
 
 def exit_levels(ex, entry, d, atr14, atr5) -> tuple:
-    """Poziomy TP/SL wariantu — te same wzory co engine.simulate. None = wariant nie ma tego poziomu (dla stopu kroczącego SL = początkowy)."""
+    """Poziomy TP/SL wariantu — te same wzory co engine.simulate. None = brak poziomu (stop kroczący: SL = początkowy)."""
     atr = atr5 if ex.n == 5 and ex.kind in ("atr", "rsi_streak", "trail") else atr14
     tp = entry + d * ex.tp * atr if ex.kind == "atr" or (ex.kind in ("rsi_streak", "trail") and ex.tp > 0) else None
     sl = entry - d * ex.sl * atr if ex.sl > 0 else None
