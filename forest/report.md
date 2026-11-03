@@ -8,10 +8,10 @@
 
 ## Wnioski
 
-- [bad] Inwestorzy na świecach, których nie widzieli (OOS): średnia trafność 49,43% (na danych bez przewagi 49,74%). Przewaga wymaga wyraźnie ponad 50%.
+- [bad] Inwestorzy na świecach, których nie widzieli (OOS): średnia trafność 49,43% (na danych bez przewagi 49,73%). Przewaga wymaga wyraźnie ponad 50%.
 - [bad] Demokracja (OOS): −0,05 pipsa brutto na transakcję (t −0,1), −1,70 netto, wygrane 46,0%.
-- [bad] Czy mapy przewidują wynik (OOS): korelacja rang z i wyniku +0,021, p = 0,126. Na razie brak dowodu, że mapy coś przewidują.
-- [warn] Mapy kontra demokracja (OOS): −1,54 vs −1,70 pipsa netto na transakcję (922 vs 2064 transakcji).
+- [bad] Czy mapy przewidują wynik (OOS): korelacja rang z i wyniku +0,021, p = 0,135. Na razie brak dowodu, że mapy coś przewidują.
+- [warn] Mapy kontra demokracja (OOS): −1,35 vs −1,70 pipsa netto na transakcję (928 vs 2064 transakcji).
 - [warn] Reputacja kontra demokracja (OOS): −1,59 vs −1,70 pipsa netto na transakcję (2077 vs 2064 transakcji).
 - [ok] Różnorodność: 1000 inwestorów to około 61 niezależnych głosów (średnia |korelacja| 0,089).
 
@@ -21,15 +21,15 @@
 |---|---|---|---|---|---|---|---|---|
 | A Demokracja | MAPY | 2051 | 46.7 | 0.74 | -0.91 | -1.51 | 1.23 | -2976.98 |
 | A Demokracja | OOS | 2064 | 46.0 | -0.05 | -1.7 | -2.96 | -0.09 | -2908.1 |
-| B Mapy | MAPY | 776 | 45.4 | -0.71 | -2.38 | -2.56 | -0.77 | -2140.52 |
-| B Mapy | OOS | 922 | 46.3 | 0.12 | -1.54 | -1.95 | 0.16 | -1302.63 |
+| B Mapy | MAPY | 786 | 44.9 | -0.83 | -2.49 | -2.7 | -0.9 | -2194.28 |
+| B Mapy | OOS | 928 | 47.2 | 0.31 | -1.35 | -1.73 | 0.39 | -1179.82 |
 | C Reputacja | MAPY | 2062 | 46.3 | -0.43 | -2.08 | -3.46 | -0.72 | -4429.98 |
 | C Reputacja | OOS | 2077 | 48.0 | 0.06 | -1.59 | -2.78 | 0.11 | -2155.34 |
 
 | księga | kapitał | wynik % | maks. obsunięcie % | zamknięte | otwarte | anulowane |
 |---|---|---|---|---|---|---|
 | A Demokracja | 4114.92 | -58.85 | -58.99 | 4115 | 0 | 3 |
-| B Mapy | 6556.85 | -34.43 | -36.47 | 1698 | 0 | 8 |
+| B Mapy | 6625.9 | -33.74 | -35.87 | 1714 | 0 | 9 |
 | C Reputacja | 3414.69 | -65.85 | -66.08 | 4139 | 0 | 3 |
 
 ## Inwestorzy na świecach niewidzianych przy kuciu
@@ -41,36 +41,22 @@
 
 ### Test zerowy: to samo na danych bez przewagi (nasiono 1000)
 
-- średnia CV kucia: prawdziwe 3.91, zerowe 3.05; najlepszy kandydat: prawdziwe 7.47, zerowe 5.24; po bramkach: prawdziwe 48,324, zerowe 25,136.
-- MAPY: trafność [49.19, 49.68, 49.93, 49.89, 49.89], ponad 51%: 14.
-- OOS: trafność [49.1, 49.86, 49.89, 49.9, 49.94], ponad 51%: 2.
-- księga A MAPY: 2048 transakcji, brutto 0.14, netto -1.51.
-- księga A OOS: 2061 transakcji, brutto -0.06, netto -1.71.
-- księga B MAPY: 602 transakcji, brutto 0.13, netto -1.51.
-- księga B OOS: 679 transakcji, brutto -0.41, netto -2.05.
-- księga C MAPY: 2048 transakcji, brutto 0.13, netto -1.52.
-- księga C OOS: 2061 transakcji, brutto 0.76, netto -0.89.
-- mapy MAPY: ρ 0.0029, p 0.8141.
-- mapy OOS: ρ -0.007, p 0.5347.
-
-### Test zerowy: to samo na danych bez przewagi (nasiono 1001)
-
-- średnia CV kucia: prawdziwe 3.91, zerowe 1.55; najlepszy kandydat: prawdziwe 7.47, zerowe 4.88; po bramkach: prawdziwe 48,324, zerowe 3,575.
-- MAPY: trafność [49.12, 49.73, 49.66, 49.63, 49.7], ponad 51%: 5.
-- OOS: trafność [49.23, 50.03, 50.25, 50.19, 50.09], ponad 51%: 17.
-- księga A MAPY: 2048 transakcji, brutto 0.03, netto -1.62.
-- księga A OOS: 2061 transakcji, brutto -0.47, netto -2.12.
-- księga B MAPY: 445 transakcji, brutto 1.04, netto -0.61.
-- księga B OOS: 684 transakcji, brutto 0.03, netto -1.6.
-- księga C MAPY: 2048 transakcji, brutto -0.79, netto -2.44.
-- księga C OOS: 2061 transakcji, brutto -0.81, netto -2.46.
-- mapy MAPY: ρ 0.0029, p 0.8291.
-- mapy OOS: ρ 0.0178, p 0.1564.
+- średnia CV kucia: prawdziwe 3.91, zerowe 3.05; najlepszy kandydat: prawdziwe 7.47, zerowe 5.24; po bramkach: prawdziwe 48,324, zerowe 25,090.
+- MAPY: trafność [49.19, 49.72, 49.92, 49.88, 49.89], ponad 51%: 14.
+- OOS: trafność [49.09, 49.83, 49.89, 49.88, 49.94], ponad 51%: 2.
+- księga A MAPY: 2048 transakcji, brutto 0.36, netto -1.29.
+- księga A OOS: 2061 transakcji, brutto 0.08, netto -1.57.
+- księga B MAPY: 592 transakcji, brutto 0.93, netto -0.71.
+- księga B OOS: 693 transakcji, brutto -0.3, netto -1.95.
+- księga C MAPY: 2048 transakcji, brutto 0.36, netto -1.29.
+- księga C OOS: 2061 transakcji, brutto 0.71, netto -0.94.
+- mapy MAPY: ρ -0.0053, p 0.6782.
+- mapy OOS: ρ -0.0073, p 0.5127.
 
 ## Co znaczy głos — MAPY (wszystkie decyzje, wirtualnie)
 
 Razem: {'n': 10184, 'win': 47.4, 'gross': 0.71, 'net': -0.94, 't': -3.47, 't_gross': 2.62}
-Uczenie: {'z_vs_wynik': {'n': 9152, 'rho': -0.0279, 'p': 0.064}, 'przewaga_vs_wynik': {'n': 10184, 'rho': 0.0037, 'p': 0.8111}, 'g_map_vs_wynik': {'n': 9152, 'rho': -0.0202, 'p': 0.2244}}
+Uczenie: {'z_vs_wynik': {'n': 9152, 'rho': -0.0281, 'p': 0.0625}, 'przewaga_vs_wynik': {'n': 10184, 'rho': 0.0037, 'p': 0.8111}, 'g_map_vs_wynik': {'n': 9152, 'rho': -0.0191, 'p': 0.2429}}
 
 ### przewaga głosów
 
@@ -86,23 +72,23 @@ Uczenie: {'z_vs_wynik': {'n': 9152, 'rho': -0.0279, 'p': 0.064}, 'przewaga_vs_wy
 
 | przedział | n | wygrane % | brutto (pips) | netto (pips) | t netto |
 |---|---|---|---|---|---|
-| z < −2 | 1815 | 48.5 | 1.57 | -0.09 | -0.14 |
-| −2…−1 | 1937 | 49.5 | 0.88 | -0.76 | -1.13 |
-| −1…0 | 2279 | 47.7 | 1.41 | -0.23 | -0.37 |
-| 0…1 | 1914 | 45.9 | 0.31 | -1.33 | -2.16 |
-| 1…2 | 927 | 46.8 | -0.27 | -1.93 | -2.32 |
-| z ≥ 2 | 280 | 37.9 | -3.74 | -5.44 | -3.94 |
+| z < −2 | 1798 | 48.4 | 1.38 | -0.28 | -0.43 |
+| −2…−1 | 1945 | 49.2 | 1.08 | -0.57 | -0.84 |
+| −1…0 | 2300 | 48.2 | 1.62 | -0.02 | -0.03 |
+| 0…1 | 1884 | 46.1 | 0.1 | -1.54 | -2.48 |
+| 1…2 | 941 | 45.7 | -0.37 | -2.04 | -2.45 |
+| z ≥ 2 | 284 | 38.7 | -3.72 | -5.42 | -4.02 |
 
 ### najlepszy z (księga B, jej horyzont)
 
 | przedział | n | wygrane % | brutto (pips) | netto (pips) | t netto |
 |---|---|---|---|---|---|
-| z < −2 | 971 | 46.2 | 0.91 | -0.76 | -1.22 |
-| −2…−1 | 1854 | 46.1 | -0.04 | -1.69 | -3.01 |
-| −1…0 | 2513 | 47.3 | 1.39 | -0.24 | -0.47 |
-| 0…1 | 2273 | 46.7 | 1.13 | -0.52 | -0.97 |
-| 1…2 | 1145 | 46.6 | 0.2 | -1.46 | -2.12 |
-| z ≥ 2 | 397 | 36.5 | -4.91 | -6.6 | -5.07 |
+| z < −2 | 973 | 45.8 | 0.92 | -0.75 | -1.18 |
+| −2…−1 | 1827 | 45.9 | -0.39 | -2.04 | -3.71 |
+| −1…0 | 2551 | 47.7 | 1.64 | 0.01 | 0.02 |
+| 0…1 | 2242 | 46.8 | 1.03 | -0.62 | -1.17 |
+| 1…2 | 1162 | 46.0 | 0.1 | -1.56 | -2.25 |
+| z ≥ 2 | 398 | 37.4 | -4.52 | -6.21 | -4.78 |
 
 ### dopasowanie do map
 
@@ -110,8 +96,8 @@ Uczenie: {'z_vs_wynik': {'n': 9152, 'rho': -0.0279, 'p': 0.064}, 'przewaga_vs_wy
 |---|---|---|---|---|---|
 | < 65% | 2128 | 45.3 | -0.76 | -2.38 | -4.48 |
 | 65–70% | 4378 | 47.0 | 0.93 | -0.73 | -1.79 |
-| 70–75% | 2219 | 50.2 | 1.79 | 0.13 | 0.19 |
-| ≥ 75% | 427 | 48.5 | 1.51 | -0.15 | -0.11 |
+| 70–75% | 2218 | 50.3 | 1.8 | 0.14 | 0.2 |
+| ≥ 75% | 428 | 48.4 | 1.48 | -0.19 | -0.14 |
 
 ### horyzont
 
@@ -146,7 +132,7 @@ Uczenie: {'z_vs_wynik': {'n': 9152, 'rho': -0.0279, 'p': 0.064}, 'przewaga_vs_wy
 ## Co znaczy głos — OOS (wszystkie decyzje, wirtualnie)
 
 Razem: {'n': 10243, 'win': 45.9, 'gross': -0.08, 'net': -1.73, 't': -6.92, 't_gross': -0.3}
-Uczenie: {'z_vs_wynik': {'n': 10243, 'rho': 0.0215, 'p': 0.1259}, 'przewaga_vs_wynik': {'n': 10243, 'rho': 0.0159, 'p': 0.3718}, 'g_map_vs_wynik': {'n': 10243, 'rho': 0.0122, 'p': 0.4398}}
+Uczenie: {'z_vs_wynik': {'n': 10243, 'rho': 0.0211, 'p': 0.1349}, 'przewaga_vs_wynik': {'n': 10243, 'rho': 0.0159, 'p': 0.3718}, 'g_map_vs_wynik': {'n': 10243, 'rho': 0.012, 'p': 0.4413}}
 
 ### przewaga głosów
 
@@ -162,23 +148,23 @@ Uczenie: {'z_vs_wynik': {'n': 10243, 'rho': 0.0215, 'p': 0.1259}, 'przewaga_vs_w
 
 | przedział | n | wygrane % | brutto (pips) | netto (pips) | t netto |
 |---|---|---|---|---|---|
-| z < −2 | 2036 | 44.5 | 0.05 | -1.6 | -3.44 |
-| −2…−1 | 2211 | 44.6 | -0.5 | -2.15 | -4.29 |
-| −1…0 | 2691 | 46.0 | 0.25 | -1.39 | -2.76 |
-| 0…1 | 1984 | 47.2 | -0.18 | -1.84 | -2.69 |
-| 1…2 | 990 | 47.7 | 0.03 | -1.64 | -2.21 |
-| z ≥ 2 | 331 | 48.9 | -0.29 | -1.98 | -1.54 |
+| z < −2 | 2024 | 44.8 | 0.09 | -1.56 | -3.29 |
+| −2…−1 | 2225 | 43.9 | -0.72 | -2.37 | -4.81 |
+| −1…0 | 2713 | 46.8 | 0.62 | -1.01 | -2.03 |
+| 0…1 | 1964 | 46.7 | -0.58 | -2.24 | -3.21 |
+| 1…2 | 983 | 47.0 | 0.02 | -1.64 | -2.24 |
+| z ≥ 2 | 334 | 50.9 | 0.21 | -1.48 | -1.17 |
 
 ### najlepszy z (księga B, jej horyzont)
 
 | przedział | n | wygrane % | brutto (pips) | netto (pips) | t netto |
 |---|---|---|---|---|---|
-| z < −2 | 1026 | 39.5 | -0.31 | -1.96 | -4.09 |
-| −2…−1 | 2014 | 42.8 | -0.24 | -1.89 | -4.37 |
-| −1…0 | 2969 | 44.7 | 0.2 | -1.45 | -3.42 |
-| 0…1 | 2519 | 44.7 | -0.72 | -2.36 | -4.97 |
-| 1…2 | 1291 | 47.3 | 0.1 | -1.57 | -2.43 |
-| z ≥ 2 | 444 | 49.1 | 1.4 | -0.29 | -0.29 |
+| z < −2 | 1023 | 39.3 | -0.44 | -2.09 | -4.33 |
+| −2…−1 | 2025 | 42.5 | -0.16 | -1.81 | -4.3 |
+| −1…0 | 2968 | 43.9 | 0.08 | -1.57 | -3.71 |
+| 0…1 | 2502 | 45.3 | -0.71 | -2.36 | -4.86 |
+| 1…2 | 1299 | 47.3 | 0.13 | -1.53 | -2.36 |
+| z ≥ 2 | 447 | 49.4 | 0.9 | -0.8 | -0.78 |
 
 ### dopasowanie do map
 
@@ -222,7 +208,7 @@ Uczenie: {'z_vs_wynik': {'n': 10243, 'rho': 0.0215, 'p': 0.1259}, 'przewaga_vs_w
 ## Co znaczy głos — RAZEM (wszystkie decyzje, wirtualnie)
 
 Razem: {'n': 20427, 'win': 46.7, 'gross': 0.32, 'net': -1.33, 't': -7.25, 't_gross': 1.72}
-Uczenie: {'z_vs_wynik': {'n': 19395, 'rho': -0.0031, 'p': 0.7726}, 'przewaga_vs_wynik': {'n': 20427, 'rho': 0.0094, 'p': 0.3948}, 'g_map_vs_wynik': {'n': 19395, 'rho': -0.0043, 'p': 0.7136}}
+Uczenie: {'z_vs_wynik': {'n': 19395, 'rho': -0.0034, 'p': 0.7456}, 'przewaga_vs_wynik': {'n': 20427, 'rho': 0.0094, 'p': 0.3948}, 'g_map_vs_wynik': {'n': 19395, 'rho': -0.0038, 'p': 0.7511}}
 
 ### przewaga głosów
 
@@ -238,23 +224,23 @@ Uczenie: {'z_vs_wynik': {'n': 19395, 'rho': -0.0031, 'p': 0.7726}, 'przewaga_vs_
 
 | przedział | n | wygrane % | brutto (pips) | netto (pips) | t netto |
 |---|---|---|---|---|---|
-| z < −2 | 3851 | 46.4 | 0.77 | -0.89 | -2.3 |
-| −2…−1 | 4148 | 46.9 | 0.14 | -1.5 | -3.62 |
-| −1…0 | 4970 | 46.8 | 0.78 | -0.86 | -2.18 |
-| 0…1 | 3898 | 46.6 | 0.06 | -1.59 | -3.45 |
-| 1…2 | 1917 | 47.3 | -0.11 | -1.78 | -3.2 |
-| z ≥ 2 | 611 | 43.9 | -1.87 | -3.56 | -3.79 |
+| z < −2 | 3822 | 46.5 | 0.7 | -0.96 | -2.45 |
+| −2…−1 | 4170 | 46.4 | 0.12 | -1.53 | -3.72 |
+| −1…0 | 5013 | 47.5 | 1.08 | -0.56 | -1.43 |
+| 0…1 | 3848 | 46.4 | -0.25 | -1.9 | -4.05 |
+| 1…2 | 1924 | 46.4 | -0.17 | -1.83 | -3.33 |
+| z ≥ 2 | 618 | 45.3 | -1.6 | -3.29 | -3.56 |
 
 ### najlepszy z (księga B, jej horyzont)
 
 | przedział | n | wygrane % | brutto (pips) | netto (pips) | t netto |
 |---|---|---|---|---|---|
-| z < −2 | 1997 | 42.8 | 0.28 | -1.38 | -3.52 |
-| −2…−1 | 3868 | 44.3 | -0.14 | -1.79 | -5.11 |
-| −1…0 | 5482 | 45.9 | 0.75 | -0.89 | -2.71 |
-| 0…1 | 4792 | 45.6 | 0.16 | -1.49 | -4.19 |
-| 1…2 | 2436 | 47.0 | 0.15 | -1.52 | -3.22 |
-| z ≥ 2 | 841 | 43.2 | -1.58 | -3.27 | -3.98 |
+| z < −2 | 1996 | 42.5 | 0.22 | -1.44 | -3.63 |
+| −2…−1 | 3852 | 44.1 | -0.27 | -1.92 | -5.61 |
+| −1…0 | 5519 | 45.7 | 0.8 | -0.84 | -2.53 |
+| 0…1 | 4744 | 46.0 | 0.11 | -1.53 | -4.29 |
+| 1…2 | 2461 | 46.7 | 0.12 | -1.55 | -3.27 |
+| z ≥ 2 | 845 | 43.8 | -1.66 | -3.35 | -4.08 |
 
 ### dopasowanie do map
 
@@ -262,8 +248,8 @@ Uczenie: {'z_vs_wynik': {'n': 19395, 'rho': -0.0031, 'p': 0.7726}, 'przewaga_vs_
 |---|---|---|---|---|---|
 | < 65% | 2577 | 45.6 | -0.6 | -2.21 | -4.67 |
 | 65–70% | 8761 | 46.0 | 0.13 | -1.52 | -5.49 |
-| 70–75% | 6064 | 48.1 | 1.02 | -0.65 | -1.74 |
-| ≥ 75% | 1993 | 46.4 | 0.27 | -1.4 | -2.45 |
+| 70–75% | 6063 | 48.1 | 1.03 | -0.64 | -1.74 |
+| ≥ 75% | 1994 | 46.4 | 0.27 | -1.41 | -2.46 |
 
 ### horyzont
 
