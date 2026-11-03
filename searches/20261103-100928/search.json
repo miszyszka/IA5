@@ -1,0 +1,264 @@
+{
+ "size": "gigant",
+ "tested": 3124224,
+ "eligible": 598718,
+ "discovered": 0,
+ "confirmed": 0,
+ "passed": 0,
+ "p_threshold": 0.0,
+ "t_threshold": NaN,
+ "t_needed": 5.2327312010933875,
+ "best_tA": 4.553949960085594,
+ "best_robust": 2.9064545858225395,
+ "cuts": [
+  1730073600,
+  1761881400,
+  1777785300,
+  1793689200
+ ],
+ "pairs": [
+  "AUDUSD",
+  "EURGBP",
+  "EURJPY",
+  "EURUSD",
+  "GBPUSD",
+  "USDCAD",
+  "USDCHF",
+  "USDJPY"
+ ],
+ "bars": {
+  "EURUSD": 12239,
+  "USDJPY": 12223,
+  "GBPUSD": 12226,
+  "EURGBP": 12248,
+  "AUDUSD": 12231,
+  "USDCHF": 12227,
+  "USDCAD": 12271,
+  "EURJPY": 12251
+ },
+ "top": 20,
+ "engine_version": "0.8.0",
+ "minutes_is": 1.9,
+ "null": [
+  {
+   "seed": 1000,
+   "best_robust": 3.3895656266661875,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1001,
+   "best_robust": 2.2265882090909694,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1002,
+   "best_robust": 3.252522404546291,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1003,
+   "best_robust": 2.868301640144221,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1004,
+   "best_robust": 2.7370992609027343,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1005,
+   "best_robust": 2.369835304007141,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1006,
+   "best_robust": 2.0154232918661745,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1007,
+   "best_robust": 2.844231133785595,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1008,
+   "best_robust": 2.493749821172265,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1009,
+   "best_robust": 2.6656731126843374,
+   "discovered": 5,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1010,
+   "best_robust": 2.491115585144685,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1011,
+   "best_robust": 2.4889758610949198,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1012,
+   "best_robust": 2.2076427206787503,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1013,
+   "best_robust": 2.823263308978683,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1014,
+   "best_robust": 2.4839788647103758,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1015,
+   "best_robust": 2.3708420916216495,
+   "discovered": 10,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1016,
+   "best_robust": 2.445664084029339,
+   "discovered": 2,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1017,
+   "best_robust": 2.517031723229724,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1018,
+   "best_robust": 2.1552872821395495,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1019,
+   "best_robust": 2.6232562145466884,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1020,
+   "best_robust": 2.3105879210627998,
+   "discovered": 1,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1021,
+   "best_robust": 2.465699654832778,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1022,
+   "best_robust": 2.5829540407729312,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1023,
+   "best_robust": 2.333634159207193,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1024,
+   "best_robust": 2.778527021935858,
+   "discovered": 1,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1025,
+   "best_robust": 2.6976551168468332,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1026,
+   "best_robust": 2.3293676852659684,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1027,
+   "best_robust": 2.4473484951245585,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1028,
+   "best_robust": 2.7202489885862584,
+   "discovered": 3,
+   "confirmed": 0,
+   "passed": 0
+  },
+  {
+   "seed": 1029,
+   "best_robust": 2.465422384419353,
+   "discovered": 0,
+   "confirmed": 0,
+   "passed": 0
+  }
+ ],
+ "dsr": {
+  "dsr": 0.3878304605572556,
+  "sharpe": 0.38263991787557255,
+  "sharpe0": 0.407352241490197,
+  "trials": 598718.0,
+  "trades": 117.0,
+  "skew": 0.6196731306956499,
+  "kurtosis": 3.9889159960844776
+ },
+ "minutes": 74.8
+}
