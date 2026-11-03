@@ -16,24 +16,6 @@
     "RSI 2"
    ],
    "errors": 0
-  },
-  {
-   "id": "anBryj97QBK3fcRBP9Xn",
-   "name": "Powrót & RSI",
-   "capital": 10000.0,
-   "pct": 5.0,
-   "start": 1793713958,
-   "computedAt": 1793722045,
-   "dataTo": 1793721600,
-   "equity": 10000.0,
-   "return_pct": 0.0,
-   "closed": 0,
-   "open": 0,
-   "strategies": [
-    "Powrót",
-    "RSI 2"
-   ],
-   "errors": 0
   }
  ]
 }
