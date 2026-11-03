@@ -1,0 +1,178 @@
+{
+ "best_variant_id": 229,
+ "best_exit": "cena przez SMA20, SL 3×ATR14, max 120",
+ "best_params": {},
+ "oos_trades": 504,
+ "oos_mean_pips": -1.707777,
+ "oos_mean_r": -0.034575,
+ "is_mean_r": -0.039484,
+ "benchmark": {
+  "sims": 1000,
+  "actual_mean_pips": -1.925976,
+  "percentile": 40.2,
+  "p5": -2.797421,
+  "p50": -1.788369,
+  "p95": -0.713818
+ },
+ "dsr": {
+  "dsr": 0.0,
+  "sharpe": -0.047522,
+  "sharpe0": 0.20963,
+  "trials": 233,
+  "trades": 1632,
+  "skew": 2.30548,
+  "kurtosis": 11.594854
+ },
+ "pbo": {
+  "pbo": 0.428205,
+  "variants": 233,
+  "combinations": 12870,
+  "blocks": 16,
+  "logit_median": 0.654926
+ },
+ "walk_forward": {
+  "windows": [
+   {
+    "from": 1756031040,
+    "to": 1768559760,
+    "variant_id": 6,
+    "train_r": 0.003077,
+    "test_trades": 402,
+    "test_r": -0.196942,
+    "test_pips": -2.210159
+   },
+   {
+    "from": 1768559760,
+    "to": 1781088480,
+    "variant_id": 229,
+    "train_r": -0.03552,
+    "test_trades": 455,
+    "test_r": -0.065093,
+    "test_pips": -3.363662
+   },
+   {
+    "from": 1781088480,
+    "to": 1793617201,
+    "variant_id": 229,
+    "train_r": -0.043227,
+    "test_trades": 390,
+    "test_r": -0.016385,
+    "test_pips": -0.952404
+   }
+  ],
+  "trades": 1247,
+  "mean_r": -0.092364,
+  "mean_pips": -2.237681
+ },
+ "bootstrap": {
+  "all": {
+   "low": -3.533239,
+   "high": -0.1837,
+   "n": 2136
+  },
+  "oos": {
+   "low": -4.877553,
+   "high": 1.766219,
+   "n": 504
+  }
+ },
+ "spread": {
+  "x1": -1.925976,
+  "x1_5": -2.750531,
+  "x2": -3.575086
+ },
+ "ambiguous_pct": 0.0,
+ "equity": {
+  "5.0": {
+   "final": 5656.68241,
+   "return_pct": -43.433176,
+   "cagr_pct": -24.930415,
+   "max_dd_pct": -46.384735,
+   "calmar": -0.53747,
+   "sharpe": -1.083613,
+   "sortino": -1.945555,
+   "longest_underwater_days": 717.666667,
+   "taken": 2136,
+   "skipped_margin": 0
+  },
+  "10.0": {
+   "final": 2937.051804,
+   "return_pct": -70.629482,
+   "cagr_pct": -46.024188,
+   "max_dd_pct": -73.578878,
+   "calmar": -0.625508,
+   "sharpe": -1.09168,
+   "sortino": -1.968471,
+   "longest_underwater_days": 717.666667,
+   "taken": 2136,
+   "skipped_margin": 0
+  },
+  "15.0": {
+   "final": 1558.154307,
+   "return_pct": -84.418457,
+   "cagr_pct": -60.768064,
+   "max_dd_pct": -86.679248,
+   "calmar": -0.701068,
+   "sharpe": -1.034811,
+   "sortino": -1.879823,
+   "longest_underwater_days": 717.666667,
+   "taken": 2120,
+   "skipped_margin": 16
+  },
+  "20.0": {
+   "final": 958.484015,
+   "return_pct": -90.41516,
+   "cagr_pct": -69.279359,
+   "max_dd_pct": -92.204987,
+   "calmar": -0.751362,
+   "sharpe": -1.061327,
+   "sortino": -1.905484,
+   "longest_underwater_days": 717.666667,
+   "taken": 1982,
+   "skipped_margin": 154
+  },
+  "30.0": {
+   "final": 702.853462,
+   "return_pct": -92.971465,
+   "cagr_pct": -73.719994,
+   "max_dd_pct": -94.602356,
+   "calmar": -0.779262,
+   "sharpe": -0.790544,
+   "sortino": -1.373012,
+   "longest_underwater_days": 717.666667,
+   "taken": 1633,
+   "skipped_margin": 503
+  }
+ },
+ "verdict": {
+  "color": "red",
+  "note": "brak przewagi",
+  "checks": [
+   {
+    "test": "expectancy netto OOS > 0",
+    "ok": false,
+    "value": -1.707777
+   },
+   {
+    "test": "percentyl benchmarku ≥ 95",
+    "ok": false,
+    "value": 40.2
+   },
+   {
+    "test": "PBO < 0,3",
+    "ok": false,
+    "value": 0.428205
+   },
+   {
+    "test": "DSR ≥ 0,95",
+    "ok": false,
+    "value": 0.0
+   },
+   {
+    "test": "dodatni przy spreadzie ×1,5",
+    "ok": false,
+    "value": -2.750531
+   }
+  ]
+ }
+}
