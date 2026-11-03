@@ -143,7 +143,7 @@ function booksPanel(st) {
   }
   return h('section', { class: 'panel' },
     h('div', { class: 'phead' }, h('h3', {}, 'Księgi: czy nauka cokolwiek daje'),
-      h('span', { class: 'hint' }, `start ${num(st.params.START_CAPITAL, 0)} USD · depozyt ${st.params.BOOK_PCT}% · ${st.params.LEVERAGE}:1 · bez map księga B i C = księga A`)),
+      h('span', { class: 'hint' }, `start ${num(st.params.START_CAPITAL, 0)} USD · depozyt ${st.params.BOOK_PCT}% · ${st.params.LEVERAGE}:1 · księga B rusza po ${num(st.params.MIN_MAPS, 0)} mapach`)),
     h('div', { class: 'kpis small' }, ...Object.entries(st.books).map(([b, x]) => kpi(`${b.toUpperCase()} ${x.name}`, `${num(x.equity, 0)} USD (${signed(x.return_pct, 1)}%)`, cls(x.return_pct)))),
     box,
     h('ul', { class: 'plain muted small' }, ...Object.entries(BOOK_NOTE).map(([b, t]) => h('li', {}, h('b', {}, `${b.toUpperCase()}: `), t))),

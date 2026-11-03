@@ -29,6 +29,7 @@ ia5 start                                    # kopia świec Yahoo z Firestore (s
 
 - Aktualizacja programu: `cd ~/IA5 && git pull`.
 - `ia5 start` można przerwać (Ctrl+C) i uruchomić ponownie w każdej chwili — kopia świec dociąga tylko brakujące miesiące.
+- Pierwszy `ia5 start` po D-048 sam buduje las FOREST (kilka minut, postęp przy wskaźniku Mac; strategie czekają w kolejce). Potem liczy go po każdej kopii świec, a po przerwie nadrabia wszystkie świece po kolei.
 - Push na gałąź `data` używa Twoich danych logowania do GitHub (np. `gh auth login`).
 
 ### Windows (wiersz poleceń `cmd`)

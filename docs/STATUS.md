@@ -2,6 +2,35 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-03 — sesja 6
+
+**Zrobione (D-048: FOREST)**
+- `runner/ia5/forest_rules.py` (138 cech, 8 rodzin), `forest.py` (kucie), `forest_manager.py` (Manager, mapy, księgi, zapis stanu), `forest_report.py` (statystyki, raport, stan dla strony), `forest_run.py` (budowa, krok, test zerowy). `ia5 start` buduje las sam i liczy go po każdej kopii świec; `ia5 forest build|krok|status` to tylko sterowanie ręczne. Zakładka FOREST: `web/js/forest.js`. Reguły F1–F9 w `CLAUDE.md`.
+- Testy: 22 nowe (cechy bez look-ahead, transakcje = `engine.simulate` co do pipsa, las nie widzi nic po kuciu, decyzje nie znają przyszłości, mapy tylko zamknięte, punkty za/przeciw, B8, B11, B12, nadrabianie co do bajta, ścisły JSON, `ia5 start`, publikacja, kontrola pozytywna lasu i map, szum). Razem z istniejącymi: pytest i Node zielone, CI zielone.
+- **Pierwszy przebieg na prawdziwych świecach, 8 par, do 2026-11-03 10:00 UTC, 300 tys. kandydatów, 2 przebiegi zerowe, 7,7 min na 2 rdzeniach, kolejny krok ok. 7 s:**
+
+| | MAPY (2025-10-31 – 2026-05-03) | OOS (2026-05-03 – 2026-11-03) | OOS bez przewagi (2 przebiegi) |
+|---|---|---|---|
+| Trafność inwestorów, średnia z 5 horyzontów | 49,58% | 49,43% | 49,74% / 49,96% |
+| Księga A: brutto / netto na transakcję (pips) | +0,74 / −0,91 (2051) | −0,05 / −1,70 (2064) | −0,06 / −1,71; −0,47 / −2,12 |
+| Księga B: brutto / netto | −0,71 / −2,38 (776) | +0,12 / −1,54 (922) | −0,41 / −2,05; +0,03 / −1,60 |
+| Księga C: brutto / netto | −0,43 / −2,08 (2062) | +0,06 / −1,59 (2077) | +0,76 / −0,89; −0,81 / −2,46 |
+| Czy z przewiduje wynik (ρ, p) | −0,028, p 0,064 | +0,021, p 0,126 | −0,007, p 0,53; +0,018, p 0,16 |
+
+- Kapitał po roku z 10 000 USD: A 4115, B 6557, C 3415. Niemal cała strata to spread: ok. 4100 transakcji × 1,65 pipsa w A. N_eff 61 z 1000 inwestorów, średnia |ρ| 0,089.
+- **Wniosek na dziś:** las nie ma przewagi na świecach, których nie widział, a mapy nie mają dowodu na przewidywanie. Manager na prawdziwym rynku wypada tak samo jak na danych bez przewagi. Mechanizm działa: kontrola pozytywna pokazuje, że gdy rynek ma zależność, las i mapy ją znajdują. W kuciu prawdziwe dane wyglądają lepiej niż zerowe (średnia CV 3,91 vs 3,05 / 1,55), ale to nie przetrwało poza próbę, a dane zerowe nie mają też korelacji między parami, więc to porównanie jest słabe.
+- Pułapka do zapamiętania: na OOS wygrane rosną z najlepszym z (39,5% → 49,1%), ale na MAPY jest odwrotnie (z ≥ 2: 36,5%). Nie wolno z tego robić reguły.
+- Horyzont księgi A to w 99,8% decyzji 5 świec: spread jest stały, a ruch rośnie z czasem. Księga B wybiera horyzont z map.
+
+**Następne (Michał)**
+1. `git pull`, `uv tool install -e runner --force`, restart `ia5 start`. Las zbuduje się sam i zastąpi podgląd policzony w tej sesji na gałęzi `data`. Od tej chwili liczy się LIVE.
+2. Nie stroić K ani progu z pod wynik OOS (F6). Czekać na LIVE: żeby odróżnić +1 pips netto od zera przy odchyleniu ok. 27 pipsów, trzeba ok. 2900 niezależnych transakcji. Księga A robi ok. 340 miesięcznie, więc minimum 9 miesięcy, a przez zależność między parami raczej dłużej.
+
+**Znane problemy**
+- OOS otwarty raz w tej sesji, poza Makiem: dziennik na Macu tego nie liczy (D-048).
+- `ia5 forest build` i `krok` nie mogą działać równocześnie z `ia5 start`, bo zapisują ten sam stan; nie ma blokady.
+- Las jest zamrożony: nowe dane nie zmieniają inwestorów, tylko mapy. Nowy las = nowy eksperyment, nowa numeracja map.
+
 ## 2026-11-03 — sesja 5
 
 **Zrobione (D-044: głębokie poszukiwanie)**
