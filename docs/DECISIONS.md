@@ -5,6 +5,13 @@ Najnowsze na górze.
 
 ---
 
+### D-052 · 2026-11-03 · Inwestorzy i maile w GitHub Actions
+- **Decyzja:** po komplecie świec Apps Script wywołuje `repository_dispatch`; workflow `alerts.yml` uruchamia `ia5 live`. Historia świec z gałęzi `data`, najnowsze miesiące z Firestore; ten sam kod strategii i silnik. Wysyłka SMTP z sekretu. Dziennik maili na gałęzi `data`. Mac przejmuje pracę tylko, gdy ostatni przebieg Actions ma ponad 2 h. Zapasowy cron co godzinę obsługuje nowych i usuwanych inwestorów.
+- **Powód:** maile bez Maca, jak najszybciej po świecy. Strategie to dowolny Python, więc Apps Script nie może ich liczyć.
+- **Odrzucone:** przepisanie silnika i strategii na JS (dwa rozjeżdżające się silniki, a każda nowa strategia wymagałaby tłumaczenia); Cloud Run (wymaga rozliczeń Google).
+- **Zużycie Firestore (Z4):** 16 odczytów świec + liczba inwestorów + 1 zapis `dataSha` na przebieg; przy 2 przebiegach na godzinę ok. 800–900 odczytów i 50 zapisów dziennie.
+- **Ryzyko:** kod strategii działa na runnerze z plikiem klucza na dysku. Liczony jest tylko kod właściciela (S1), a S2 nadal czyści zmienne środowiskowe.
+
 ### D-051 · 2026-11-03 · Maile inwestorów i zapowiedź możliwego sygnału
 - **Decyzja:** przełącznik `investors/{id}.emailAlerts`. Mac wysyła przez Gmail SMTP (smtplib, hasło aplikacji w `~/.ia5/smtp.json`): sygnał, otwarcie, zamknięcie z powodem „czas”. Dziennik `~/.ia5/mail_sent.json` daje jednokrotną wysyłkę, a włączenie nie wysyła historii. Zapowiedź: po liczeniu Mac dopisuje w pamięci hipotetyczną świecę z zamknięciem 0…±1 ATR14 i uruchamia kod strategii w piaskownicy; wynik `upcoming` w `state.json`.
 - **Powód:** strategia to dowolny kod, więc tylko jej uruchomienie uczciwie mówi, czy sygnał jest blisko. Adres i hasło nie mogą być w publicznym repo (S3). D2 i D7 zostają: świeca hipotetyczna nie trafia do danych, a świeca w trakcie nie jest pobierana.

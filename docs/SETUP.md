@@ -54,3 +54,10 @@ ia5 start
 1. Włącz weryfikację dwuetapową na koncie Google i utwórz hasło aplikacji: myaccount.google.com/apppasswords.
 2. Utwórz `~/.ia5/smtp.json`: `{"user": "twoj@gmail.com", "app_password": "xxxx xxxx xxxx xxxx", "to": "twoj@gmail.com"}` i wykonaj `chmod 600 ~/.ia5/smtp.json`.
 3. Wklej aktualne `firestore.rules` (Firebase → Firestore → Rules → Publish).
+
+## Maile bez Maca (D-052)
+
+1. GitHub → repo IA5 → Settings → Secrets and variables → Actions, dodaj: `IA5_SERVICE_ACCOUNT` (cała zawartość `service-account.json`), `IA5_OWNER_UID` (Twój UID), `IA5_SMTP` (zawartość `smtp.json`).
+2. GitHub → Settings → Developer settings → Fine-grained tokens: token tylko dla repo IA5, uprawnienie Contents: Read and write.
+3. Apps Script → Project Settings → Script Properties: `GITHUB_TOKEN` = ten token. Wklej nowy `Code.gs`.
+4. Sprawdź: repo → Actions → „Inwestorzy i maile” → Run workflow.

@@ -165,9 +165,9 @@ test('inwestorzy: stan „INWESTOR DZIAŁA” i jego wyjątki (D-045)', () => {
   const now = 1_800_000_000, on = { online: true, state: 'idle' }, off = { online: false };
   const st = { computedAt: now - 600, strategies: [{ name: 'A' }, { name: 'B' }] };
   assert.equal(investorStatus({ status: 'aktywny' }, st, on, now).word, 'INWESTOR DZIAŁA');
-  assert.equal(investorStatus({ status: 'aktywny' }, st, off, now).word, 'WSTRZYMANY');
+  assert.equal(investorStatus({ status: 'aktywny' }, st, off, now).word, 'INWESTOR DZIAŁA');
   assert.equal(investorStatus({ status: 'aktywny' }, null, on, now).word, 'URUCHAMIANIE');
-  assert.equal(investorStatus({ status: 'aktywny' }, null, off, now).word, 'CZEKA NA MACA');
+  assert.equal(investorStatus({ status: 'aktywny' }, null, off, now).word, 'URUCHAMIANIE');
   assert.equal(investorStatus({ status: 'aktywny' }, { ...st, computedAt: now - 4 * 3600 }, on, now).word, 'OPÓŹNIONY');
   const bad = { ...st, strategies: [{ error: 'x' }, { error: 'y' }] };
   assert.equal(investorStatus({ status: 'aktywny' }, bad, on, now).state, 'bad');

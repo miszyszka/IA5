@@ -183,6 +183,11 @@ def watch_investors(on_change):
     return db().collection("investors").on_snapshot(cb)
 
 
+def list_investors() -> dict[str, dict]:
+    """D-052: jednorazowy odczyt listy inwestorów (GitHub Actions): tyle odczytów, ilu inwestorów."""
+    return {s.id: s.to_dict() or {} for s in db().collection("investors").stream()}
+
+
 def delete_investor(iid: str) -> None:
     db().collection("investors").document(iid).delete()
 

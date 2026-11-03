@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.42 · 2026-11-03 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku; `ia5 search` (D-044); zakładka Inwestorzy (D-045); eksperyment FOREST (D-048, v2: D-049) — `docs/STATUS.md`
+Wersja 0.43 · 2026-11-03 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku; `ia5 search` (D-044); zakładka Inwestorzy (D-045); eksperyment FOREST (D-048, v2: D-049) — `docs/STATUS.md`
 
 ---
 
@@ -209,6 +209,7 @@ scans/{run}/                         # wyniki skanera hipotez (D-037)
 searches/{run}/                      # głębokie poszukiwanie (D-044): search.md, candidates_is.csv, top_oos.csv, strategy.py
 investors/index.json                 # lista inwestorów: kapitał teraz, wynik, liczba transakcji (D-045)
 investors/{id}/state.json            # stan inwestora: kapitał (zrealizowany + wycena otwartych), krzywa, wszystkie transakcje
+alerts/mail_sent.json, alerts/run.json # D-052: klucze wysłanych maili; ostatni przebieg inwestorów
 forest/state.json                    # FOREST (D-049): decyzje teraz, księgi, progi, odświeżenia, wnioski
 forest/investors.json                # inwestorzy: reguła, horyzont, w lesie od, czy aktywny
 forest/journal/{RRRR-MM}.parquet     # dziennik decyzji z listą głosujących (zmienia się tylko bieżący miesiąc)
@@ -220,8 +221,7 @@ forest/report.md                     # raport dla Claude
 ```
 ~/.ia5/
   service-account.json                     # klucz Firebase (S3)
-  smtp.json                                # D-051: {"user", "app_password", "to"} — Gmail, hasło aplikacji (S3)
-  mail_sent.json                           # D-051: dziennik wysłanych powiadomień inwestorów
+  smtp.json                                # D-051: {"user", "app_password", "to"} — Gmail, hasło aplikacji (S3); w Actions z sekretu
   config.json                              # {"owner_uid": "..."} — kto może zlecać liczenie (S1)
   source.json                              # {"source": "yahoo"} — znacznik po przejściu na jedno źródło (D-039)
   data/yahoo/{PARA}.parquet                # surowa kopia świec z Firestore — niezmieniana (D4); tylko 8 par z sekcji 2 (D-041)
@@ -242,6 +242,7 @@ forest/report.md                     # raport dla Claude
 - Funkcje:
   - `backfill()` — jednorazowo, i gdy przegląd zdrowia pokaże przerwy w danych. Yahoo udostępnia świece 1h tylko z ostatnich **730 dni** — to cała dostępna historia; dalej rośnie o każdą nową godzinę (D7). Ponowny backfill uzupełnia dziury, jeśli Yahoo ma już te świece (upsert, ok. 200 zapisów). Zapis porcjami po miesiącu.
   - `tick()` — wyzwalacz **co 1 min** (D-033). Gdy wszystko jest — koniec bez zapytań. Tuż po pełnej godzinie czeka na zamknięcie świecy (D2) i ponawia brakujące pary co 15 s przez 10 min (najwyżej 100 s na uruchomienie); status zapisuje po każdej rundzie z nową świecą. Po wklejeniu nowej wersji uruchom raz `installTrigger()`.
+  - Po komplecie świec `tick` uruchamia GitHub Actions (`dispatchLive_`, D-052; token w Script Properties `GITHUB_TOKEN`).
   - `healthcheck()` — ręczna diagnostyka.
   - `removeOffGrid()` — ręcznie: usuwa z `candles/*` wpisy z czasem nie na pełnej godzinie (notowania Yahoo, nie świece; D-042). `tick` takich wpisów już nie zapisuje.
 - Yahoo: nieoficjalny endpoint `v8/finance/chart`, `interval=1h`. Ponawianie z rosnącym odstępem, maks. 3 próby, nigdy pętla bez końca. Odpowiedź, która nie jest JSON-em → błąd w `meta/status`, nie awaria.
@@ -264,7 +265,7 @@ forest/report.md                     # raport dla Claude
   6. Heartbeat co 30 s do `runner/heartbeat`; `caffeinate -i`, żeby Mac nie usnął.
   7. Nasłuch `strategies` ze statusem `do_policzenia` / `do_usuniecia`; kolejka FIFO, jedna strategia na raz.
   8. Co godzinę (5 min po pełnej godzinie) kroki 2–5 od nowa; co 6 h ponowne liczenie zamrożonych strategii (forward test, W4).
-  8a. **Inwestorzy (D-045):** po każdej kopii świec i po każdej zmianie listy `investors` — przeliczenie wszystkich aktywnych inwestorów właściciela (`ia5/investors.py`) i publikacja `investors/` na gałęzi `data`; inwestorzy `do_usuniecia` znikają z gałęzi i z Firestore.
+  8a. **Inwestorzy (D-045, D-052):** liczy GitHub Actions (`ia5 live`), uruchamiane przez Apps Script po komplecie świec. Mac robi to tylko, gdy `alerts/run.json` z gałęzi `data` jest starszy niż 2 h: po każdej kopii świec i po każdej zmianie listy `investors` — przeliczenie wszystkich aktywnych inwestorów właściciela (`ia5/investors.py`) i publikacja `investors/` na gałęzi `data`; inwestorzy `do_usuniecia` znikają z gałęzi i z Firestore.
   8b. **FOREST (D-049):** po każdej kopii świec: brak lasu albo starsza wersja → budowa (kilka minut); jest las → nowe świece po kolei, co 4 tygodnie odświeżenie lasu, publikacja `forest/` na gałęzi `data`.
   9. `Ctrl+C` → heartbeat `offline`, czyste wyjście.
 - `ia5 scan [--duzy] [--pary …]` — **skaner hipotez** (D-037): tysiące–miliony prostych reguł na wszystkich parach, FDR 5% w odkryciu (pierwsze 50%), potwierdzenie (50–75%), ostatnie 25% pominięte; wynik `~/.ia5/scans/{run}/` i gałąź `data` `scans/{run}/`. To hipotezy do zbudowania strategii, nie werdykt.
@@ -374,7 +375,7 @@ Przy jednym wariancie PBO „nie dotyczy” (nie liczy się ani za, ani przeciw)
 
 **FOREST** (0 odczytów Firestore, wszystko z `forest/` na gałęzi `data`): stan lasu i jedno zdanie, jak to działa; **Teraz** (8 par: ilu głosuje, BUY, SELL, zgoda, decyzja i jej powód po ludzku, otwarta pozycja); **Co wiadomo** (wnioski liczone automatycznie); **Wynik** (kapitał Managera i Kontroli, tabela odcinków z wynikiem po nocach); **Dziennik** (klik = kto głosował, eksport CSV); **Czego się uczy** (odświeżenia: ile doszło, ile odpadło); **Co znaczy zgoda**; rozwijane **Szczegóły** (inwestorzy, cała tabela progów, dane bez przewagi, raport dla Claude).
 
-**Inwestorzy** — wirtualne konta (paper trading). Dodawanie: nazwa, kapitał początkowy (USD), % kapitału jako depozyt na każde wejście, strategie wyłącznie z listy policzonych strategii, każda z wariantem wybranym przy dodaniu (domyślnie zamrożony albo #1 IS); kod i wariant zapisują się w tej wersji. Ustawień nie da się zmienić — tylko usunąć inwestora; wyjątek to przełącznik **Wysyłaj mail** (D-051: sygnał, otwarcie, zamknięcie przez limit czasu). Na górze karty: „za x minut możliwy sygnał na instrumencie Y” z ceną zamknięcia, która go wywoła (próby hipotetycznych zamknięć do ±1 ATR14, nie zapisywane w danych). Model: te same zasady co silnik (B1–B12), sygnały tylko ze świec zamkniętych po dodaniu, wszystkie strategie na wspólnym kapitale (B4: suma depozytów ≤ 100%, nominał = 30 × depozyt), pozycja bez wyjścia = otwarta, wyceniana po ostatnim zamknięciu. Lista: wskaźnik stanu (INWESTOR DZIAŁA / URUCHAMIANIE / WSTRZYMANY — Mac rozłączony / OPÓŹNIONY / BŁĄD), kapitał teraz, wynik. Karta: stan, kapitał (zrealizowany + wycena otwartych), wykres kapitału z obsunięciem, strategie inwestora, sygnały czekające na wejście i chronologiczna lista wszystkich transakcji (także pominiętych z braku depozytu i anulowanych), eksport CSV. Wskaźnik stanu inwestora to kropka bez poświaty — poświata zostaje tylko w nagłówku (D-019).
+**Inwestorzy** — wirtualne konta (paper trading). Dodawanie: nazwa, kapitał początkowy (USD), % kapitału jako depozyt na każde wejście, strategie wyłącznie z listy policzonych strategii, każda z wariantem wybranym przy dodaniu (domyślnie zamrożony albo #1 IS); kod i wariant zapisują się w tej wersji. Ustawień nie da się zmienić — tylko usunąć inwestora; wyjątek to przełącznik **Wysyłaj mail** (D-051, D-052: ostrzeżenie, sygnał, otwarcie, zamknięcie przez limit czasu; działa bez Maca). Na górze karty: „za x minut możliwy sygnał na instrumencie Y” z ceną zamknięcia, która go wywoła (próby hipotetycznych zamknięć do ±1 ATR14, nie zapisywane w danych). Model: te same zasady co silnik (B1–B12), sygnały tylko ze świec zamkniętych po dodaniu, wszystkie strategie na wspólnym kapitale (B4: suma depozytów ≤ 100%, nominał = 30 × depozyt), pozycja bez wyjścia = otwarta, wyceniana po ostatnim zamknięciu. Lista: wskaźnik stanu (INWESTOR DZIAŁA / URUCHAMIANIE / WSTRZYMANY — Mac rozłączony / OPÓŹNIONY / BŁĄD), kapitał teraz, wynik. Karta: stan, kapitał (zrealizowany + wycena otwartych), wykres kapitału z obsunięciem, strategie inwestora, sygnały czekające na wejście i chronologiczna lista wszystkich transakcji (także pominiętych z braku depozytu i anulowanych), eksport CSV. Wskaźnik stanu inwestora to kropka bez poświaty — poświata zostaje tylko w nagłówku (D-019).
 
 **Stats** (`meta/status` + `runner/heartbeat` + `coverage/coverage.json` z gałęzi `data`, 0 dodatkowych odczytów Firestore): **Stan systemu** (D-023) — jedno zdanie o stanie, opis bazy i projektu (ile świec w którym źródle, zakresy, strategie, gałąź `data`) i lista nazwanych kontroli (✓ / ! / ✕) z opisem, szczegółami i „co zrobić”; gdy przegląd jest starszy niż 2 h, strona mówi to wprost; świece w bazie i ostatnie pobranie, latencja (ostatnia, mediana 24 h, mini-wykres), kafelek przeglądu z listą wszystkich problemów (nazwa + zdanie);
 **mapa pokrycia świec Yahoo** (D-022, D-033, D-039) z przełącznikiem: *Ostatnia doba* — 24 zamknięte świece + trwająca godzina (przerywana kratka), nad kolumną godzina otwarcia w czasie polskim; stany: jest / spóźniona > 20 min / z flagą / czeka (czerwony zegar od pełnej godziny do zapisu) / rynek zamknięty; przy każdej parze zegar albo czas ostatniego zapisu; na żywo z `meta/status.recent` i `pairs`; *Cała historia* — 8 par × miesiące od pierwszej świecy: kolor = jak duże dziury, luki rozdzielone na *dziury* (brak danych: ≤ 3 h uzupełniana do liczenia, dłuższa = przerwa, transakcje anulowane), *granicę tygodnia* i *bez ruchu ceny*; klik miesiąc → lista luk co do godziny ze skutkiem dla liczenia, klik para → wszystkie jej dziury; **kalendarz danych dzień po dniu** (D-040) — cała historia, miesiąc pod miesiącem (od najnowszego), 1 kratka = 1 dzień UTC: komplet / pojedyncze braki ≤ 3 h (uzupełnione) / przerwa w danych > 3 h / brak danych / bez sesji / dziś; wszystkie pary (najgorszy stan) albo jedna para; podsumowanie „dane od … do …”, klik w dzień → luki co do godziny; tabela par. Flagi Yahoo nie mają osobnej listy — widać je w audycie jako kafelki „z flagą”, a ich liczbę w przeglądzie zdrowia.

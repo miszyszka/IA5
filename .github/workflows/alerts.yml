@@ -1,0 +1,50 @@
+name: Inwestorzy i maile
+# D-052: start od Apps Script po komplecie świec; cron to zapas i obsługa nowych oraz usuwanych inwestorów.
+on:
+  repository_dispatch:
+    types: [candles]
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+concurrency:
+  group: alerts
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      IA5_HOME: ${{ github.workspace }}/.ia5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: data
+          path: .ia5/data-repo
+          fetch-depth: 1
+          sparse-checkout: |
+            candles
+            investors
+            alerts
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: runner/pyproject.toml
+      - run: pip install -q -e runner
+      - name: Klucze
+        env:
+          SA: ${{ secrets.IA5_SERVICE_ACCOUNT }}
+          OWNER: ${{ secrets.IA5_OWNER_UID }}
+          SMTP: ${{ secrets.IA5_SMTP }}
+        run: |
+          umask 077
+          printf '%s' "$SA" > .ia5/service-account.json
+          printf '{"owner_uid":"%s"}' "$OWNER" > .ia5/config.json
+          printf '%s' "$SMTP" > .ia5/smtp.json
+      - run: |
+          git -C .ia5/data-repo config user.name "IA5 (GitHub Actions)"
+          git -C .ia5/data-repo config user.email "ia5@localhost"
+      - run: ia5 live

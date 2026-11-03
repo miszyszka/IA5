@@ -124,7 +124,9 @@ def test_handle_investors_owner_only_and_delete(monkeypatch):
     calls = {"computed": [], "published": None, "deleted": []}
     monkeypatch.setattr(cloud, "heartbeat", lambda *a, **k: None)
     monkeypatch.setattr(cloud, "delete_investor", lambda i: calls["deleted"].append(i))
-    monkeypatch.setattr(publish, "publish_investors", lambda st, rm, log=print: calls.__setitem__("published", (sorted(st), rm)))
+    monkeypatch.setattr(publish, "publish_investors", lambda st, rm, **k: calls.__setitem__("published", (sorted(st), rm)))
+    monkeypatch.setattr(publish, "ensure_repo", lambda: None)
+    monkeypatch.setattr(cli, "cloud_active", lambda *a: False)
     monkeypatch.setattr(investors, "compute", lambda d, *a, **k: calls["computed"].append(d["id"]) or
                         {"equity": {"now": 1.0, "return_pct": 0.0}, "counts": {"closed": 0, "open": 0}})
     docs = {"a": {"createdBy": "me", "status": "aktywny", "name": "A"},
@@ -191,3 +193,27 @@ def test_mail_once_no_history_and_retry():
     assert len(sent) == 2 and "ZAMKNIĘCIE" in sent[1][0] and "SL: 1.00000" in sent[0][1] and "TP: brak" in sent[0][1]
     alerts.process("i", True, st, ledger, send)
     assert len(sent) == 2                                                        # raz
+
+
+def test_mac_skips_when_cloud_fresh(tmp_path):
+    import json as j
+
+    from ia5 import cli
+    (tmp_path / "alerts").mkdir()
+    (tmp_path / "alerts" / "run.json").write_text(j.dumps({"at": 1000, "source": "actions"}))
+    assert cli.cloud_active(tmp_path, 1000 + 3600)
+    assert not cli.cloud_active(tmp_path, 1000 + 3 * 3600)     # Actions stoi → Mac przejmuje
+
+
+def test_warning_mail_once_and_not_after_close():
+    from ia5 import alerts
+    st = {"name": "A", "strategies": [{"name": "S"}], "trades": [], "pending": [], "upcoming": []}
+    ledger, sent = {"i": []}, []
+    u = {"strategy": 0, "pair": "EURUSD", "dir": 1, "target_ts": 4102444800, "move_atr": 0.5, "level": 1.1}
+    st["upcoming"] = [u]
+    alerts.process("i", True, st, ledger, lambda a, b: sent.append(a))
+    alerts.process("i", True, st, ledger, lambda a, b: sent.append(a))
+    assert len(sent) == 1 and "MOŻLIWY SYGNAŁ" in sent[0]
+    st["upcoming"] = [{**u, "target_ts": 1000}]
+    alerts.process("i", True, st, ledger, lambda a, b: sent.append(a))
+    assert len(sent) == 1

@@ -140,7 +140,10 @@ function run_(mode) {
   const exp = expectedTs(startedAt);
   let todo = PAIRS.filter(p => mode === 'backfill' ||
     !(state.pairs[p.name] && state.pairs[p.name].lastTs >= exp));
-  if (!todo.length && state.daily && state.recent) return; // nic nowego — zero zapytań i zapisów
+  if (!todo.length && state.daily && state.recent) { // nic nowego — zero zapytań i zapisów
+    if (mode === 'tick') dispatchLive_(exp, true);
+    return;
+  }
   if (!state.daily || !state.recent) { // jednorazowo: dziennik i audyt z tego, co już jest w bazie
     const seed = seedFromDb_(startedAt);
     state.daily = state.daily || seed.daily;
@@ -159,6 +162,25 @@ function run_(mode) {
     Utilities.sleep(RETRY_S * 1000);
   }
   saveState_(state);
+  if (mode === 'tick') dispatchLive_(exp, !todo.length);
+}
+
+/**
+ * D-052: komplet świec (albo koniec prób po 10 min) → GitHub Actions liczy inwestorów i wysyła maile.
+ * Raz na świecę; nieudane wywołanie ponowi następny tick. Token: Script Properties → GITHUB_TOKEN.
+ */
+function dispatchLive_(exp, complete) {
+  const props = PropertiesService.getScriptProperties();
+  const token = props.getProperty('GITHUB_TOKEN');
+  if (!token || Number(props.getProperty('LIVE_TS') || 0) >= exp) return;
+  if (!complete && nowSec() - (exp + H) < BURST_S) return;
+  const r = UrlFetchApp.fetch('https://api.github.com/repos/miszyszka/IA5/dispatches', {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' },
+    payload: JSON.stringify({ event_type: 'candles', client_payload: { ts: exp } }),
+  });
+  if (r.getResponseCode() === 204) props.setProperty('LIVE_TS', String(exp));
+  else console.warn('GitHub dispatch: ' + r.getResponseCode());
 }
 
 function fetchRound_(mode, todo, state, startedAt, round) {

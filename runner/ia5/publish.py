@@ -18,6 +18,22 @@ def _git(*args, check=True) -> str:
     return r.stdout.strip()
 
 
+def _push(tries: int = 4) -> None:
+    """D-052: gałąź data ma dwóch piszących (Mac i GitHub Actions) — odrzucony push doczytuje cudzy commit i ponawia."""
+    for attempt in range(tries):
+        try:
+            _git("push", "-q", "origin", "data")
+            return
+        except RuntimeError:
+            if attempt == tries - 1:
+                raise
+            try:
+                _git("pull", "-q", "--rebase", "origin", "data")
+            except RuntimeError:
+                _git("rebase", "--abort", check=False)
+                raise
+
+
 def _identity() -> None:
     """Commit wymaga tożsamości gita; gdy na komputerze jej nie ma, ustawiamy ją tylko dla klonu gałęzi data."""
     if not _git("config", "user.email", check=False):
@@ -81,7 +97,7 @@ def publish_candles(h1: dict[str, pd.DataFrame], source: str, log=print) -> str 
     mpath.write_text(json.dumps(manifest, indent=1, sort_keys=True))
     _git("add", "-A")
     _git("commit", "-q", "-m", f"dane: świece H1 ({changed} plików)")
-    _git("push", "-q", "origin", "data")
+    _push()
     sha = _git("rev-parse", "HEAD")
     log(f"  gałąź data: {changed} plików, {sha[:7]}")
     return sha
@@ -106,7 +122,7 @@ def publish_coverage(cov: dict, log=print) -> str | None:
     path.write_text(json.dumps(cov, separators=(",", ":")))
     _git("add", "-A")
     _git("commit", "-q", "-m", f"dane: mapa pokrycia ({h})")
-    _git("push", "-q", "origin", "data")
+    _push()
     sha = _git("rev-parse", "HEAD")
     log(f"  mapa pokrycia: opublikowana, {sha[:7]}")
     return sha
@@ -153,7 +169,7 @@ def publish_result(res_dir: Path, log=print) -> str:
     _write_index([e for e in _read_index() if e["id"] != entry["id"]] + [entry])
     _git("add", "-A")
     _git("commit", "-q", "-m", f"wyniki: {entry['name']} ({entry['run_id']})")
-    _git("push", "-q", "origin", "data")
+    _push()
     sha = _git("rev-parse", "HEAD")
     log(f"  opublikowano results/{entry['id']} ({sha[:7]})")
     return sha
@@ -170,7 +186,7 @@ def publish_scan(folder: Path, run_id: str, log=print) -> str:
     shutil.copytree(folder, dst)
     _git("add", "-A")
     _git("commit", "-q", "-m", f"skan hipotez {run_id}")
-    _git("push", "-q", "origin", "data")
+    _push()
     sha = _git("rev-parse", "HEAD")
     log(f"  opublikowano scans/{run_id} ({sha[:7]})")
     return sha
@@ -187,13 +203,13 @@ def publish_search(folder: Path, run_id: str, log=print) -> str:
     shutil.copytree(folder, dst, ignore=shutil.ignore_patterns("all_is.parquet"))
     _git("add", "-A")
     _git("commit", "-q", "-m", f"poszukiwanie {run_id}")
-    _git("push", "-q", "origin", "data")
+    _push()
     sha = _git("rev-parse", "HEAD")
     log(f"  opublikowano searches/{run_id} ({sha[:7]})")
     return sha
 
 
-def publish_investors(states: dict[str, dict], removed: list[str], log=print) -> str | None:
+def publish_investors(states: dict[str, dict], removed: list[str], log=print, extra: dict[str, str] | None = None) -> str | None:
     """D-045: investors/{id}/state.json + investors/index.json na gałęzi data. Inwestorzy spoza `states` i z `removed`
     znikają z gałęzi (historia gita zostaje). Push tylko, gdy treść (bez znacznika czasu liczenia) się zmieniła."""
     import shutil
@@ -204,6 +220,12 @@ def publish_investors(states: dict[str, dict], removed: list[str], log=print) ->
     root = DATA_REPO / "investors"
     root.mkdir(parents=True, exist_ok=True)
     changed = False
+    for rel, text in (extra or {}).items():      # D-052: dziennik maili i znacznik przebiegu jadą tym samym commitem
+        p = DATA_REPO / rel
+        if not p.exists() or p.read_text(encoding="utf-8") != text:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(text, encoding="utf-8")
+            changed = True
     for iid, st in states.items():
         p = root / iid / "state.json"
         if p.exists():
@@ -229,7 +251,7 @@ def publish_investors(states: dict[str, dict], removed: list[str], log=print) ->
     (root / "index.json").write_text(json.dumps({"investors": entries}, ensure_ascii=False, indent=1), encoding="utf-8")
     _git("add", "-A")
     _git("commit", "-q", "-m", f"inwestorzy: {len(entries)} (paper trading)")
-    _git("push", "-q", "origin", "data")
+    _push()
     sha = _git("rev-parse", "HEAD")
     log(f"  inwestorzy: opublikowani, {sha[:7]}")
     return sha
@@ -272,7 +294,7 @@ def publish_forest(folder: Path, log=print) -> str | None:
         return None
     _git("add", "-A")
     _git("commit", "-q", "-m", f"FOREST: {changed} plików")
-    _git("push", "-q", "origin", "data")
+    _push()
     sha = _git("rev-parse", "HEAD")
     log(f"  FOREST: opublikowany, {sha[:7]}")
     return sha
@@ -293,7 +315,7 @@ def delete_result(strategy_id: str, log=print) -> str | None:
     _write_index(after)
     _git("add", "-A")
     _git("commit", "-q", "-m", f"usunięto strategię {strategy_id}")
-    _git("push", "-q", "origin", "data")
+    _push()
     log(f"  usunięto results/{strategy_id}")
     return _git("rev-parse", "HEAD")
 
@@ -325,5 +347,5 @@ def purge_dukascopy_results(log=print) -> int:
     _write_index(after)
     _git("add", "-A")
     _git("commit", "-q", "-m", "D-039: usunięte wyniki i skany policzone na Dukascopy")
-    _git("push", "-q", "origin", "data")
+    _push()
     return len(gone | {e["id"] for e in before} - {e["id"] for e in after})

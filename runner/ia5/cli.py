@@ -432,10 +432,21 @@ def handle_job(sid: str, data: dict, state: dict) -> None:
         cloud.heartbeat("idle")
 
 
-def handle_investors(docs: dict, owner: str | None, state: dict) -> None:
-    """D-045: przelicza wszystkich aktywnych inwestorów właściciela (S1) na aktualnych danych, publikuje stan na gałęzi
-    data, usuwa inwestorów ze statusem do_usuniecia. Błąd jednego inwestora nie zatrzymuje pozostałych — zostaje jego
-    ostatni opublikowany stan."""
+CLOUD_FRESH_S = 2 * 3600   # D-052: świeży przebieg GitHub Actions = Mac nie liczy inwestorów
+
+
+def cloud_active(root, now: int) -> bool:
+    try:
+        r = json.loads((root / "alerts" / "run.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return r.get("source") == "actions" and now - int(r.get("at", 0)) < CLOUD_FRESH_S
+
+
+def handle_investors(docs: dict, owner: str | None, state: dict, source: str = "mac") -> None:
+    """D-045, D-052: liczy aktywnych inwestorów właściciela (S1), wysyła maile, publikuje stan na gałęzi data i usuwa inwestorów
+    do_usuniecia. Normalnie robi to GitHub Actions; Mac przejmuje pracę tylko, gdy Actions nie działało od 2 h.
+    Błąd jednego inwestora nie zatrzymuje pozostałych — zostaje jego ostatni opublikowany stan."""
     from . import alerts, cloud, publish
     from .investors import compute
     from .store import DATA_REPO, READY
@@ -443,6 +454,12 @@ def handle_investors(docs: dict, owner: str | None, state: dict) -> None:
     if not owner:
         if docs:
             log(f"Inwestorzy: pomijam — brak owner_uid w {HOME / 'config.json'} (S1)")
+        return
+    beat = cloud.heartbeat if source == "mac" else (lambda *a, **k: None)
+    publish.ensure_repo()
+    now = int(time.time())
+    if source == "mac" and cloud_active(DATA_REPO, now):
+        log("Inwestorzy: liczy GitHub Actions — Mac pomija.")
         return
     mine = {i: d for i, d in docs.items() if d.get("createdBy") == owner}
     removed = [i for i, d in mine.items() if d.get("status") == "do_usuniecia"]
@@ -455,7 +472,7 @@ def handle_investors(docs: dict, owner: str | None, state: dict) -> None:
         for n, (iid, d) in enumerate(active.items()):
             state["job"] = {"id": iid, "name": f"Inwestor: {d.get('name', iid)}", "progress": int(100 * n / max(1, len(active))),
                             "phase": "paper trading"}
-            cloud.heartbeat("computing", state["job"])
+            beat("computing", state["job"])
             try:
                 states[iid] = compute({**d, "id": iid}, READY, log=log)
                 e = states[iid]["equity"]
@@ -466,28 +483,57 @@ def handle_investors(docs: dict, owner: str | None, state: dict) -> None:
                 prev = DATA_REPO / "investors" / iid / "state.json"
                 if prev.exists():
                     states[iid] = json.loads(prev.read_text(encoding="utf-8"))
-        ledger_path = Path(HOME) / "mail_sent.json"
-        ledger = alerts.load_ledger(ledger_path)
+        ledger = alerts.load_ledger(DATA_REPO / alerts.LEDGER)
         cfg = alerts.load_config(HOME / "smtp.json")
         send = alerts.smtp_sender(cfg) if cfg else None
         for iid, st in states.items():
             err = alerts.process(iid, bool(active[iid].get("emailAlerts")), st, ledger, send)
-            alerts.save_ledger(ledger_path, ledger)
             st["mail_error"] = err
             if err:
                 log(f"Inwestor „{active[iid].get('name', iid)}”: {err}")
-        publish.publish_investors(states, removed, log=log)
+        for iid in removed:
+            ledger.pop(iid, None)
+        extra = {alerts.LEDGER: json.dumps(ledger, ensure_ascii=False), "alerts/run.json": json.dumps({"at": now, "source": source})}
+        sha = None
+        for attempt in range(3):      # ensure_repo w publikacji zaczyna od świeżej gałęzi, więc ponowienie jest bezpieczne
+            try:
+                sha = publish.publish_investors(states, removed, log=log, extra=extra)
+                break
+            except RuntimeError:
+                if attempt == 2:
+                    raise
+                time.sleep(5)
+        if sha:
+            cloud.set_data_sha(sha)
         for iid in removed:
             cloud.delete_investor(iid)
-            ledger.pop(iid, None)
             log(f"Inwestor {iid}: usunięty")
-        alerts.save_ledger(ledger_path, ledger)
     except Exception as e:  # noqa: BLE001 — publikacja nie może zatrzymać programu
         log(f"Inwestorzy: błąd publikacji — {e} (ponowię po następnej kopii świec)")
+        if source != "mac":
+            raise
     finally:
         state["now"] = "idle"
         state["job"] = None
-        cloud.heartbeat("idle")
+        beat("idle")
+
+
+def cmd_live(_args) -> None:
+    """D-052: jeden przebieg w GitHub Actions. Historia świec z gałęzi data, najnowsze miesiące z Firestore."""
+    import pandas as pd
+
+    from . import cloud, publish, ready
+    from .store import DATA_REPO, READY, YAHOO
+
+    publish.ensure_repo()
+    YAHOO.mkdir(parents=True, exist_ok=True)
+    for pair in PAIRS:
+        files = sorted((DATA_REPO / "candles" / pair).glob("*.parquet"))
+        if files:
+            pd.concat(pd.read_parquet(f) for f in files).to_parquet(YAHOO / f"{pair}.parquet", index=False)
+    yahoo = cloud.sync_yahoo(YAHOO, log=log)
+    ready.build(yahoo, READY, log=log)
+    handle_investors(cloud.list_investors(), config().get("owner_uid"), {}, source="actions")
 
 
 def handle_forest(state: dict) -> None:
@@ -758,6 +804,7 @@ def main(argv=None) -> int:
     p_fr.add_argument("--nasiono", type=int, default=5)
     p_fr.add_argument("--lokalnie", action="store_true", help="bez publikacji na gałąź data")
     p_fr.set_defaults(func=cmd_forest)
+    sub.add_parser("live", help="jeden przebieg inwestorów i maili w GitHub Actions (D-052)").set_defaults(func=cmd_live)
     sub.add_parser("status").set_defaults(func=cmd_status)
     sub.add_parser("health", help="opisowy przegląd zdrowia danych i projektu").set_defaults(func=cmd_health)
     args = parser.parse_args(argv)

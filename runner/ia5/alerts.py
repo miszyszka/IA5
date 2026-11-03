@@ -1,6 +1,6 @@
 """Powiadomienia mailowe inwestorów (D-051): sygnał, otwarcie, zamknięcie przez limit czasu.
 
-Zdarzenia wynikają ze stanu inwestora (`investors.compute`). Dziennik `~/.ia5/mail_sent.json` pilnuje, żeby każde poszło raz.
+Zdarzenia wynikają ze stanu inwestora (`investors.compute`). Dziennik `alerts/mail_sent.json` na gałęzi data pilnuje, żeby każde poszło raz.
 Pierwszy przebieg inwestora i zdarzenia przy wyłączonym przełączniku są tylko odnotowywane — włączenie nie wysyła historii.
 Nieudana wysyłka nie trafia do dziennika, więc ponowi się po następnym liczeniu.
 Dane Gmaila leżą poza repo (S3): `~/.ia5/smtp.json` = {"user", "app_password", "to"}.
@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import json
 import smtplib
+import time
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 PL = ZoneInfo("Europe/Warsaw")
+LEDGER = "alerts/mail_sent.json"   # D-052: na gałęzi data, wspólny dla GitHub Actions i Maca (same klucze zdarzeń)
 
 
 def _pl(ts: int) -> str:
@@ -42,8 +44,17 @@ def events(state: dict) -> list[dict]:
     sname = lambda k: strat[k].get("name") if k < len(strat) else f"#{k + 1}"  # noqa: E731
     out = []
 
-    def add(key, title, lines):
-        out.append({"key": key, "subject": f"IA5 · {name} · {title}", "body": "\n".join([f"Inwestor: {name}", *lines]) + "\n"})
+    def add(key, title, lines, expires=None):
+        out.append({"key": key, "subject": f"IA5 · {name} · {title}", "expires": expires,
+                    "body": "\n".join([f"Inwestor: {name}", *lines]) + "\n"})
+
+    for u in state.get("upcoming") or []:
+        k, q, tgt = u["strategy"], u["pair"], u["target_ts"]
+        side = "w okolicy" if u["move_atr"] == 0 else "powyżej" if u["move_atr"] > 0 else "poniżej"
+        add(f"warn|{k}|{q}|{u['dir']}|{tgt}", f"MOŻLIWY SYGNAŁ {_pair(q)} {_word(u['dir'])}", [
+            f"Strategia: {sname(k)}", f"Instrument: {_pair(q)} ({_word(u['dir'])})",
+            f"Warunek: zamknięcie świecy {side} {_px(u['level'])}", f"Świeca zamyka się: {_pl(tgt)} czasu polskiego",
+            "To ostrzeżenie, nie sygnał."], expires=tgt)
 
     for p in state.get("pending") or []:
         if not p.get("free", True):
@@ -97,6 +108,8 @@ def process(iid: str, enabled: bool, state: dict, ledger: dict, send) -> str | N
         ledger[iid] = sorted(set(ledger.get(iid, [])) | {e["key"] for e in ev})
         return None
     done = set(ledger[iid])
+    now = time.time()
+    done |= {e["key"] for e in ev if e["expires"] and e["expires"] <= now}   # spóźnione ostrzeżenie jest bez sensu
     new = [e for e in ev if e["key"] not in done]
     if send is None:
         return "Maile włączone, ale brak ~/.ia5/smtp.json — wiadomości czekają na konfigurację."
@@ -116,8 +129,3 @@ def load_ledger(path: Path) -> dict:
         return json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
-
-
-def save_ledger(path: Path, ledger: dict) -> None:
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    Path(path).write_text(json.dumps(ledger, ensure_ascii=False), encoding="utf-8")

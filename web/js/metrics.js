@@ -181,18 +181,15 @@ export function investorStatus(doc, st, mac, now = Date.now() / 1000) {
   if (doc?.status === 'do_usuniecia') return { state: 'mute', word: 'USUWANIE', detail: 'Mac usunie inwestora przy najbliższym przebiegu.' };
   const busy = mac?.online && mac.state === 'computing' && mac.job?.name?.startsWith('Inwestor');
   if (!st) {
-    return mac?.online
-      ? { state: 'warn', word: 'URUCHAMIANIE', detail: busy ? 'Mac liczy inwestorów…' : 'Czeka na pierwsze liczenie na Macu.' }
-      : { state: 'mute', word: 'CZEKA NA MACA', detail: 'Mac jest rozłączony — inwestor zacznie działać po uruchomieniu ia5 start.' };
+    return { state: 'warn', word: 'URUCHAMIANIE', detail: busy ? 'Trwa liczenie inwestorów…' : 'Pierwsze liczenie w chmurze nastąpi w ciągu godziny.' };
   }
   const errs = (st.strategies || []).filter((s) => s.error).length + (st.errors || 0);
   const all = (st.strategies || []).length;
-  if (!mac?.online) return { state: 'mute', word: 'WSTRZYMANY', detail: 'Mac rozłączony — nowe świece nie są liczone.' };
   if (all && errs >= all) return { state: 'bad', word: 'BŁĄD', detail: 'Żadna strategia inwestora nie daje się policzyć — szczegóły przy strategiach.' };
   if (now - (st.computedAt || 0) > INVESTOR_STALE_S) {
     return { state: 'warn', word: 'OPÓŹNIONY', detail: 'Ostatnie liczenie ponad 2 h temu.' };
   }
-  return { state: 'ok', word: 'INWESTOR DZIAŁA', detail: errs ? `Uwaga: ${errs} z ${all} strategii z błędem.` : 'Liczony co godzinę po nowej świecy.' };
+  return { state: 'ok', word: 'INWESTOR DZIAŁA', detail: errs ? `Uwaga: ${errs} z ${all} strategii z błędem.` : 'Liczony po każdej nowej świecy, także bez Maca.' };
 }
 
 /** Lista inwestorów = dokumenty Firestore (źródło prawdy o istnieniu) + stan z gałęzi data. */
