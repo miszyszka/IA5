@@ -57,11 +57,11 @@ const plain = (row) => {
   return row;
 };
 
-/** Wiersze [rowStart, rowEnd) pliku Parquet z gałęzi data. */
-export async function readRows(path, rowStart, rowEnd) {
+/** Wiersze [rowStart, rowEnd) pliku Parquet z gałęzi data; columns = tylko te kolumny (opcjonalnie). */
+export async function readRows(path, rowStart, rowEnd, columns) {
   const url = (await dataBase()) + path;
   try {
-    const rows = await parquetReadObjects({ file: await parquetFile(url), rowStart, rowEnd });
+    const rows = await parquetReadObjects({ file: await parquetFile(url), rowStart, rowEnd, columns });
     return rows.map(plain);
   } catch (e) {
     // serwer bez obsługi zakresów — jeszcze raz z całym plikiem
@@ -70,6 +70,6 @@ export async function readRows(path, rowStart, rowEnd) {
     if (!r.ok) throw e;
     const ab = await r.arrayBuffer();
     buffers.set(url, Promise.resolve(ab));
-    return (await parquetReadObjects({ file: ab, rowStart, rowEnd })).map(plain);
+    return (await parquetReadObjects({ file: ab, rowStart, rowEnd, columns })).map(plain);
   }
 }

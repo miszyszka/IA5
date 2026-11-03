@@ -291,6 +291,7 @@ def cmd_start(_args) -> int:
     state["now"] = "idle"
     beat_now()
     enqueue_frozen(jobs, owner)
+    jobs.put((FOREST_JOB, None))                                   # D-048: las zbuduje się sam przy pierwszym starcie
     log("Połączony. Czekam na strategie (Ctrl+C kończy).")
     next_sync, last_forward = next_sync_time(), time.time()
     while True:
@@ -311,10 +312,14 @@ def cmd_start(_args) -> int:
                     enqueue_frozen(jobs, owner)
                     last_forward = time.time()
                 queue_investors()                                  # nowe świece → paper trading inwestorów (D-045)
+                jobs.put((FOREST_JOB, None))                       # nowe świece → FOREST (D-048)
             continue
         if sid == INVESTORS_JOB:
             inv_seen["queued"] = False
             handle_investors(dict(inv_docs), owner, state)
+            continue
+        if sid == FOREST_JOB:
+            handle_forest(state)
             continue
         if data.get("status") == "do_usuniecia":
             handle_delete(sid)
@@ -353,6 +358,7 @@ def requeue_after_source_change(owner: str | None) -> bool:
 
 FORWARD_SECONDS = 6 * 3600   # W4: forward test zamrożonych strategii
 INVESTORS_JOB = "__inwestorzy__"
+FOREST_JOB = "__forest__"
 SYNC_OFFSET = 300            # kopia świec 5 min po pełnej godzinie
 
 
@@ -466,6 +472,42 @@ def handle_investors(docs: dict, owner: str | None, state: dict) -> None:
             log(f"Inwestor {iid}: usunięty")
     except Exception as e:  # noqa: BLE001 — publikacja nie może zatrzymać programu
         log(f"Inwestorzy: błąd publikacji — {e} (ponowię po następnej kopii świec)")
+    finally:
+        state["now"] = "idle"
+        state["job"] = None
+        cloud.heartbeat("idle")
+
+
+def handle_forest(state: dict) -> None:
+    """D-048: FOREST działa tylko tu, przy ia5 start. Brak lasu → budowa; jest las → nowe świece po kolei (po przerwie Maca
+    nadrabia wszystko, co ominęło) i publikacja na gałąź data. Błąd nie zatrzymuje programu; stan na dysku zostaje poprzedni."""
+    from . import cloud, forest_run, publish, ready
+    from .store import READY
+
+    job = {"id": "forest", "name": "FOREST", "progress": 0, "phase": "start"}
+    state["now"], state["job"] = "computing", job
+
+    def step(msg: str) -> None:
+        log(msg)
+        job["phase"] = msg.strip()[:60]
+        try:
+            cloud.heartbeat("computing", job)
+        except Exception:  # noqa: BLE001 — chwilowy brak sieci nie przerywa liczenia
+            pass
+
+    try:
+        frames = ready.load(READY)
+        if not forest_run.exists():
+            step("FOREST: pierwsza budowa lasu (kilka–kilkanaście minut)…")
+            st = forest_run.build(frames, log=step, ledger=HOME)
+            made = st["counts"]["decyzje"]
+        else:
+            st, made = forest_run.step(frames, log=step)
+        log(f"FOREST: {made} nowych decyzji · mapy {st['counts']['mapy']:,} · " + " · ".join(
+            f"{b.upper()} {x['equity']:,.0f} USD" for b, x in st["books"].items()))
+        publish.publish_forest(forest_run.public_dir(), log=log)
+    except Exception as e:  # noqa: BLE001 — błąd lasu nie może zatrzymać programu
+        log(f"FOREST: błąd — {type(e).__name__}: {e}")
     finally:
         state["now"] = "idle"
         state["job"] = None
@@ -612,6 +654,54 @@ def cmd_search(args) -> int:
     return 0
 
 
+def cmd_forest(args) -> int:
+    """FOREST (D-048) ręcznie. Normalnie nic z tego nie jest potrzebne: `ia5 start` buduje las sam i liczy go co godzinę.
+    Komend `build` i `krok` używaj przy wyłączonym ia5 start, bo oba procesy zapisują ten sam stan."""
+    from . import cloud, forest_run, ready
+    from .store import READY, YAHOO
+
+    if args.co == "status":
+        if not forest_run.exists():
+            print("Lasu jeszcze nie ma — zbuduje go ia5 start albo ia5 forest build.")
+            return 0
+        st = json.loads((forest_run.public_dir() / "state.json").read_text(encoding="utf-8"))
+        print(f"Las {st['id']} · dane do {time.strftime('%Y-%m-%d %H:%M', time.gmtime(st['dataTo']))} UTC · "
+              f"decyzje {st['counts']['decyzje']:,} · mapy {st['counts']['mapy']:,}")
+        for b, x in st["books"].items():
+            print(f"  {b.upper()} {x['name']}: {x['equity']:,.2f} USD ({x['return_pct']:+.2f}%), {x['closed']} transakcji")
+        for c in st["conclusions"]:
+            print(f"  [{c['state']}] {c['text']}")
+        return 0
+    yahoo = cloud.load_yahoo(YAHOO)
+    if not yahoo:
+        print("Brak świec na Macu — najpierw ia5 start.")
+        return 1
+    ready.build(yahoo, READY, log=log)
+    frames = ready.load(READY)
+    caffeinate = subprocess.Popen(["caffeinate", "-i", "-w", str(os.getpid())]) if sys.platform == "darwin" else None
+    try:
+        if args.co == "build":
+            st = forest_run.build(frames, n_candidates=args.kandydaci, zero=args.zero, seed=args.nasiono, workers=args.procesy,
+                                  log=log, ledger=HOME)
+        else:
+            if not forest_run.exists():
+                print("Lasu jeszcze nie ma — najpierw ia5 forest build.")
+                return 1
+            st, _ = forest_run.step(frames, log=log)
+    finally:
+        if caffeinate:
+            caffeinate.terminate()
+    print((forest_run.public_dir() / "report.md").read_text(encoding="utf-8")[:4000])
+    if not args.lokalnie:
+        try:
+            from . import publish
+
+            publish.publish_forest(forest_run.public_dir(), log=log)
+        except Exception as e:  # noqa: BLE001 — wynik jest lokalnie, publikacja się nie udała
+            log(f"  publikacja nieudana ({e}) — wynik jest lokalnie w {forest_run.public_dir()}")
+    return 0
+
+
 def cmd_status(_args) -> int:
     print(f"IA5 runner · silnik {ENGINE_VERSION}")
     print("Pary:", ", ".join(PAIRS))
@@ -650,6 +740,15 @@ def main(argv=None) -> int:
     p_srch.add_argument("--bez-oos", action="store_true", help="tylko IS — OOS zostaje zamknięty")
     p_srch.add_argument("--lokalnie", action="store_true", help="bez publikacji na gałąź data")
     p_srch.set_defaults(func=cmd_search)
+    p_fr = sub.add_parser("forest", help="FOREST: las 1000 inwestorów (D-048); ia5 start liczy go sam, to tylko ręczne sterowanie")
+    p_fr.add_argument("co", choices=["build", "krok", "status"],
+                      help="build = nowy las (poprzedni do archiwum), krok = nowe świece, status")
+    p_fr.add_argument("--kandydaci", type=int, default=300_000, help="ilu kandydatów ocenić przy kuciu")
+    p_fr.add_argument("--zero", type=int, default=1, help="przebiegi na danych bez przewagi")
+    p_fr.add_argument("--nasiono", type=int, default=1)
+    p_fr.add_argument("--procesy", type=int, help="równoległe procesy (domyślnie liczba rdzeni, max 8)")
+    p_fr.add_argument("--lokalnie", action="store_true", help="bez publikacji na gałąź data")
+    p_fr.set_defaults(func=cmd_forest)
     sub.add_parser("status").set_defaults(func=cmd_status)
     sub.add_parser("health", help="opisowy przegląd zdrowia danych i projektu").set_defaults(func=cmd_health)
     args = parser.parse_args(argv)

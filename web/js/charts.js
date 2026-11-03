@@ -65,6 +65,25 @@ export function equityChart(el, curve, dd, marks = []) {
   });
 }
 
+/** Kilka krzywych kapitału na jednej osi (księgi FOREST). series: [{name, ts, equity, color}], marks jak w equityChart. */
+export function equityLines(el, series, marks = []) {
+  const b = base();
+  const ax = b.axisDefaults;
+  return chart(el, {
+    ...b,
+    grid: { left: 72, right: 24, top: 36, bottom: 36 },
+    legend: { top: 0, textStyle: { color: ax.axisLabel.color } },
+    tooltip: { ...b.tooltip, trigger: 'axis', valueFormatter: (v) => (v == null ? '—' : v.toLocaleString('pl-PL', { maximumFractionDigits: 0 })) },
+    xAxis: { type: 'time', ...ax, splitLine: { show: false }, axisLabel: { ...ax.axisLabel, formatter: (v) => fmtDate(v) } },
+    yAxis: { type: 'value', scale: true, ...ax, name: 'USD', nameTextStyle: { color: ax.axisLabel.color },
+      axisLabel: { ...ax.axisLabel, formatter: (v) => v.toLocaleString('pl-PL', { maximumFractionDigits: 0 }) } },
+    series: series.map((s, i) => ({ name: s.name, type: 'line', step: 'end', showSymbol: false, data: s.ts.map((t, k) => [t * 1000, s.equity[k]]),
+      lineStyle: { color: css(s.color), width: i === 0 ? 1.75 : 1.25 }, itemStyle: { color: css(s.color) },
+      markLine: i === 0 ? { symbol: 'none', silent: true, label: { color: css('--muted'), formatter: '{b}' }, lineStyle: { color: css('--muted'), type: 'dashed' },
+        data: marks.map((m) => ({ name: m.label, xAxis: m.ts * 1000 })) } : undefined })),
+  });
+}
+
 /** Heatmapa TP × SL. cells: [{x, y, v, n, id}] — v = null gdy za mało transakcji. */
 export function heatmap(el, xs, ys, cells, onPick, label) {
   const b = base();

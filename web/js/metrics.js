@@ -239,3 +239,54 @@ export function variantChoices(variants, frozenId = null) {
   }));
 }
 
+
+// ---------- FOREST (D-048) ----------
+
+const FOREST_STALE_S = 2 * 3600;
+
+/** Stan lasu na podstawie opublikowanego stanu i Maca: FOREST działa tylko przy ia5 start. */
+export function forestStatus(st, mac, now = Date.now() / 1000) {
+  const busy = mac?.online && mac.state === 'computing' && mac.job?.name === 'FOREST';
+  if (!st) {
+    if (busy) return { state: 'warn', word: 'BUDOWA LASU', detail: mac.job?.phase || 'Mac kuje las — kilka do kilkunastu minut.' };
+    return mac?.online
+      ? { state: 'warn', word: 'URUCHAMIANIE', detail: 'Mac zbuduje las, gdy skończy bieżące zadania.' }
+      : { state: 'mute', word: 'CZEKA NA MACA', detail: 'FOREST liczy tylko Mac. Uruchom ia5 start: las zbuduje się sam.' };
+  }
+  if (!mac?.online) return { state: 'mute', word: 'WSTRZYMANY', detail: 'Mac rozłączony. Po ia5 start las nadrobi wszystkie świece po kolei, z tym samym wynikiem.' };
+  if (busy) return { state: 'ok', word: 'LICZY', detail: mac.job?.phase || 'Nowe świece, rozliczenia, mapy.' };
+  if (now - (st.computedAt || 0) > FOREST_STALE_S) return { state: 'warn', word: 'OPÓŹNIONY', detail: 'Ostatnie liczenie ponad 2 h temu.' };
+  return { state: 'ok', word: 'LAS DZIAŁA', detail: 'Liczony po każdej nowej świecy.' };
+}
+
+/** Mapa głosów z zapisu szesnastkowego: tablica m wartości true = BUY (kolejność bitów jak numpy.packbits). */
+export function votesFromHex(hex, m) {
+  const out = new Array(m);
+  for (let k = 0; k < m; k++) {
+    const byte = parseInt(hex.slice((k >> 3) * 2, (k >> 3) * 2 + 2), 16);
+    out[k] = (byte & (0x80 >> (k & 7))) !== 0;
+  }
+  return out;
+}
+
+/** Wiersz dziennika widziany przez księgę: kierunek, horyzont, wynik brutto/netto, status. book = a | b | c. */
+export function forestRow(r, book = 'a') {
+  const dir = book === 'c' ? r.dir_c : r.dir;
+  const h = book === 'c' ? r.h_c : book === 'b' ? r.h_b : r.h;
+  const g = r[`g${h}`];
+  const done = r.known >= h;
+  const cancelled = done && (g == null || Number.isNaN(g));
+  const gross = done && !cancelled ? dir * g : null;
+  const net = gross == null ? null : gross - r.spread;
+  const za = dir > 0 ? r.buy : r.sell;
+  return { ...r, b_dir: dir, b_h: h, gross, net, za, przeciw: r.buy + r.sell - za, forecast: r[`f${h}`],
+    status: cancelled ? 'anulowana' : done ? 'zamknięta' : 'otwarta', executed: !!r[`ex_${book}`], exit_ts: r[`xt${h}`] || null };
+}
+
+/** Filtry dziennika: book (a/b/c), only (tylko wykonane), pair, dir (1/−1), status, wynik (zysk/strata). */
+export function filterJournal(rows, f = {}) {
+  const book = f.book || 'a';
+  return rows.map((r) => forestRow(r, book)).filter((r) => (!f.only || r.executed) && (!f.pair || r.pair === f.pair)
+    && (!f.dir || r.b_dir === f.dir) && (!f.status || r.status === f.status)
+    && (!f.wynik || (f.wynik === 'zysk' ? r.net > 0 : r.net != null && r.net <= 0)));
+}

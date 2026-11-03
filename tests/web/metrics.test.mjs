@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { checkStrategyCode, filterTrades, investorStatus, investorTrades, mergeInvestors, mergeStrategies, simulateEquity, summarize, validateInvestor, variantChoices } from '../../web/js/metrics.js';
+import { checkStrategyCode, filterJournal, filterTrades, forestRow, forestStatus, investorStatus, investorTrades, mergeInvestors, mergeStrategies, simulateEquity, summarize, validateInvestor, variantChoices, votesFromHex } from '../../web/js/metrics.js';
 
 test('kapitał = Python (runner/ia5/portfolio.py) dla każdego depozytu', () => {
   const fx = JSON.parse(readFileSync(process.env.IA5_EQUITY_FIXTURE, 'utf8'));
@@ -190,4 +190,35 @@ test('inwestorzy: lista, walidacja, chronologia, wybór wariantu', () => {
   const fr = variantChoices(vs, 9);
   assert.deepEqual(fr.map((c) => c.id), [9, 3, 7]);
   assert.ok(fr[0].frozen && fr[0].label.startsWith('❄'));
+});
+
+test('FOREST: mapa głosów z zapisu szesnastkowego (bity jak numpy.packbits)', () => {
+  assert.deepEqual(votesFromHex('a0', 4), [true, false, true, false]);
+  assert.deepEqual(votesFromHex('0180', 9), [false, false, false, false, false, false, false, true, true]);
+});
+
+test('FOREST: wiersz dziennika w każdej księdze', () => {
+  const r = { seq: 1, pair: 'EURUSD', buy: 600, sell: 400, dir: 1, h: 3, h_b: 2, dir_c: -1, h_c: 1, spread: 0.9, known: 3, g1: 2, g2: -4, g3: 5, g4: NaN, g5: NaN, f3: 1, xt3: 100,
+    ex_a: true, ex_b: false, ex_c: true };
+  const a = forestRow(r, 'a');
+  assert.equal(a.gross, 5); assert.equal(a.net, 4.1); assert.equal(a.za, 600); assert.equal(a.przeciw, 400); assert.equal(a.status, 'zamknięta'); assert.equal(a.exit_ts, 100);
+  const b = forestRow(r, 'b');
+  assert.equal(b.gross, -4); assert.equal(b.executed, false);
+  const c = forestRow(r, 'c');
+  assert.equal(c.gross, -2); assert.equal(c.za, 400);
+  assert.equal(forestRow({ ...r, known: 1 }, 'a').status, 'otwarta');
+  assert.equal(forestRow({ ...r, g3: NaN }, 'a').status, 'anulowana');
+  assert.equal(filterJournal([r], { book: 'b', only: true }).length, 0);
+  assert.equal(filterJournal([r], { wynik: 'zysk' }).length, 1);
+  assert.equal(filterJournal([r], { wynik: 'strata' }).length, 0);
+  assert.equal(filterJournal([r], { dir: -1 }).length, 0);
+});
+
+test('FOREST: stan lasu zależy od Maca', () => {
+  const now = 1_000_000;
+  assert.equal(forestStatus(null, { online: false }, now).word, 'CZEKA NA MACA');
+  assert.equal(forestStatus(null, { online: true, state: 'computing', job: { name: 'FOREST' } }, now).word, 'BUDOWA LASU');
+  assert.equal(forestStatus({ computedAt: now - 60 }, { online: false }, now).word, 'WSTRZYMANY');
+  assert.equal(forestStatus({ computedAt: now - 60 }, { online: true }, now).word, 'LAS DZIAŁA');
+  assert.equal(forestStatus({ computedAt: now - 3 * 3600 }, { online: true }, now).word, 'OPÓŹNIONY');
 });

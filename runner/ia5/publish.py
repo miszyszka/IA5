@@ -235,6 +235,49 @@ def publish_investors(states: dict[str, dict], removed: list[str], log=print) ->
     return sha
 
 
+def publish_forest(folder: Path, log=print) -> str | None:
+    """D-048: forest/ na gałęzi data (state.json, investors.json, report.md, journal/{RRRR-MM}.parquet). Tylko pliki, które się
+    zmieniły; sam nowy czas liczenia nie jest zmianą. Zwraca SHA lub None."""
+    import shutil
+
+    ensure_repo()
+    dst = DATA_REPO / "forest"
+    (dst / "journal").mkdir(parents=True, exist_ok=True)
+
+    def same_state(a: Path, b: Path) -> bool:
+        if not b.exists():
+            return False
+        x, y = json.loads(a.read_text(encoding="utf-8")), json.loads(b.read_text(encoding="utf-8"))
+        x.pop("computedAt", None)
+        y.pop("computedAt", None)
+        return x == y
+
+    changed = 0
+    for f in sorted(folder.rglob("*")):
+        if not f.is_file():
+            continue
+        rel = f.relative_to(folder)
+        t = dst / rel
+        same = same_state(f, t) if rel.name == "state.json" else t.exists() and t.read_bytes() == f.read_bytes()
+        if not same:
+            t.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(f, t)
+            changed += 1
+    for f in (dst / "journal").glob("*.parquet"):
+        if not (folder / "journal" / f.name).exists():
+            f.unlink()
+            changed += 1
+    if not changed:
+        log("  FOREST: bez zmian")
+        return None
+    _git("add", "-A")
+    _git("commit", "-q", "-m", f"FOREST: {changed} plików")
+    _git("push", "-q", "origin", "data")
+    sha = _git("rev-parse", "HEAD")
+    log(f"  FOREST: opublikowany, {sha[:7]}")
+    return sha
+
+
 def delete_result(strategy_id: str, log=print) -> str | None:
     """Usuwa wynik strategii z gałęzi data i z indeksu (historia gita zostaje — G4)."""
     import shutil

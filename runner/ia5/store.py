@@ -10,6 +10,7 @@ READY = DATA / "h1_ready"   # H1 Yahoo po warstwie czyszczenia (clean.py) — je
 RESULTS = HOME / "results"
 SCANS = HOME / "scans"
 SEARCHES = HOME / "searches"   # D-044: głębokie poszukiwanie (ia5 search)
+FOREST = HOME / "forest"       # D-048: las inwestorów, mapy, dziennik (current/, public/, archive/)
 DATA_ALLOWED = ("yahoo", "h1_ready")   # D-041: lokalnie tylko kopia świec Yahoo i dane do liczenia z niej
 # D-039: pozostałości po źródle Dukascopy (usuwane przy starcie za zgodą Michała z 2026-10-31)
 LEGACY = (DATA / "m1", DATA / "h1", DATA / "h1_scan")
