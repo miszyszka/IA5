@@ -608,7 +608,7 @@ def report(out: dict, ledger_count: int | None = None) -> str:
               "konfiguracje są ze sobą skorelowane, więc ta liczba jest optymistyczna).",
               f"- Średnio na OOS: {oos.r_oos.mean():+.3f} R na transakcję vs {np.nanmean(np.minimum(oos.rA, oos.rB)):+.3f} R "
               "(gorsza z połówek IS) — spadek z IS do OOS to typowa miara przeuczenia.",
-              f"- Korelacja rangi IS z wynikiem OOS: {oos.rank_is.corr(oos.r_oos, method='spearman'):+.2f} "
+              f"- Korelacja rangi IS z wynikiem OOS: {oos.rank_is.rank().corr(oos.r_oos.rank()):+.2f} "
               "(ujemna = ranking IS nic nie przewiduje)."]
         d = out.get("dsr") or {}
         if d.get("dsr") is not None and np.isfinite(d.get("dsr", np.nan)):
