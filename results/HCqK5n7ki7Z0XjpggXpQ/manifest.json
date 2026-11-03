@@ -1,0 +1,165 @@
+{
+ "id": "HCqK5n7ki7Z0XjpggXpQ",
+ "name": "Pivot",
+ "run_id": "20261103-174534",
+ "engine_version": "0.9.0",
+ "code_hash": "1d99b8d4fbf585d6",
+ "data_hash": "e76fc4183c4b5596",
+ "data_source": "yahoo",
+ "candles": "pełne",
+ "pairs": [
+  "AUDUSD",
+  "EURGBP",
+  "EURJPY",
+  "EURUSD",
+  "GBPUSD",
+  "USDCAD",
+  "USDCHF",
+  "USDJPY"
+ ],
+ "params": [
+  {
+   "tol": 0.25,
+   "bold": 0.0,
+   "wait": 1
+  },
+  {
+   "tol": 0.25,
+   "bold": 0.0,
+   "wait": 2
+  },
+  {
+   "tol": 0.25,
+   "bold": 1.0,
+   "wait": 1
+  },
+  {
+   "tol": 0.25,
+   "bold": 1.0,
+   "wait": 2
+  },
+  {
+   "tol": 0.5,
+   "bold": 0.0,
+   "wait": 1
+  },
+  {
+   "tol": 0.5,
+   "bold": 0.0,
+   "wait": 2
+  },
+  {
+   "tol": 0.5,
+   "bold": 1.0,
+   "wait": 1
+  },
+  {
+   "tol": 0.5,
+   "bold": 1.0,
+   "wait": 2
+  }
+ ],
+ "n_variants": 48,
+ "n_exits": 6,
+ "oos_cutoff": 1777809600,
+ "sizing": [
+  5.0,
+  10.0,
+  15.0,
+  20.0,
+  30.0
+ ],
+ "pyramid": 1,
+ "max_pairs": null,
+ "pair_rank": null,
+ "hours": "07–17 czasu polskiego (B11)",
+ "data_from": 1730073600,
+ "data_to": 1793721600,
+ "data_clean": {
+  "AUDUSD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 3,
+   "gaps": 3,
+   "gap_hours": 99,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "EURGBP": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 3,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "EURJPY": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 3,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "EURUSD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 5,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "GBPUSD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 4,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "USDCAD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 6,
+   "gaps": 3,
+   "gap_hours": 99,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "USDCHF": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 6,
+   "gaps": 4,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "USDJPY": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 6,
+   "gaps": 3,
+   "gap_hours": 99,
+   "rejected": 0,
+   "closed_hours": 146
+  }
+ },
+ "skipped": {
+  "B8": 0,
+  "brak_danych": 0,
+  "rozgrzewka": 0,
+  "poza_godzinami": 1,
+  "luka_danych": 0,
+  "swieca_uzupelniona": 36
+ },
+ "hypothesis": "Wczorajsze ekstrema i poprzedni poziom dalej za nimi to strefy, w których czekają duzi kupujący i sprzedający.\nGdy cena w godzinach 07–13 dochodzi do takiej strefy, następna świeca ją odrzuca, a kolejna przebija tę świecę,\ncena ma wrócić w stronę przeciwnej strony wczorajszego zakresu. Przeniesienie Sneaky Pivot z M15 na H1.",
+ "trades_rows": 1926,
+ "created": 1793727934,
+ "seconds": 14.2,
+ "verdict": "red"
+}
