@@ -1,13 +1,13 @@
 # Raport strategii: RSI 2
 
-Run `20261101-022203` · silnik 0.8.0 · kod `05a4838aae5707ab` · dane `fca2a7086f281a13`
+Run `20261103-090925` · silnik 0.8.0 · kod `05a4838aae5707ab` · dane `577d83129396fd6c`
 
 ## Werdykt: 🟡 ŻÓŁTY — zaliczone 4 z 5 testów
 
 | test | wynik | wartość |
 |---|---|---|
 | expectancy netto OOS > 0 | ✔ | 6.78 |
-| percentyl benchmarku ≥ 95 | ✔ | 99.80 |
+| percentyl benchmarku ≥ 95 | ✔ | 99.70 |
 | PBO < 0,3 | ✔ | 0.03 |
 | DSR ≥ 0,95 | ✘ | 0.59 |
 | dodatni przy spreadzie ×1,5 | ✔ | 5.00 |
@@ -25,9 +25,9 @@ Wersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób 
 
 ## Dane i model wykonania
 
-- Pary: AUDUSD, EURGBP, EURJPY, EURUSD, GBPUSD, USDCAD, USDCHF, USDJPY; świece H1 od 2024-10-28 do 2026-10-30; źródło: yahoo.
+- Pary: AUDUSD, EURGBP, EURJPY, EURUSD, GBPUSD, USDCAD, USDCHF, USDJPY; świece H1 od 2024-10-28 do 2026-11-03; źródło: yahoo.
 
-- In-sample do 2026-04-30, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS.
+- In-sample do 2026-05-03, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS.
 
 - Wejście na open świecy po sygnale, o dowolnej godzinie (strategia wyłączyła okno handlu, HOURS = False, D-034); wyjście na dowolnej świecy, także po nocy i weekendzie (D-032). TP i SL w tej samej świecy: przyjęty SL (pesymistycznie — świece H1 nie mówią, co padło pierwsze; transakcja z flagą `ambiguous`, B5).
 
@@ -102,7 +102,7 @@ Wersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób 
 
 ## Walidacja
 
-- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 5.81 pips/transakcję, percentyl **99.8** (losowe: 5%=-4.85, mediana=-0.93, 95%=2.93).
+- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 5.81 pips/transakcję, percentyl **99.7** (losowe: 5%=-5.20, mediana=-0.90, 95%=3.04).
 
 - **Deflated Sharpe Ratio**: 0.588 (Sharpe na transakcję 0.208, próg przy 24 próbach 0.195).
 
