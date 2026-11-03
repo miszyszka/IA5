@@ -90,6 +90,15 @@ def read_settings(ns: dict) -> dict:
     if not isinstance(pyr, int) or isinstance(pyr, bool) or not 1 <= pyr <= MAX_PYRAMID:
         raise StrategyError(f"PYRAMID musi być liczbą całkowitą 1–{MAX_PYRAMID}")
     out["pyramid"] = pyr
+    if "MAX_PAIRS" in ns:   # D-050: najwyżej tyle par z otwartymi pozycjami naraz (cały portfel strategii)
+        mp = ns["MAX_PAIRS"]
+        if not isinstance(mp, int) or isinstance(mp, bool) or not 1 <= mp <= 8:
+            raise StrategyError("MAX_PAIRS musi być liczbą całkowitą 1–8")
+        out["max_pairs"] = mp
+        rank = ns.get("PAIR_RANK", [])
+        if not isinstance(rank, (list, tuple)) or not all(isinstance(x, str) for x in rank):
+            raise StrategyError("PAIR_RANK: lista nazw par, np. [\"USDCHF\", \"AUDUSD\"] — kolejność przy równoczesnych sygnałach")
+        out["pair_rank"] = [str(x) for x in rank]
     if "HOURS" in ns:
         h = ns["HOURS"]
         if h is False or h is None:

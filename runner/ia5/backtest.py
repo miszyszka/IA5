@@ -225,7 +225,8 @@ def run_file(code: str, name: str, h1_dir: Path, out_root: Path, log=print,
     hours = meta.get("hours")  # D-034: None = okno z config (B11), False = bez okna, [od, do] = własne
     hours = tuple(hours) if isinstance(hours, list) else hours
     pyramid = int(meta.get("pyramid") or 1)
-    res = run(h1, signals, meta["params"], exits=exits, hours=hours, pyramid=pyramid)
+    max_pairs, pair_rank = meta.get("max_pairs"), meta.get("pair_rank")   # D-050
+    res = run(h1, signals, meta["params"], exits=exits, hours=hours, pyramid=pyramid, max_pairs=max_pairs, pair_rank=pair_rank)
     variants = variant_table(res)
     trades = trades_table(res)
     validation = validate_best(res, variants, trades, exits, signals, h1, sizing, log=log, hours=hours)
@@ -253,6 +254,7 @@ def run_file(code: str, name: str, h1_dir: Path, out_root: Path, log=print,
         "candles": "pełne" if full_candles else f"wycinki ±{CANDLE_PAD} świec wokół transakcji {TOP_FOR_CANDLES} najlepszych wariantów",
         "pairs": sorted(h1), "params": meta["params"], "n_variants": res["n_variants"], "n_exits": len(exits),
         "oos_cutoff": int(res["cutoff"]), "sizing": sizing, "pyramid": pyramid,
+        "max_pairs": max_pairs, "pair_rank": pair_rank,
         "hours": "bez okna" if hours is False else (list(hours) if hours else "07–17 czasu polskiego (B11)"),
         "data_from": int(min(df.ts.iloc[0] for df in h1.values())), "data_to": int(max(df.ts.iloc[-1] for df in h1.values())),
         "data_clean": data_clean_info(h1_dir, h1),

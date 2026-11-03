@@ -1,6 +1,6 @@
 # STRATEGIE — jak pisać kod strategii dla IA5
 
-Wersja 0.30 · 2026-11-03 (dodane: strategie z `ia5 search`, sekcja 9)
+Wersja 0.39 · 2026-11-03 (dodane: strategie z `ia5 search`, sekcja 9)
 
 > Ten plik jest **regułą dla Claude**. Gdy Michał mówi „zrób mi strategię …”, Claude postępuje dokładnie według sekcji 1 i zwraca kod, który bez zmian wkleja się do okna „Nowa strategia” w dashboardzie i który program `ia5` na Macu zrozumie.
 > Kontrakt jest egzekwowany w kodzie: `runner/ia5/sandbox.py` (wykonanie), `runner/ia5/check.py` (kontrola), `web/js/metrics.js` → `checkStrategyCode` (kontrola w przeglądarce).
@@ -49,6 +49,8 @@ def signals(df, p, ind):       # WYMAGANE — dokładnie ta nazwa i te trzy argu
 # SIZING = [5, 10, 20]         # opcjonalne: % kapitału jako depozyt (domyślnie 5, 10, 15, 20, 30)
 # PYRAMID = 5                  # opcjonalne, tylko na życzenie: do 5 pozycji naraz w parze, jeden kierunek (D-034)
 # HOURS = False                # opcjonalne, tylko na życzenie: bez okna 07–17 (albo (od, do) czasu polskiego)
+# MAX_PAIRS = 1                # opcjonalne, tylko na życzenie: najwyżej 1 para z otwartymi pozycjami naraz (D-050)
+# PAIR_RANK = ["USDCHF", ...]  # kolejność par przy równoczesnych sygnałach — tylko z wyników IS
 ```
 
 | Element | Szczegóły |

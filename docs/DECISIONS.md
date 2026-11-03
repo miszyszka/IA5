@@ -5,6 +5,13 @@ Najnowsze na górze.
 
 ---
 
+### D-050 · 2026-11-03 · Limit par naraz: `MAX_PAIRS` i `PAIR_RANK` (strategia łączona RSI 2 + Powrót)
+- **Decyzja (Michał):** „strategia łączona z RSI 2 i Powrót v2; naraz jedna transakcja na strategię — czyli jedna para walutowa naraz (dokładanie w niej jest OK); gdy kilka par daje sygnał, wybierz parę o statystycznie największym sukcesie”. Ranking: średni zysk w IS, stały. Miejsce: nowa funkcja silnika.
+- **Silnik (`ENGINE_VERSION` 0.9.0):** strategia może ustawić `MAX_PAIRS = k` (1–8) — najwyżej k par z otwartymi pozycjami naraz w całym wariancie — i `PAIR_RANK` (lista par). Wejścia rozpatrywane po kolei w czasie; przy tej samej świecy wejścia wygrywa para wyżej w `PAIR_RANK`. Para zajęta od wejścia do swojej świecy wyjścia włącznie; w zajętej parze dokładanie (`PYRAMID`) działa jak dotąd. Pominięte przez limit liczone w raporcie (`limit_par`). Bez `MAX_PAIRS` wyniki identyczne jak w 0.8.0. Inwestorzy stosują ten sam limit.
+- **Strategia łączona = dwie strategie + inwestor:** `laczona_rsi2_jedna_para.py` (RSI 2 #12, ranking z IS wersji 2) i `laczona_powrot_jedna_para.py` (Powrót v2, TP 1,5 × ATR14 — najlepsze w IS z przybliżeń, ranking z IS). Każda ma osobną kartę z pełną walidacją; łącznie — jeden inwestor z obiema strategiami (najwyżej 2 pary naraz: jedna RSI, jedna Powrót, wspólny kapitał).
+- **Odrzucone:** jeden plik z oboma sygnałami (silnik ma jedną listę wyjść na wariant, a obie części mają inne wyjścia); ranking kroczący (zmienia się w czasie — możliwy później jako osobny wariant); ranking z OOS (W1).
+- **Ograniczenia:** benchmark losowy nie stosuje limitu par (jak dotąd nie stosuje B8); u inwestora limit działa na liście transakcji po regule jednej pozycji w parze — pozycja zablokowana limitem mogła zasłonić późniejszy sygnał w swojej parze (rzadkie, ostrożne).
+
 ### D-049 · 2026-11-03 · FOREST v2: inwestorzy mówią tylko, gdy mają co powiedzieć; progi Managera; nauka co 4 tygodnie
 - **Decyzja (Michał):** inwestor nie musi mieć zdania zawsze; strategie mają być zyskowne i mieć minimalną liczbę transakcji; Manager wchodzi tylko powyżej progu zgody; prostszy dashboard; strategia ma się dalej uczyć. Zastępuje F1–F9 z D-048.
 - **Metoda:** wszystkie założenia ustalone na świecach do 2026-05-03; późniejsze świece były fizycznie odcięte. Na tych danych sprawdzono ok. 100 wariantów (horyzonty, próg t, progi Managera, mapy); wszystko liczone krocząco: każda decyzja używa reguł wybranych wcześniej.

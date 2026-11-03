@@ -140,6 +140,22 @@ def _ts(v) -> int:
     return int(v or 0)
 
 
+def limit_pairs(t: pd.DataFrame, max_pairs: int, rank: list[str], pyramid: int) -> pd.DataFrame:
+    """D-050: limit par z otwartymi pozycjami (jak engine.no_overlap_pairs) na transakcjach jednej strategii.
+    Transakcje anulowane zostają na liście; otwarte zajmują parę do końca danych."""
+    from .engine import no_overlap_pairs
+
+    t = t.reset_index(drop=True)
+    act = ~t["status"].str.startswith("anulowana")
+    ets = t["entry_ts"].to_numpy(float)
+    xts = t["exit_ts"].to_numpy(float)
+    bar_exit = np.where(np.isnan(xts), np.inf, xts - H)      # świeca wyjścia (ostrożnie: zajęta do jej końca)
+    rk = {q: i for i, q in enumerate(rank)}
+    keep, _ = no_overlap_pairs(t["pair"].to_numpy(), ets, ets // H, np.where(act, bar_exit // H, np.nan), bar_exit,
+                               t["dir"].to_numpy(), np.array([rk.get(q, len(rk)) for q in t["pair"]]), pyramid, max_pairs)
+    return t[keep | ~act]
+
+
 def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print) -> dict:
     """Pełny stan inwestora na aktualnych danych do liczenia (data/h1_ready)."""
     now = int(time.time()) if now is None else int(now)
@@ -167,6 +183,7 @@ def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print) -> dict:
             pyramid = int(meta.get("pyramid") or 1)
             ex = exits[xid]
             info.update({"params": meta["params"][pid], "exit": ex.label()})
+            mine = []
             for pair, df in h1.items():
                 arr = np.zeros(len(df), np.float32)
                 part = sig[(sig.param_id == pid) & (sig.pair == pair)]
@@ -174,8 +191,11 @@ def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print) -> dict:
                 t = paper_trades(preps[pair], arr, ex, pair, start, hours, pyramid)
                 if not t.empty:
                     t["strategy"] = k
-                    frames.append(t)
+                    mine.append(t)
                 pending += [{**x, "pair": pair, "strategy": k} for x in pending_signals(preps[pair], arr, start, hours)]
+            if mine and meta.get("max_pairs"):
+                mine = [limit_pairs(pd.concat(mine, ignore_index=True), meta["max_pairs"], meta.get("pair_rank") or [], pyramid)]
+            frames += mine
         except (StrategyError, SystemExit) as e:
             info["error"] = str(e)[:500]
             log(f"  inwestor „{inv.get('name')}”: strategia „{s.get('name')}” — błąd: {e}")

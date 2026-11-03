@@ -38,6 +38,8 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
 - `strategies/examples/powrot_v2.py` — FX-POWRÓT v2 (short po impulsie ≥ 2 × ATR100 i pierwszej czerwonej); TP „połowa drogi” przybliżone TP 1/1,5/2/3 × ATR14 + czas 60, bez SL; brakuje w silniku TP jako poziomu ceny z sygnału (do decyzji).
 
+- **D-050:** `MAX_PAIRS` / `PAIR_RANK` w silniku (0.9.0) i u inwestorów; strategia łączona RSI 2 + Powrót = `laczona_rsi2_jedna_para.py` + `laczona_powrot_jedna_para.py` + jeden inwestor z obiema.
+
 **Następne (Michał)**
 1. Nie liczyć kolejnych przeszukiwań na OOS 2026-05 – 2026-11 (otwarty dwa razy).
 2. Zamrozić RSI 2 #12 i/lub dać go inwestorowi z małym % — forward test.

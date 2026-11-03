@@ -313,10 +313,44 @@ def no_overlap(entry_i: np.ndarray, exit_i: np.ndarray, dirs: np.ndarray | None 
     return keep
 
 
+def no_overlap_pairs(pair: np.ndarray, entry_ts: np.ndarray, entry_i: np.ndarray, exit_i: np.ndarray,
+                     exit_bar_ts: np.ndarray, dirs: np.ndarray, rank: np.ndarray, cap: int = 1,
+                     max_pairs: int = 1) -> tuple[np.ndarray, np.ndarray]:
+    """D-050: B8 w każdej parze (jak no_overlap) + najwyżej `max_pairs` par z otwartymi pozycjami naraz w całym wariancie.
+
+    Wejścia rozpatrywane po kolei w czasie; przy tej samej świecy wejścia wygrywa para z niższym `rank` (ranking z IS,
+    podany przez strategię). Para jest zajęta od wejścia do swojej świecy wyjścia włącznie; w zajętej parze wolno
+    dokładać w tym samym kierunku (PYRAMID). Zwraca (wykonane, pominięte przez limit par)."""
+    n = len(entry_ts)
+    keep = np.zeros(n, bool)
+    blocked = np.zeros(n, bool)
+    order = np.lexsort((rank, entry_ts))
+    open_: dict = {}                     # para → lista (exit_i, kierunek, ts świecy wyjścia)
+    for k in order:
+        if np.isnan(exit_i[k]):
+            continue
+        t = entry_ts[k]
+        for q in list(open_):            # zamknięte pozycje zwalniają parę po swojej świecy wyjścia
+            open_[q] = [o for o in open_[q] if o[2] >= t]
+            if not open_[q]:
+                del open_[q]
+        mine = [o for o in open_.get(pair[k], []) if o[0] >= entry_i[k]]
+        d = int(dirs[k])
+        if not (len(mine) < cap and all(o[1] == d for o in mine)):
+            continue                     # B8 w parze
+        if pair[k] not in open_ and len(open_) >= max_pairs:
+            blocked[k] = True            # limit par
+            continue
+        keep[k] = True
+        open_.setdefault(pair[k], []).append((exit_i[k], d, exit_bar_ts[k]))
+    return keep, blocked
+
+
 # ---------- uruchomienie dla strategii ----------
 
 def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray], params: list[dict],
-        exits: list[Exit] | None = None, oos_frac: float = 0.25, hours=None, pyramid: int = 1) -> dict:
+        exits: list[Exit] | None = None, oos_frac: float = 0.25, hours=None, pyramid: int = 1,
+        max_pairs: int | None = None, pair_rank: list[str] | None = None) -> dict:
     """Pełny przebieg: wszystkie warianty wejścia (params) × wszystkie wyjścia × wszystkie pary.
 
     signals[(param_id, pair)] = tablica sygnałów (+1/-1/0) na świecach h1[pair].
@@ -331,6 +365,9 @@ def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray],
     ent_frames, out_frames = [], []
     skipped = {"B8": 0, "brak_danych": 0, "rozgrzewka": 0, "poza_godzinami": 0, "luka_danych": 0,
                "swieca_uzupelniona": 0}
+    if max_pairs:
+        skipped["limit_par"] = 0
+    pending: dict = {}   # D-050: kandydaci wariantu ze wszystkich par, rozstrzygani razem po pętli
     eid = 0
     for (pid, pair), sig in signals.items():
         P = preps[pair]
@@ -358,15 +395,41 @@ def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray],
             cancel = gap | fill
             xi = res["exit_i"].to_numpy(float).copy()
             xi[cancel] = np.nan
-            keep = no_overlap(ent["entry_i"].to_numpy(), xi, ent["dir"].to_numpy(), pyramid)
             skipped["brak_danych"] += int(missing.sum())
             skipped["luka_danych"] += int(gap.sum())
             skipped["swieca_uzupelniona"] += int(fill.sum())
+            if max_pairs:
+                xb = np.where(np.isnan(xi), np.inf, P["ts"][np.nan_to_num(xi, nan=0).astype(np.int64)])
+                pending.setdefault((pid, xid), []).append((pair, ent, res, xi, xb, missing | cancel))
+                continue
+            keep = no_overlap(ent["entry_i"].to_numpy(), xi, ent["dir"].to_numpy(), pyramid)
             skipped["B8"] += int((~keep & ~missing & ~cancel).sum())
             res = res[keep].copy()
             res.insert(0, "variant_id", pid * len(exits) + xid)
             res.insert(1, "entry_id", ent["entry_id"].to_numpy()[keep])
             out_frames.append(res)
+
+    rank_of = {p: i for i, p in enumerate(pair_rank or [])}
+    for (pid, xid), parts in pending.items():
+        pr = np.concatenate([np.full(len(e), pr_) for pr_, e, *_ in parts])
+        ets = np.concatenate([e["entry_ts"].to_numpy() for _, e, *_ in parts])
+        ei = np.concatenate([e["entry_i"].to_numpy() for _, e, *_ in parts])
+        xi = np.concatenate([x for *_, x, _xb, _m in parts])
+        xb = np.concatenate([b for *_, b, _m in parts])
+        dr = np.concatenate([e["dir"].to_numpy() for _, e, *_ in parts])
+        bad = np.concatenate([m for *_, m in parts])
+        rk = np.array([rank_of.get(q, len(rank_of)) for q in pr])
+        keep, blocked = no_overlap_pairs(pr, ets, ei, xi, xb, dr, rk, pyramid, max_pairs)
+        skipped["limit_par"] += int(blocked.sum())
+        skipped["B8"] += int((~keep & ~blocked & ~bad).sum())
+        off = 0
+        for _pair, e, res, *_ in parts:
+            k = keep[off:off + len(e)]
+            off += len(e)
+            r = res[k].copy()
+            r.insert(0, "variant_id", pid * len(exits) + xid)
+            r.insert(1, "entry_id", e["entry_id"].to_numpy()[k])
+            out_frames.append(r)
 
     entries = pd.concat(ent_frames, ignore_index=True) if ent_frames else pd.DataFrame()
     outcomes = pd.concat(out_frames, ignore_index=True) if out_frames else pd.DataFrame()
