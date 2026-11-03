@@ -1,3 +1,21 @@
 {
- "investors": []
+ "investors": [
+  {
+   "id": "2CJTkGrGC3udvbLSL1JU",
+   "name": "Inwestor RSI 2",
+   "capital": 10000.0,
+   "pct": 5.0,
+   "start": 1793697399,
+   "computedAt": 1793697400,
+   "dataTo": 1793696400,
+   "equity": 10000.0,
+   "return_pct": 0.0,
+   "closed": 0,
+   "open": 0,
+   "strategies": [
+    "RSI 2"
+   ],
+   "errors": 0
+  }
+ ]
 }
