@@ -48,6 +48,8 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
 - **D-050:** `MAX_PAIRS` / `PAIR_RANK` w silniku (0.9.0) i u inwestorów; strategia łączona RSI 2 + Powrót = `laczona_rsi2_jedna_para.py` + `laczona_powrot_jedna_para.py` + jeden inwestor z obiema.
 
+- `strategies/examples/crt_trzy_swiece.py` — CRT (3 świece, „Nitro Trades”) na H1: zebranie dołka/szczytu świecy 1 przez świecę 2 z zamknięciem w zakresie, wejście po zamknięciu świecy 3 za świecą 2; sesja NY (15–18 PL), bias z zebrania płynności 24 h, pierwszy układ dnia; zysk/ryzyko 1,5 jako ATR (TP/SL z poziomów ceny wymaga zmiany silnika).
+
 **Następne (Michał)**
 1. Nie liczyć kolejnych przeszukiwań na OOS 2026-05 – 2026-11 (otwarty dwa razy).
 2. Zamrozić RSI 2 #12 i/lub dać go inwestorowi z małym % — forward test.
