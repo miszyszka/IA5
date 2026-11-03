@@ -2,6 +2,19 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-03 — sesja 7 (analiza: „najbardziej stabilna strategia”)
+
+**Zrobione (bez zmian w kodzie)**
+- Prototyp poszukiwania stabilności (poza repo): 3 622 konfiguracje z siatki `duzy` (≥ 200 transakcji, dodatnie w IS-A i IS-B, ≥ 5/8 par) → ranking po stabilności IS ponad dryf par (miesięczny Sharpe, ≥ 70% miesięcy na plusie, zysk/obsunięcie ≥ 2) → koszyk 10 reguł o korelacji dziennej ≤ 0,3.
+- **IS koszyka:** 3 894 transakcje, t = 10,0, 90% miesięcy na plusie, zysk/obsunięcie 32. **Ta sama procedura na 3 zestawach danych bez przewagi:** t 7,4–8,4, 95–100% miesięcy na plusie, zysk/obsunięcie 22–31 — stabilność IS koszyka w całości tłumaczy wybór.
+- **OOS koszyka otwarty raz** (drugie otwarcie OOS 2026-05-03 – 2026-11-03 po `ia5 search` gigant — liczone w chmurze, nie ma go w `~/.ia5/oos_ledger.json`): 1 210 transakcji, −0,03 R, 2/7 miesięcy na plusie, obsunięcie −67 R (w IS −19 R).
+- RSI 2 (#12): poza przestrzenią `ia5 search` (bez okna B11, dokładanie do 5 pozycji z wagą do 3, wyjście „seria RSI”, trend jako nachylenie EMA w ATR). IS t = 3,2 — słabiej niż najlepsze z poszukiwania (4,55); różnica jest w OOS. Profil: 71% wygranych, warianty ze stopem ≈ 0 w IS (przewaga = brak stopu), 5 najgorszych epizodów dokładania = −32% całego zysku, najgorszy −465 pipsów × waga (USD/JPY 29.09.2025).
+
+**Następne (Michał)**
+1. Nie liczyć kolejnych przeszukiwań na OOS 2026-05 – 2026-11 (otwarty dwa razy).
+2. Zamrozić RSI 2 #12 i/lub dać go inwestorowi z małym % — forward test.
+3. Nowe przeszukiwanie (stabilność ponad dryf, z testem zerowym w raporcie) dopiero na nowych danych, z `--bez-oos`.
+
 ## 2026-11-03 — sesja 6
 
 **Zrobione (D-048: FOREST)**
