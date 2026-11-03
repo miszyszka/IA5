@@ -23,7 +23,7 @@ export async function loadForest() {
   try {
     const st = await getJSON('forest/state.json');
     store.set('forestError', null);
-    store.set('forest', st);
+    if (!st || st.computedAt !== store.state.forest?.computedAt) store.set('forest', st);   // ten sam stan = bez przerysowania
   } catch (e) {
     store.set('forestError', e.message || String(e));
     store.set('forest', null);
@@ -245,13 +245,12 @@ const J_COLS = [['seq', '#'], ['ts', 'decyzja (czas PL)'], ['pair', 'para'], ['b
 async function journalRows(st, month) {
   const key = `${st.id}:${month}:${st.computedAt}`;
   if (!rowsCache.has(key)) {
-    const cols = null;
-    rowsCache.set(key, readRows(`forest/journal/${month}.parquet`, undefined, undefined, cols).catch((e) => { rowsCache.delete(key); throw e; }));
+    rowsCache.set(key, readRows(`forest/journal/${month}.parquet`).catch((e) => { rowsCache.delete(key); throw e; }));
   }
   return rowsCache.get(key);
 }
 
-function jRow(r, st) {
+function jRow(r) {
   const pc = (x) => (x == null || Number.isNaN(x) ? '—' : `${num(x * 100, 1)}%`);
   const ks = ['a', 'b', 'c'].filter((b) => r[`ex_${b}`]).map((b) => b.toUpperCase()).join(' ') || '—';
   const pick = () => { ui.focus = { kind: 'row', row: r, hex: r.votes }; render(); $('#f-map')?.scrollIntoView({ block: 'nearest' }); };
@@ -294,7 +293,7 @@ function journalPanel(st) {
           h('button', { class: 'btn ghost small', onclick: csv }, 'Eksport CSV')),
         h('div', { class: 'tablewrap fjournal' }, h('table', { class: 'data compact' },
           h('thead', {}, h('tr', {}, ...J_COLS.map(([, l]) => h('th', {}, l)))),
-          h('tbody', {}, ...rows.slice(0, 400).map((r) => jRow(r, st))))),
+          h('tbody', {}, ...rows.slice(0, 400).map(jRow)))),
         rows.length > 400 ? h('p', { class: 'hint' }, `Widać 400 najnowszych z ${num(rows.length, 0)}; całość w eksporcie CSV.`) : '');
     } catch (e) {
       box.replaceChildren(h('div', { class: 'banner warn' }, `Nie udało się wczytać dziennika: ${e.message || e}`));
