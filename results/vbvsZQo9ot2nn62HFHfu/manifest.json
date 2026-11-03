@@ -1,0 +1,141 @@
+{
+ "id": "vbvsZQo9ot2nn62HFHfu",
+ "name": "power of 3",
+ "run_id": "20261103-180304",
+ "engine_version": "0.9.0",
+ "code_hash": "21262dcf279024e7",
+ "data_hash": "e76fc4183c4b5596",
+ "data_source": "yahoo",
+ "candles": "pełne",
+ "pairs": [
+  "AUDUSD",
+  "EURGBP",
+  "EURJPY",
+  "EURUSD",
+  "GBPUSD",
+  "USDCAD",
+  "USDCHF",
+  "USDJPY"
+ ],
+ "params": [
+  {
+   "bias": "dzien",
+   "dolek": "4h"
+  },
+  {
+   "bias": "dzien",
+   "dolek": "24h"
+  },
+  {
+   "bias": "brak",
+   "dolek": "4h"
+  },
+  {
+   "bias": "brak",
+   "dolek": "24h"
+  }
+ ],
+ "n_variants": 24,
+ "n_exits": 6,
+ "oos_cutoff": 1777809600,
+ "sizing": [
+  5.0,
+  10.0,
+  15.0,
+  20.0,
+  30.0
+ ],
+ "pyramid": 1,
+ "max_pairs": null,
+ "pair_rank": null,
+ "hours": "07–17 czasu polskiego (B11)",
+ "data_from": 1730073600,
+ "data_to": 1793721600,
+ "data_clean": {
+  "AUDUSD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 3,
+   "gaps": 3,
+   "gap_hours": 99,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "EURGBP": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 3,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "EURJPY": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 3,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "EURUSD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 5,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "GBPUSD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 4,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "USDCAD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 6,
+   "gaps": 3,
+   "gap_hours": 99,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "USDCHF": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 6,
+   "gaps": 4,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "USDJPY": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 6,
+   "gaps": 3,
+   "gap_hours": 99,
+   "rejected": 0,
+   "closed_hours": 146
+  }
+ },
+ "skipped": {
+  "B8": 3335,
+  "brak_danych": 10,
+  "rozgrzewka": 13,
+  "poza_godzinami": 11657,
+  "luka_danych": 89,
+  "swieca_uzupelniona": 6
+ },
+ "hypothesis": "Power of 3 / „knot świecy 4H” (wg filmu: akumulacja → manipulacja → dystrybucja). Gdy dzienny kierunek jest\nwzrostowy, nowa świeca 4H zwykle najpierw robi dolny knot (fałszywy ruch w dół, który zbiera płynność pod ważnym\ndołkiem), a potem zamyka się wysoko. Wchodzimy long, gdy w pierwszych godzinach nowej świecy 4H cena zebrała dołek\n(poprzedniej świecy 4H albo ostatnich 24 h), a świeca H1 zamyka się z powrotem nad nim (zmiana kierunku). Lustrzanie short.\nRóżnice (ograniczenia IA5): tylko H1 (autor wchodzi na 1 min po luce FVG i „zmianie stanu dostawy”); stop „pod dołkiem\nświecy 4H” i cel przybliżone przez ATR14 albo wyjście na koniec świecy 4H (2–4 świece H1).",
+ "trades_rows": 64522,
+ "created": 1793728984,
+ "seconds": 9.9,
+ "verdict": "red"
+}
