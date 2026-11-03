@@ -36,6 +36,8 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
   - `strategies/examples/simple_v2_wszystkie_pary.py` — „simple” 1:1 na 8 parach: spadek 50 pipsów z 10 świec + pierwsza zielona, wyjście TP 1 × ATR14, SL 0,5 × ATR14, max 24 (najlepszy wariant IS wersji 1); 1 wariant. (Poprawka: pierwsza wersja pliku była rozbudową z siatką 12 × 233 — nie o to chodziło.)
   - `strategies/examples/rsi_trend_v3_bez_cad_gbp.py` — RSI 2 bez USD/CAD i EUR/GBP (najwyższy spread względem ATR; najsłabsze też w IS). Pary wybrane po obejrzeniu OOS wersji 2 — OOS nie jest czysty, łącznie 1 + 24 + 24 prób.
 
+- `strategies/examples/powrot_v2.py` — FX-POWRÓT v2 (short po impulsie ≥ 2 × ATR100 i pierwszej czerwonej); TP „połowa drogi” przybliżone TP 1/1,5/2/3 × ATR14 + czas 60, bez SL; brakuje w silniku TP jako poziomu ceny z sygnału (do decyzji).
+
 **Następne (Michał)**
 1. Nie liczyć kolejnych przeszukiwań na OOS 2026-05 – 2026-11 (otwarty dwa razy).
 2. Zamrozić RSI 2 #12 i/lub dać go inwestorowi z małym % — forward test.
