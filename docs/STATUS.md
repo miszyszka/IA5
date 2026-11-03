@@ -2,6 +2,10 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-03 — strategia PO3 / knot świecy 4H
+
+- `strategies/examples/po3_swieca_4h.py`: w pierwszych 3 h świecy 4H (UTC) zebrany dołek/szczyt poprzedniej świecy 4H albo 24 h i powrót zamknięciem H1; filtr kierunku = wczorajsza świeca dzienna albo brak; wyjście koniec 4H (2–4 świece) albo ATR14 TP 1/1,5/2 × SL 1. 4 × 6 = 24 warianty, kontrola OK (uwaga: sygnał w ~12% świec w wariancie bez filtra).
+
 ## 2026-11-03 — maile inwestorów i zapowiedź sygnału (D-051)
 
 **Zrobione:** przełącznik „Wysyłaj mail” w karcie inwestora; maile o sygnale, otwarciu i zamknięciu przez limit czasu; baner „za x min możliwy sygnał”.
