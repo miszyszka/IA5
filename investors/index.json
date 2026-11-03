@@ -1,21 +1,3 @@
 {
- "investors": [
-  {
-   "id": "53oGB6M8gzlswWwOV1M7",
-   "name": "Inwestor 1 - RSI",
-   "capital": 10000.0,
-   "pct": 5.0,
-   "start": 1793696807,
-   "computedAt": 1793696807,
-   "dataTo": 1793696400,
-   "equity": 10000.0,
-   "return_pct": 0.0,
-   "closed": 0,
-   "open": 0,
-   "strategies": [
-    "RSI 2"
-   ],
-   "errors": 0
-  }
- ]
+ "investors": []
 }
