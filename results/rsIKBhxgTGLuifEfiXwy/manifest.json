@@ -1,0 +1,128 @@
+{
+ "id": "rsIKBhxgTGLuifEfiXwy",
+ "name": "Combined 1",
+ "run_id": "20261103-145408",
+ "engine_version": "0.8.0",
+ "code_hash": "261e758df7f609bd",
+ "data_hash": "e018f0159766d8fb",
+ "data_source": "yahoo",
+ "candles": "pełne",
+ "pairs": [
+  "AUDUSD",
+  "EURGBP",
+  "EURJPY",
+  "EURUSD",
+  "GBPUSD",
+  "USDCAD",
+  "USDCHF",
+  "USDJPY"
+ ],
+ "params": [
+  {
+   "ema": 200,
+   "nachylenie": 0.15,
+   "szok": 0
+  }
+ ],
+ "n_variants": 1,
+ "n_exits": 1,
+ "oos_cutoff": 1777801500,
+ "sizing": [
+  5.0,
+  10.0,
+  15.0,
+  20.0,
+  30.0
+ ],
+ "pyramid": 5,
+ "hours": "bez okna",
+ "data_from": 1730073600,
+ "data_to": 1793710800,
+ "data_clean": {
+  "AUDUSD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 3,
+   "gaps": 3,
+   "gap_hours": 99,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "EURGBP": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 3,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "EURJPY": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 3,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "EURUSD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 5,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "GBPUSD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 4,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "USDCAD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 6,
+   "gaps": 3,
+   "gap_hours": 99,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "USDCHF": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 6,
+   "gaps": 4,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "USDJPY": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 6,
+   "gaps": 3,
+   "gap_hours": 99,
+   "rejected": 0,
+   "closed_hours": 146
+  }
+ },
+ "skipped": {
+  "B8": 11,
+  "brak_danych": 0,
+  "rozgrzewka": 0,
+  "poza_godzinami": 0,
+  "luka_danych": 1,
+  "swieca_uzupelniona": 0
+ },
+ "hypothesis": "Część RSI strategii łączonej „RSI 2 + Powrót” (D-050). Logika RSI 2 bez zmian (RSI14 przebija 70/30 przeciw\nwyraźnemu trendowi H1 = chwilowa przesada; dokładanie do 5 pozycji w jednej parze; wyjście TP 1,5 × ATR14 albo seria\n6 zamknięć RSI za 70/30, bez stopu, max 120 świec), wariant #12 — najlepszy w IS wersji 2 (EMA200, nachylenie 0,15,\nbez filtra szoku). Nowe: naraz otwarta jest najwyżej JEDNA para (seria dokładania w niej to jedna „transakcja”);\ngdy kilka par daje sygnał na tej samej świecy, wygrywa para z najwyższym średnim zyskiem w IS wersji 2 (PAIR_RANK).\nOOS nie jest czysty (wariant i ranking z danych, na których oglądano wersję 2).",
+ "trades_rows": 599,
+ "created": 1793717648,
+ "seconds": 7.6,
+ "verdict": "green"
+}
