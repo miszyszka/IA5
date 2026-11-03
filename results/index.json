@@ -1,36 +1,6 @@
 {
  "strategies": [
   {
-   "id": "i9UEKiJDiXs4fQubz8Pj",
-   "name": "Simple v2",
-   "run_id": "20261103-131909",
-   "created": 1793711950,
-   "verdict": "red",
-   "verdict_note": "brak przewagi",
-   "n_variants": 2796,
-   "hypothesis": "Wersja 2 strategii „simple” (wersja 1: tylko EUR/USD, spadek 50–150 pipsów z 10 świec, 8 transakcji OOS).\nPo gwałtownym spadku rynek jest wyprzedany: sprzedający kończą, a zielona świeca pokazuje powrót kupujących —\noczekujemy krótkiego odbicia na long. To samo dotyczy każdej pary, więc spadek mierzymy w jednostkach zmienności\npary (ATR14 · √N), a nie w pipsach: 50 pipsów na EUR/USD to coś innego niż 50 pipsów na EUR/GBP czy USD/JPY.\nSprawdzamy: krótsze i dłuższe okno spadku, mniejszy i większy spadek, wejście po pierwszej albo po drugiej zielonej.",
-   "pairs": [
-    "AUDUSD",
-    "EURGBP",
-    "EURJPY",
-    "EURUSD",
-    "GBPUSD",
-    "USDCAD",
-    "USDCHF",
-    "USDJPY"
-   ],
-   "data_from": 1730073600,
-   "data_to": 1793707200,
-   "source": "yahoo",
-   "engine_version": "0.8.0",
-   "best_exit": "po 120 świecach",
-   "is_mean_r": 2.653888,
-   "oos_mean_r": -4.246262,
-   "oos_mean_pips": -57.818813,
-   "oos_trades": 12,
-   "demo": false
-  },
-  {
    "id": "FaC8c8947CS977MriiYh",
    "name": "simple",
    "run_id": "20261103-125900",
