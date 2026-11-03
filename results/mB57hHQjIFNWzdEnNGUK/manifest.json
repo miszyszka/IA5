@@ -1,0 +1,159 @@
+{
+ "id": "mB57hHQjIFNWzdEnNGUK",
+ "name": "Gigant",
+ "run_id": "20261103-112354",
+ "engine_version": "0.8.0",
+ "code_hash": "95df832624b0f8bd",
+ "data_hash": "ba7e470247ae9087",
+ "data_source": "yahoo",
+ "candles": "pełne",
+ "pairs": [
+  "AUDUSD",
+  "EURGBP",
+  "EURJPY",
+  "EURUSD",
+  "GBPUSD",
+  "USDCAD",
+  "USDCHF",
+  "USDJPY"
+ ],
+ "params": [
+  {
+   "cfg": 0
+  },
+  {
+   "cfg": 1
+  },
+  {
+   "cfg": 2
+  },
+  {
+   "cfg": 3
+  },
+  {
+   "cfg": 4
+  },
+  {
+   "cfg": 5
+  },
+  {
+   "cfg": 6
+  },
+  {
+   "cfg": 7
+  },
+  {
+   "cfg": 8
+  },
+  {
+   "cfg": 9
+  },
+  {
+   "cfg": 10
+  },
+  {
+   "cfg": 11
+  }
+ ],
+ "n_variants": 84,
+ "n_exits": 7,
+ "oos_cutoff": 1777793400,
+ "sizing": [
+  5.0,
+  10.0,
+  15.0,
+  20.0,
+  30.0
+ ],
+ "pyramid": 1,
+ "hours": "07–17 czasu polskiego (B11)",
+ "data_from": 1730073600,
+ "data_to": 1793700000,
+ "data_clean": {
+  "AUDUSD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 3,
+   "gaps": 3,
+   "gap_hours": 99,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "EURGBP": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 3,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "EURJPY": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 3,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "EURUSD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 5,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "GBPUSD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 4,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "USDCAD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 6,
+   "gaps": 3,
+   "gap_hours": 99,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "USDCHF": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 6,
+   "gaps": 4,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "USDJPY": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 6,
+   "gaps": 3,
+   "gap_hours": 99,
+   "rejected": 0,
+   "closed_hours": 146
+  }
+ },
+ "skipped": {
+  "B8": 2652,
+  "brak_danych": 61,
+  "rozgrzewka": 0,
+  "poza_godzinami": 0,
+  "luka_danych": 202,
+  "swieca_uzupelniona": 24
+ },
+ "hypothesis": "Konfiguracje wybrane przez ia5 search (D-044, przebieg 20261103-100928) z 3 124 224 przetestowanych, wyłącznie na IS (IS-A + IS-B).\nHipoteza: reguły, które przeszły FDR, potwierdzenie i płaskowyż na 8 parach, mają przewagę ponad koszty.\nUwaga: OOS był już raz otwarty przez poszukiwanie; DSR w karcie liczy tylko warianty tej strategii,\nnie wszystkie próby poszukiwania — rozstrzyga forward test po zamrożeniu (W4).",
+ "trades_rows": 23409,
+ "created": 1793705034,
+ "seconds": 28.8,
+ "verdict": "red"
+}
