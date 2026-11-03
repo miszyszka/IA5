@@ -6,8 +6,8 @@
    "capital": 10000.0,
    "pct": 5.0,
    "start": 1793697399,
-   "computedAt": 1793711109,
-   "dataTo": 1793710800,
+   "computedAt": 1793714765,
+   "dataTo": 1793714400,
    "equity": 10000.0,
    "return_pct": 0.0,
    "closed": 0,
@@ -15,7 +15,7 @@
    "strategies": [
     "RSI 2"
    ],
-   "errors": 0
+   "errors": 1
   },
   {
    "id": "anBryj97QBK3fcRBP9Xn",
@@ -23,8 +23,8 @@
    "capital": 10000.0,
    "pct": 5.0,
    "start": 1793713958,
-   "computedAt": 1793713963,
-   "dataTo": 1793710800,
+   "computedAt": 1793714765,
+   "dataTo": 1793714400,
    "equity": 10000.0,
    "return_pct": 0.0,
    "closed": 0,
