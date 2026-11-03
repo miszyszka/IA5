@@ -1,0 +1,176 @@
+{
+ "best_variant_id": 0,
+ "best_exit": "ATR14 TP 1.5× SL 0× max 60",
+ "best_params": {},
+ "oos_trades": 74,
+ "oos_mean_pips": 10.369627,
+ "oos_mean_r": 0.476651,
+ "is_mean_r": 0.513443,
+ "benchmark": {
+  "sims": 1000,
+  "actual_mean_pips": 10.535028,
+  "percentile": 100.0,
+  "p5": -6.883862,
+  "p50": -1.767473,
+  "p95": 2.993374
+ },
+ "dsr": {
+  "dsr": 0.976848,
+  "sharpe": 0.211709,
+  "sharpe0": 0.0,
+  "trials": 1,
+  "trades": 202,
+  "skew": -4.455128,
+  "kurtosis": 30.075054
+ },
+ "pbo": {
+  "pbo": null,
+  "variants": 1
+ },
+ "walk_forward": {
+  "windows": [
+   {
+    "from": 1755725040,
+    "to": 1768361760,
+    "variant_id": 0,
+    "train_r": 0.502139,
+    "test_trades": 60,
+    "test_r": 0.471279,
+    "test_pips": 6.349902
+   },
+   {
+    "from": 1768361760,
+    "to": 1780998480,
+    "variant_id": 0,
+    "train_r": 0.490985,
+    "test_trades": 48,
+    "test_r": 0.512433,
+    "test_pips": 8.87888
+   },
+   {
+    "from": 1780998480,
+    "to": 1793635201,
+    "variant_id": 0,
+    "train_r": 0.495796,
+    "test_trades": 62,
+    "test_r": 0.530442,
+    "test_pips": 11.746304
+   }
+  ],
+  "trades": 170,
+  "mean_r": 0.504476,
+  "mean_pips": 9.032065
+ },
+ "bootstrap": {
+  "all": {
+   "low": 6.058723,
+   "high": 14.957124,
+   "n": 276
+  },
+  "oos": {
+   "low": 3.465526,
+   "high": 17.24802,
+   "n": 74
+  }
+ },
+ "spread": {
+  "x1": 10.535028,
+  "x1_5": 9.764376,
+  "x2": 8.993724
+ },
+ "ambiguous_pct": 0.0,
+ "equity": {
+  "5.0": {
+   "final": 14160.131186,
+   "return_pct": 41.601312,
+   "cagr_pct": 18.955122,
+   "max_dd_pct": -6.596819,
+   "calmar": 2.873373,
+   "sharpe": 2.138827,
+   "sortino": 1.045324,
+   "longest_underwater_days": 100.416667,
+   "taken": 276,
+   "skipped_margin": 0
+  },
+  "10.0": {
+   "final": 19858.424895,
+   "return_pct": 98.584249,
+   "cagr_pct": 40.823648,
+   "max_dd_pct": -13.111937,
+   "calmar": 3.113472,
+   "sharpe": 2.135217,
+   "sortino": 1.042198,
+   "longest_underwater_days": 100.708333,
+   "taken": 276,
+   "skipped_margin": 0
+  },
+  "15.0": {
+   "final": 27570.739061,
+   "return_pct": 175.707391,
+   "cagr_pct": 65.876719,
+   "max_dd_pct": -19.537983,
+   "calmar": 3.371726,
+   "sharpe": 2.130707,
+   "sortino": 1.038179,
+   "longest_underwater_days": 100.791667,
+   "taken": 276,
+   "skipped_margin": 0
+  },
+  "20.0": {
+   "final": 37874.825722,
+   "return_pct": 278.748257,
+   "cagr_pct": 94.356548,
+   "max_dd_pct": -25.867562,
+   "calmar": 3.647678,
+   "sharpe": 2.125173,
+   "sortino": 1.033132,
+   "longest_underwater_days": 103.708333,
+   "taken": 276,
+   "skipped_margin": 0
+  },
+  "30.0": {
+   "final": 56921.150112,
+   "return_pct": 469.211501,
+   "cagr_pct": 138.168565,
+   "max_dd_pct": -38.32771,
+   "calmar": 3.604926,
+   "sharpe": 1.966321,
+   "sortino": 0.920562,
+   "longest_underwater_days": 104.708333,
+   "taken": 265,
+   "skipped_margin": 11
+  }
+ },
+ "verdict": {
+  "color": "green",
+  "note": "wszystkie testy zaliczone",
+  "checks": [
+   {
+    "test": "expectancy netto OOS > 0",
+    "ok": true,
+    "value": 10.369627
+   },
+   {
+    "test": "percentyl benchmarku ≥ 95",
+    "ok": true,
+    "value": 100.0
+   },
+   {
+    "test": "PBO < 0,3",
+    "ok": null,
+    "na": true,
+    "value": null
+   },
+   {
+    "test": "DSR ≥ 0,95",
+    "ok": true,
+    "value": 0.976848
+   },
+   {
+    "test": "dodatni przy spreadzie ×1,5",
+    "ok": true,
+    "value": 9.764376
+   }
+  ]
+ }
+}
