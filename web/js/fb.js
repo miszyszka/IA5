@@ -144,6 +144,12 @@ export async function createInvestor({ name, capital, pct, strategies }) {
   return ref.id;
 }
 
+/** D-051: przełącznik maili — jedyne ustawienie inwestora, które można zmienić. */
+export async function setInvestorEmail(id, on) {
+  const { fb } = await need();
+  await fb.F.updateDoc(fb.F.doc(fb.db, 'investors', id), { emailAlerts: !!on });
+}
+
 export async function deleteInvestor(id) {
   const { fb } = await need();
   await fb.F.updateDoc(fb.F.doc(fb.db, 'investors', id), { status: 'do_usuniecia' });

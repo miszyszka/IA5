@@ -5,6 +5,12 @@ Najnowsze na górze.
 
 ---
 
+### D-051 · 2026-11-03 · Maile inwestorów i zapowiedź możliwego sygnału
+- **Decyzja:** przełącznik `investors/{id}.emailAlerts`. Mac wysyła przez Gmail SMTP (smtplib, hasło aplikacji w `~/.ia5/smtp.json`): sygnał, otwarcie, zamknięcie z powodem „czas”. Dziennik `~/.ia5/mail_sent.json` daje jednokrotną wysyłkę, a włączenie nie wysyła historii. Zapowiedź: po liczeniu Mac dopisuje w pamięci hipotetyczną świecę z zamknięciem 0…±1 ATR14 i uruchamia kod strategii w piaskownicy; wynik `upcoming` w `state.json`.
+- **Powód:** strategia to dowolny kod, więc tylko jej uruchomienie uczciwie mówi, czy sygnał jest blisko. Adres i hasło nie mogą być w publicznym repo (S3). D2 i D7 zostają: świeca hipotetyczna nie trafia do danych, a świeca w trakcie nie jest pobierana.
+- **Odrzucone:** MailApp w Apps Script (nowy zakres OAuth, odczyt kolejki co minutę); pobieranie bieżącej ceny (łamie D7).
+- **Ograniczenia:** mail o sygnale przychodzi ok. 5–10 min po pełnej godzinie, a mail o otwarciu godzinę później, bo cena open znana jest po zamknięciu tej świecy. Bez działającego Maca nie ma maili. Firestore: najwyżej kilka zapisów przy przełączaniu, 0 nowych odczytów (Z4).
+
 ### D-050 · 2026-11-03 · Limit par naraz: `MAX_PAIRS` i `PAIR_RANK` (strategia łączona RSI 2 + Powrót)
 - **Decyzja (Michał):** „strategia łączona z RSI 2 i Powrót v2; naraz jedna transakcja na strategię — czyli jedna para walutowa naraz (dokładanie w niej jest OK); gdy kilka par daje sygnał, wybierz parę o statystycznie największym sukcesie”. Ranking: średni zysk w IS, stały. Miejsce: nowa funkcja silnika.
 - **Silnik (`ENGINE_VERSION` 0.9.0):** strategia może ustawić `MAX_PAIRS = k` (1–8) — najwyżej k par z otwartymi pozycjami naraz w całym wariancie — i `PAIR_RANK` (lista par). Wejścia rozpatrywane po kolei w czasie; przy tej samej świecy wejścia wygrywa para wyżej w `PAIR_RANK`. Para zajęta od wejścia do swojej świecy wyjścia włącznie; w zajętej parze dokładanie (`PYRAMID`) działa jak dotąd. Pominięte przez limit liczone w raporcie (`limit_par`). Bez `MAX_PAIRS` wyniki identyczne jak w 0.8.0. Inwestorzy stosują ten sam limit.

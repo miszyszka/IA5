@@ -151,3 +151,43 @@ def test_failed_forward_keeps_strategy_computed(monkeypatch, tmp_path):
     assert writes[-1]["status"] == "policzona" and "brak sieci" in writes[-1]["forwardError"]["message"]
     cli.handle_job("s", {"name": "RSI", "code": "x", "status": "do_policzenia"}, {})
     assert writes[-1]["status"] == "blad" and "brak sieci" in writes[-1]["error"]
+
+
+def test_tp_sl_match_engine_exit(h1_dir):
+    start = 1600041600 + 3600 * 2000
+    s = investors.compute(inv(start, variant=233 + 40), h1_dir, now=start + 3600 * 1100)
+    closed = [t for t in s["trades"] if t["reason"] in ("TP", "SL") and t["bars"] > 1]
+    assert closed
+    for t in closed[:20]:
+        assert t["exit_px"] == pytest.approx(t["tp" if t["reason"] == "TP" else "sl"]) or t["reason"] == "SL"
+
+
+def test_upcoming_finds_reachable_signal_and_needs_future_close(h1_dir):
+    code = 'HOURS = False\ndef signals(df, p, ind):\n    return (df.close > df.close.shift(1)).astype("int8")\n'
+    last = 1600041600 + 3600 * 2999
+    i = inv(last - 3600 * 10, variant=0, code=code)
+    s = investors.compute(i, h1_dir, now=last + 3600 + 300)
+    assert s["upcoming"] and all(u["target_ts"] == last + 2 * 3600 for u in s["upcoming"])
+    assert all(u["dir"] == 1 for u in s["upcoming"])
+    late = investors.compute(i, h1_dir, now=last + 3 * 3600)
+    assert late["upcoming"] == []
+
+
+def test_mail_once_no_history_and_retry():
+    from ia5 import alerts
+    trade = {"strategy": 0, "pair": "EURUSD", "dir": 1, "entry_ts": 1600000000, "entry_px": 1.1, "exit_ts": 1600003600, "exit_px": 1.2,
+             "status": "zamknięta", "reason": "czas", "margin_usd": 10.0, "pnl_usd": 5.0, "pips_net": 3.0, "tp": None, "sl": 1.0}
+    st = {"name": "A", "strategies": [{"name": "S"}], "trades": [trade], "pending": []}
+    ledger, sent = {}, []
+    send = lambda a, b: sent.append((a, b))  # noqa: E731
+    assert alerts.process("i", True, st, ledger, send) is None and not sent      # historia: bez wysyłki
+    new = {**trade, "entry_ts": 1600007200}
+    st["trades"].append(new)
+
+    def boom(a, b):
+        raise OSError("sieć")
+    assert "sieć" in alerts.process("i", True, st, ledger, boom)                 # błąd: ponowienie
+    assert alerts.process("i", True, st, ledger, send) is None
+    assert len(sent) == 2 and "ZAMKNIĘCIE" in sent[1][0] and "SL: 1.00000" in sent[0][1] and "TP: brak" in sent[0][1]
+    alerts.process("i", True, st, ledger, send)
+    assert len(sent) == 2                                                        # raz

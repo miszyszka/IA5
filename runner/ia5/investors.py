@@ -30,10 +30,11 @@ from . import ENGINE_VERSION
 from .backtest import exits_from
 from .config import LEVERAGE, PAIRS
 from .engine import data_cancel, find_entries, no_overlap, prepare, simulate
-from .sandbox import StrategyError, run_strategy_code
+from .sandbox import StrategyError, run_probe, run_strategy_code
 from .session import in_trading_hours
 
 H = 3600
+PROBE_MOVES = [0.0, 0.25, -0.25, 0.5, -0.5, 0.75, -0.75, 1.0, -1.0]   # D-051: hipotetyczne zamknięcie, w ATR14 od ostatniej ceny
 OPEN_EXIT = 1e15   # pozycja otwarta zajmuje miejsce w parze do końca danych (B8 / PYRAMID)
 
 
@@ -71,6 +72,29 @@ def paper_trades(P: dict, sig: np.ndarray, ex, pair: str, start: int, hours=None
     out["pair"] = pair
     out["mark_ts"] = int(P["ts"][last]) + H
     return out
+
+
+def exit_levels(ex, entry, d, atr14, atr5) -> tuple:
+    """Poziomy TP/SL wariantu — te same wzory co engine.simulate. None = wariant nie ma tego poziomu (dla stopu kroczącego SL = początkowy)."""
+    atr = atr5 if ex.n == 5 and ex.kind in ("atr", "rsi_streak", "trail") else atr14
+    tp = entry + d * ex.tp * atr if ex.kind == "atr" or (ex.kind in ("rsi_streak", "trail") and ex.tp > 0) else None
+    sl = entry - d * ex.sl * atr if ex.sl > 0 else None
+    return tp, sl
+
+
+def upcoming_signals(code: str, h1_dir: Path, pid: int, strategy: int, target: int, hours, busy: set) -> list[dict]:
+    """D-051: na którym instrumencie sygnał jest osiągalny przy zamknięciu trwającej świecy (o `target`) i przy jakiej cenie."""
+    if not bool(in_trading_hours(np.array([target]), hours)[0]):
+        return []
+    best: dict = {}
+    for x in run_probe(code, h1_dir, pid, PROBE_MOVES):
+        if x["pair"] in busy:
+            continue
+        key = (x["pair"], x["dir"])
+        if key not in best or abs(x["k"]) < abs(best[key]["k"]):
+            best[key] = x
+    return [{"strategy": strategy, "pair": p, "dir": d, "target_ts": target, "move_atr": x["k"], "level": x["level"]}
+            for (p, d), x in sorted(best.items())]
 
 
 def pending_signals(P: dict, sig: np.ndarray, start: int, hours=None) -> list[dict]:
@@ -164,7 +188,7 @@ def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print) -> dict:
     h1 = {f.stem: pd.read_parquet(f) for f in sorted(Path(h1_dir).glob("*.parquet"))}
     preps = {p: prepare(df) for p, df in h1.items()}
     data_to = max((int(df["ts"].iloc[-1]) + H for df in h1.values()), default=0)
-    frames, pending, strat_info = [], [], []
+    frames, pending, strat_info, probes = [], [], [], []
     for k, s in enumerate(inv.get("strategies") or []):
         info = {"strategyId": s.get("strategyId"), "name": s.get("name"), "variantId": int(s.get("variantId", 0)),
                 "variantLabel": s.get("variantLabel"), "code_hash": hashlib.sha256((s.get("code") or "").encode()).hexdigest()[:16]}
@@ -190,12 +214,21 @@ def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print) -> dict:
                 arr[part["i"].to_numpy(int)] = part["sig"].to_numpy(np.float32)
                 t = paper_trades(preps[pair], arr, ex, pair, start, hours, pyramid)
                 if not t.empty:
+                    lv = [exit_levels(ex, e, d, a14, a5) for e, d, a14, a5 in
+                          zip(t["entry_px"], t["dir"], t["atr14"], t["atr5"])]
+                    t["tp"] = [x[0] for x in lv]
+                    t["sl"] = [x[1] for x in lv]
                     t["strategy"] = k
                     mine.append(t)
-                pending += [{**x, "pair": pair, "strategy": k} for x in pending_signals(preps[pair], arr, start, hours)]
+                for x in pending_signals(preps[pair], arr, start, hours):
+                    P, i = preps[pair], len(preps[pair]["ts"]) - 1
+                    px = float(P["c"][i])
+                    tp, sl = exit_levels(ex, px, x["dir"], float(P["atr14"][i]), float(P["atr5"][i]))
+                    pending.append({**x, "pair": pair, "strategy": k, "price": px, "tp": tp, "sl": sl, "free": True})
             if mine and meta.get("max_pairs"):
                 mine = [limit_pairs(pd.concat(mine, ignore_index=True), meta["max_pairs"], meta.get("pair_rank") or [], pyramid)]
             frames += mine
+            probes.append((k, s.get("code") or "", pid, ex, hours, pyramid))
         except (StrategyError, SystemExit) as e:
             info["error"] = str(e)[:500]
             log(f"  inwestor „{inv.get('name')}”: strategia „{s.get('name')}” — błąd: {e}")
@@ -211,6 +244,21 @@ def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print) -> dict:
     curve_eq = [capital] + b["curve"]["equity"] + ([now_eq] if data_to > start else [])
     eq = np.asarray(curve_eq, float)
     max_dd = float(((eq - np.maximum.accumulate(eq)) / np.maximum.accumulate(eq)).min() * 100) if len(eq) else 0.0
+    held = set()
+    if not t.empty:
+        held = {(int(a), b) for a, b in zip(t.loc[t["status"] == "otwarta", "strategy"], t.loc[t["status"] == "otwarta", "pair"])}
+    pyr = {p[0]: p[5] for p in probes}
+    for p in pending:                               # B8: sygnał przy zajętej parze nie da wejścia, więc nie alarmuje
+        p["free"] = pyr.get(p["strategy"], 1) > 1 or (p["strategy"], p["pair"]) not in held
+    upcoming = []
+    target = data_to + H                            # zamknięcie trwającej świecy; po przerwie w danych leży w przeszłości
+    if h1 and target > now and data_to > 0:
+        for k, code, pid, _ex, hours, pyramid in probes:
+            busy = set() if pyramid > 1 else {q for s_, q in held if s_ == k} | {p["pair"] for p in pending if p["strategy"] == k}
+            try:
+                upcoming += upcoming_signals(code, h1_dir, pid, k, target, hours, busy)
+            except (StrategyError, SystemExit) as e:
+                log(f"  inwestor „{inv.get('name')}”: prognoza sygnału — błąd: {e}")
     rows = []
     for _, r in t.iterrows():
         rows.append({
@@ -219,6 +267,7 @@ def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print) -> dict:
             "exit_ts": None if pd.isna(r["exit_ts"]) else int(r["exit_ts"]), "exit_px": float(r["exit_px"]),
             "reason": r["reason"], "status": r["status"], "bars": None if pd.isna(r["bars"]) else int(r["bars"]),
             "pips_net": round(float(r["pips_net"]), 2),
+            "tp": None if pd.isna(r["tp"]) else float(r["tp"]), "sl": None if pd.isna(r["sl"]) else float(r["sl"]),
             **{k: None if pd.isna(r[k]) else round(float(r[k]), 2) for k in ("margin_usd", "nominal_usd", "pnl_usd", "equity_after")},
         })
     for si in strat_info:
@@ -239,7 +288,7 @@ def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print) -> dict:
                    "cancelled": int(st.str.startswith("anulowana").sum()) if len(st) else 0,
                    "skipped_margin": int(b["skipped_margin"])},
         "curve": {"ts": [int(x) for x in curve_ts], "equity": [round(float(x), 2) for x in curve_eq]},
-        "trades": rows, "pending": pending,
+        "trades": rows, "pending": pending, "upcoming": upcoming,
     }
 
 

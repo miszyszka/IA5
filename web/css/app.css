@@ -458,3 +458,6 @@ ul.plain { margin: 4px 0 0; padding-left: 18px; }
 .fdetails h3 { margin: 16px 0 8px; }
 section.panel select { font: inherit; color: var(--text); background: var(--raised); border: 1px solid var(--line-2); border-radius: var(--r-ctl); padding: 3px 8px; }
 ul.plain { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 2px; }
+
+.banner.upcoming { margin: 10px 0; color: var(--text); }
+.banner.upcoming .upc-min { color: var(--warn); font-weight: 600; }

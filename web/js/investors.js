@@ -4,7 +4,7 @@
 import { disposeAll, equityChart } from './charts.js';
 import { collapsible } from './collapse.js';
 import { getJSON, getText } from './data.js';
-import { createInvestor, deleteInvestor } from './fb.js';
+import { createInvestor, deleteInvestor, setInvestorEmail } from './fb.js';
 import { drawdown, investorStatus, investorTrades, mergeInvestors, mergeStrategies, PAIRS, SIZING, toCSV, validateInvestor, variantChoices } from './metrics.js';
 import { heartbeatState } from './status.js';
 import { $, ago, cls, confirmDialog, download, h, local, num, signed, store, toast } from './util.js';
@@ -137,6 +137,46 @@ function tradeRow(t) {
     h('td', { class: 'r' }, t.equity_after == null ? '—' : num(t.equity_after, 2)));
 }
 
+function upcomingBanner(st, strategies) {
+  const list = (st?.upcoming || []);
+  if (!list.length) return '';
+  const lines = list.map((u) => h('li', {}, '',
+    h('span', { class: 'upc-min', 'data-target': u.target_ts }, ''),
+    ` możliwy sygnał na ${PAIRS[u.pair]?.label || u.pair} (${dirWord(u.dir)})`,
+    ` — ${u.move_atr === 0 ? 'wystarczy zamknięcie w okolicy' : u.move_atr > 0 ? 'zamknięcie świecy powyżej' : 'zamknięcie świecy poniżej'} ${num(u.level, u.level > 20 ? 3 : 5)}`,
+    ` · ${strategies[u.strategy]?.name || '#' + (u.strategy + 1)}`));
+  const box = h('div', { class: 'banner warn upcoming' }, h('ul', { class: 'plain' }, ...lines));
+  const tick = () => {
+    const now = Date.now() / 1000;
+    let live = 0;
+    box.querySelectorAll('.upc-min').forEach((el) => {
+      const m = Math.ceil((Number(el.dataset.target) - now) / 60);
+      el.closest('li').hidden = m <= 0;
+      if (m > 0) { live += 1; el.textContent = `Za ${m} min`; }
+    });
+    box.hidden = !live;
+    return live;
+  };
+  tick();
+  const t = setInterval(() => { if (!box.isConnected || !tick()) clearInterval(t); }, 20000);
+  return box;
+}
+
+function mailToggle(id, d) {
+  const box = h('input', { type: 'checkbox', 'aria-label': 'Wysyłaj mail' });
+  box.checked = !!d.emailAlerts;
+  box.addEventListener('change', async () => {
+    box.disabled = true;
+    try { await setInvestorEmail(id, box.checked); toast(box.checked ? 'Maile włączone.' : 'Maile wyłączone.', 'ok'); }
+    catch (e) {
+      box.checked = !box.checked;
+      toast(e.code === 'permission-denied' ? 'Firestore odmówił zapisu — wklej nowe reguły z pliku firestore.rules.' : (e.message || String(e)), 'bad', 8000);
+    }
+    box.disabled = false;
+  });
+  return h('label', { class: 'row' }, box, 'Wysyłaj mail');
+}
+
 async function renderCard(root, id) {
   const x = items().find((y) => y.id === id) || { id, doc: store.state.invDocs?.[id] || null, st: null };
   const d = x.doc;
@@ -157,13 +197,16 @@ async function renderCard(root, id) {
   const head = h('div', { class: 'ihead panel' },
     h('div', { class: 'row between wrap' },
       h('div', { class: 'row wrap' }, h('h2', {}, name)),
-      d ? h('button', { class: 'btn danger small', onclick: () => removeInvestor(id, name, true) }, 'Usuń inwestora') : null),
+      h('div', { class: 'row wrap' }, d ? mailToggle(id, d) : null,
+        d ? h('button', { class: 'btn danger small', onclick: () => removeInvestor(id, name, true) }, 'Usuń inwestora') : null)),
+    upcomingBanner(st, strategies),
+    st?.mail_error ? h('div', { class: 'banner warn' }, st.mail_error) : '',
     h('div', { class: `istatus`, 'data-state': s.state },
       h('i', { class: 'dot flat' }), h('b', {}, s.word), h('span', {}, s.detail),
       st ? h('span', { class: 'muted' }, ` · ostatnie liczenie ${ago(st.computedAt)} · dane do ${local(st.dataTo)}`) : null),
     h('p', { class: 'muted small' },
       `Paper trading od ${local(d?.createdAt || st?.start)} · kapitał początkowy ${fmtUSD(capital)} · depozyt ${num(d?.pct ?? st?.pct, 1)}% kapitału `
-      + `na każde wejście (nominał = 30 × depozyt, suma depozytów ≤ 100% kapitału) · ustawienia stałe.`));
+      + `na każde wejście (nominał = 30 × depozyt, suma depozytów ≤ 100% kapitału) · ustawienia stałe poza mailami.`));
 
   const kpis = h('div', { class: 'kpis small' },
     kpi('kapitał teraz', fmtUSD(e?.now)),

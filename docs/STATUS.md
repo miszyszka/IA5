@@ -2,6 +2,14 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-03 — maile inwestorów i zapowiedź sygnału (D-051)
+
+**Zrobione:** przełącznik „Wysyłaj mail” w karcie inwestora; maile o sygnale, otwarciu i zamknięciu przez limit czasu; baner „za x min możliwy sygnał”.
+
+**Następne (Michał):** wkleić `firestore.rules`; utworzyć `~/.ia5/smtp.json` (`docs/SETUP.md`); `git pull`, `uv tool install -e runner --force`, restart `ia5 start`.
+
+**Znane problemy:** zapowiedź działa tylko na ostatniej znanej świecy, a mail o otwarciu ma godzinę opóźnienia (D-051). Do rozwiązania tylko źródłem cen wewnątrz godziny, czego D7 zabrania.
+
 ## 2026-11-03 — FOREST v2 (D-049)
 
 **Zrobione**

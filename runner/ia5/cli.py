@@ -436,7 +436,7 @@ def handle_investors(docs: dict, owner: str | None, state: dict) -> None:
     """D-045: przelicza wszystkich aktywnych inwestorów właściciela (S1) na aktualnych danych, publikuje stan na gałęzi
     data, usuwa inwestorów ze statusem do_usuniecia. Błąd jednego inwestora nie zatrzymuje pozostałych — zostaje jego
     ostatni opublikowany stan."""
-    from . import cloud, publish
+    from . import alerts, cloud, publish
     from .investors import compute
     from .store import DATA_REPO, READY
 
@@ -466,10 +466,22 @@ def handle_investors(docs: dict, owner: str | None, state: dict) -> None:
                 prev = DATA_REPO / "investors" / iid / "state.json"
                 if prev.exists():
                     states[iid] = json.loads(prev.read_text(encoding="utf-8"))
+        ledger_path = Path(HOME) / "mail_sent.json"
+        ledger = alerts.load_ledger(ledger_path)
+        cfg = alerts.load_config(HOME / "smtp.json")
+        send = alerts.smtp_sender(cfg) if cfg else None
+        for iid, st in states.items():
+            err = alerts.process(iid, bool(active[iid].get("emailAlerts")), st, ledger, send)
+            alerts.save_ledger(ledger_path, ledger)
+            st["mail_error"] = err
+            if err:
+                log(f"Inwestor „{active[iid].get('name', iid)}”: {err}")
         publish.publish_investors(states, removed, log=log)
         for iid in removed:
             cloud.delete_investor(iid)
+            ledger.pop(iid, None)
             log(f"Inwestor {iid}: usunięty")
+        alerts.save_ledger(ledger_path, ledger)
     except Exception as e:  # noqa: BLE001 — publikacja nie może zatrzymać programu
         log(f"Inwestorzy: błąd publikacji — {e} (ponowię po następnej kopii świec)")
     finally:

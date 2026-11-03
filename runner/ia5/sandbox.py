@@ -208,6 +208,63 @@ def worker_main(code_path: str, h1_dir: str, out_dir: str, param_ids: list[int] 
     (out / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, default=str))
 
 
+def probe_main(code_path: str, h1_dir: str, out_dir: str, param_id: int, moves: list[float]) -> None:
+    """D-051: sygnał na ostatniej świecy po dopisaniu hipotetycznej świecy (open = ostatnie zamknięcie, close = open + k × ATR14).
+    Świeca istnieje tylko w pamięci tego procesu — nie trafia do danych, nie ma wpływu na wyniki (D2)."""
+    from . import indicators as ind
+
+    out: dict = {"errors": [], "hits": []}
+    try:
+        ns: dict = {"np": np, "pd": pd}
+        exec(compile(Path(code_path).read_text(encoding="utf-8"), "strategia.py", "exec"), ns)  # noqa: S102
+        p = param_grid(ns.get("PARAMS"))[param_id]
+        for f in sorted(Path(h1_dir).glob("*.parquet")):
+            raw = pd.read_parquet(f)[["ts", "open", "high", "low", "close"]]
+            df = raw.set_index(pd.to_datetime(raw["ts"], unit="s", utc=True))[["open", "high", "low", "close"]]
+            atr = float(ind.atr(df, 14).iloc[-1])
+            if not atr > 0:
+                continue
+            o = float(df["close"].iloc[-1])
+            when = df.index[-1] + pd.Timedelta(hours=1)
+            for k in moves:
+                c = o + k * atr
+                x = pd.concat([df, pd.DataFrame({"open": [o], "high": [max(o, c)], "low": [min(o, c)], "close": [c]}, index=[when])])
+                x.attrs["pair"] = f.stem
+                v = float(_as_signal(ns["signals"](x, p, ind), x)[-1])
+                if v:
+                    out["hits"].append({"pair": f.stem, "k": k, "level": c, "dir": int(np.sign(v)), "atr14": atr, "atr5": float(ind.atr(df, 5).iloc[-1])})
+    except Exception as e:  # noqa: BLE001
+        out["errors"].append(f"{type(e).__name__}: {e}")
+    (Path(out_dir) / "probe.json").write_text(json.dumps(out))
+
+
+def run_probe(code: str, h1_dir: Path, param_id: int, moves: list[float], timeout: int = 300) -> list[dict]:
+    """Uruchamia probe_main w tym samym odgrodzeniu co strategie (S2)."""
+    errs = check_code(code)
+    if errs:
+        raise StrategyError("; ".join(errs))
+    pkg_parent = str(Path(__file__).resolve().parent.parent)
+    with tempfile.TemporaryDirectory(prefix="ia5-") as tmp:
+        code_path = Path(tmp) / "strategia.py"
+        code_path.write_text(code, encoding="utf-8")
+        boot = (f"import sys; sys.path.insert(0, {pkg_parent!r}); from ia5.sandbox import probe_main; "
+                f"probe_main({str(code_path)!r}, {str(h1_dir)!r}, {tmp!r}, {int(param_id)}, {[float(x) for x in moves]!r})")
+        env = {"PATH": os.environ.get("PATH", ""), "HOME": tmp, "TMPDIR": tmp, "PYTHONHASHSEED": "0"}
+        try:
+            r = subprocess.run([sys.executable, "-I", "-c", boot], env=env, cwd=tmp, timeout=timeout,
+                               capture_output=True, text=True, check=False,
+                               preexec_fn=_limit_memory if sys.platform.startswith("linux") else None)
+        except subprocess.TimeoutExpired as e:
+            raise StrategyError(f"Przekroczony limit czasu ({timeout} s)") from e
+        p = Path(tmp) / "probe.json"
+        if not p.exists():
+            raise StrategyError(f"Proces przerwany ({exit_reason(r.returncode)})")
+        out = json.loads(p.read_text(encoding="utf-8"))
+    if out["errors"]:
+        raise StrategyError("; ".join(out["errors"]))
+    return out["hits"]
+
+
 def _limit_memory():  # pragma: no cover — zależne od systemu
     try:
         import resource

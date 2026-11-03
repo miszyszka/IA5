@@ -48,3 +48,9 @@ ia5 start
 
 - Repo i dane trzymamy poza OneDrive (`%USERPROFILE%\IA5`, `%USERPROFILE%\.ia5`) — wyniki strategii zajmują miejsce i nie powinny się synchronizować.
 - Aktualizacja: `cd /d %USERPROFILE%\IA5 && git pull`.
+
+## Maile inwestorów (D-051)
+
+1. Włącz weryfikację dwuetapową na koncie Google i utwórz hasło aplikacji: myaccount.google.com/apppasswords.
+2. Utwórz `~/.ia5/smtp.json`: `{"user": "twoj@gmail.com", "app_password": "xxxx xxxx xxxx xxxx", "to": "twoj@gmail.com"}` i wykonaj `chmod 600 ~/.ia5/smtp.json`.
+3. Wklej aktualne `firestore.rules` (Firebase → Firestore → Rules → Publish).
