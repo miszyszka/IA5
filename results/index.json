@@ -1,36 +1,6 @@
 {
  "strategies": [
   {
-   "id": "cC40yi3w3Gl2xNncHWC5",
-   "name": "3 Candles",
-   "run_id": "20261103-173126",
-   "created": 1793727086,
-   "verdict": "red",
-   "verdict_note": "brak przewagi",
-   "n_variants": 16,
-   "hypothesis": "CRT (Candle Range Theory, „Nitro Trades”), przeniesione na H1 i FX. Świeca 1 wyznacza zakres (high–low).\nŚwieca 2 wybija jego dołek (zbiera zlecenia kupujących), ale zamyka się z powrotem w zakresie — sprzedający nie\nmieli siły. Świeca 3 wybija szczyt świecy 2: potwierdzenie, że rynek „dowozi” zlecenia na drugą stronę zakresu,\ndo szczytu świecy 1. Lustrzanie dla short. Autor: cel = przeciwny koniec zakresu świecy 1, stop tak, by zysk/ryzyko\n= 1,5, sesja Nowy Jork 9:30–12:00 ET, tylko pierwszy układ dnia, kierunek zgodny z ostatnim zebraniem płynności H1.\nRóżnice (ograniczenia IA5): tylko H1 (bez 15/30 min i bez „rebreak” na 1 min); wejście na open świecy po zamknięciu\nświecy 3 ponad szczytem świecy 2 (silnik nie zna zleceń stop w trakcie świecy); cel i stop jako wielokrotności ATR14\nw proporcji 1,5 : 1 zamiast poziomów ceny (silnik nie przyjmuje TP/SL z sygnału).",
-   "pairs": [
-    "AUDUSD",
-    "EURGBP",
-    "EURJPY",
-    "EURUSD",
-    "GBPUSD",
-    "USDCAD",
-    "USDCHF",
-    "USDJPY"
-   ],
-   "data_from": 1730073600,
-   "data_to": 1793721600,
-   "source": "yahoo",
-   "engine_version": "0.9.0",
-   "best_exit": "ATR14 TP 2× SL 1.333× max 24",
-   "is_mean_r": -0.148939,
-   "oos_mean_r": -0.230365,
-   "oos_mean_pips": -3.388417,
-   "oos_trades": 318,
-   "demo": false
-  },
-  {
    "id": "4tnm7GF0IMeRNDuIabi7",
    "name": "RSI 2",
    "run_id": "20261103-170055",
