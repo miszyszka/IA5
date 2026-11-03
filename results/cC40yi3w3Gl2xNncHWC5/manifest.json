@@ -1,0 +1,144 @@
+{
+ "id": "cC40yi3w3Gl2xNncHWC5",
+ "name": "3 Candles",
+ "run_id": "20261103-173126",
+ "engine_version": "0.9.0",
+ "code_hash": "1c1f87b01cced769",
+ "data_hash": "e76fc4183c4b5596",
+ "data_source": "yahoo",
+ "candles": "pełne",
+ "pairs": [
+  "AUDUSD",
+  "EURGBP",
+  "EURJPY",
+  "EURUSD",
+  "GBPUSD",
+  "USDCAD",
+  "USDCHF",
+  "USDJPY"
+ ],
+ "params": [
+  {
+   "bias": "brak",
+   "pierwsza": true
+  },
+  {
+   "bias": "brak",
+   "pierwsza": false
+  },
+  {
+   "bias": "zebranie",
+   "pierwsza": true
+  },
+  {
+   "bias": "zebranie",
+   "pierwsza": false
+  }
+ ],
+ "n_variants": 16,
+ "n_exits": 4,
+ "oos_cutoff": 1777809600,
+ "sizing": [
+  5.0,
+  10.0,
+  15.0,
+  20.0,
+  30.0
+ ],
+ "pyramid": 1,
+ "max_pairs": null,
+ "pair_rank": null,
+ "hours": [
+  15,
+  18
+ ],
+ "data_from": 1730073600,
+ "data_to": 1793721600,
+ "data_clean": {
+  "AUDUSD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 3,
+   "gaps": 3,
+   "gap_hours": 99,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "EURGBP": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 3,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "EURJPY": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 3,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "EURUSD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 5,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "GBPUSD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 4,
+   "gaps": 3,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "USDCAD": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 6,
+   "gaps": 3,
+   "gap_hours": 99,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "USDCHF": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 6,
+   "gaps": 4,
+   "gap_hours": 98,
+   "rejected": 0,
+   "closed_hours": 146
+  },
+  "USDJPY": {
+   "version": "5",
+   "source": "yahoo",
+   "filled": 6,
+   "gaps": 3,
+   "gap_hours": 99,
+   "rejected": 0,
+   "closed_hours": 146
+  }
+ },
+ "skipped": {
+  "B8": 105,
+  "brak_danych": 10,
+  "rozgrzewka": 10,
+  "poza_godzinami": 10804,
+  "luka_danych": 58,
+  "swieca_uzupelniona": 6
+ },
+ "hypothesis": "CRT (Candle Range Theory, „Nitro Trades”), przeniesione na H1 i FX. Świeca 1 wyznacza zakres (high–low).\nŚwieca 2 wybija jego dołek (zbiera zlecenia kupujących), ale zamyka się z powrotem w zakresie — sprzedający nie\nmieli siły. Świeca 3 wybija szczyt świecy 2: potwierdzenie, że rynek „dowozi” zlecenia na drugą stronę zakresu,\ndo szczytu świecy 1. Lustrzanie dla short. Autor: cel = przeciwny koniec zakresu świecy 1, stop tak, by zysk/ryzyko\n= 1,5, sesja Nowy Jork 9:30–12:00 ET, tylko pierwszy układ dnia, kierunek zgodny z ostatnim zebraniem płynności H1.\nRóżnice (ograniczenia IA5): tylko H1 (bez 15/30 min i bez „rebreak” na 1 min); wejście na open świecy po zamknięciu\nświecy 3 ponad szczytem świecy 2 (silnik nie zna zleceń stop w trakcie świecy); cel i stop jako wielokrotności ATR14\nw proporcji 1,5 : 1 zamiast poziomów ceny (silnik nie przyjmuje TP/SL z sygnału).",
+ "trades_rows": 15337,
+ "created": 1793727086,
+ "seconds": 7.0,
+ "verdict": "red"
+}
