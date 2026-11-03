@@ -50,6 +50,8 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
 - `strategies/examples/crt_trzy_swiece.py` — CRT (3 świece, „Nitro Trades”) na H1: zebranie dołka/szczytu świecy 1 przez świecę 2 z zamknięciem w zakresie, wejście po zamknięciu świecy 3 za świecą 2; sesja NY (15–18 PL), bias z zebrania płynności 24 h, pierwszy układ dnia; zysk/ryzyko 1,5 jako ATR (TP/SL z poziomów ceny wymaga zmiany silnika).
 
+- `strategies/examples/crt_v2_sma200.py` — CRT v2: filtr odległości od SMA200 (blisko ≤ 1 ATR14 / daleko ≥ 3 ATR14 / brak), 12 × 4 = 48 wariantów; filtr dodany po 🔴 wersji 1 (OOS nie jest czysty).
+
 **Następne (Michał)**
 1. Nie liczyć kolejnych przeszukiwań na OOS 2026-05 – 2026-11 (otwarty dwa razy).
 2. Zamrozić RSI 2 #12 i/lub dać go inwestorowi z małym % — forward test.
