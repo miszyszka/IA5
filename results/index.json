@@ -1,6 +1,36 @@
 {
  "strategies": [
   {
+   "id": "YDcZPsJ371jeFuIZjE43",
+   "name": "simple",
+   "run_id": "20261103-132539",
+   "created": 1793712339,
+   "verdict": "red",
+   "verdict_note": "brak przewagi",
+   "n_variants": 1,
+   "hypothesis": "„simple” na wszystkich 8 parach (wersja 1: tylko EUR/USD, najlepszy wariant IS: spadek 50 pipsów,\nwyjście TP 1 × ATR14, SL 0,5 × ATR14, max 24 świece). Po gwałtownym spadku z 10 świec rynek jest wyprzedany:\nsprzedający kończą, a pierwsza zielona świeca pokazuje powrót kupujących. Oczekujemy krótkiego odbicia na long.\nTa sama reguła i to samo wyjście, bez zmian — tylko więcej par. Spadek w pipsach danej pary (JPY: 0,01).",
+   "pairs": [
+    "AUDUSD",
+    "EURGBP",
+    "EURJPY",
+    "EURUSD",
+    "GBPUSD",
+    "USDCAD",
+    "USDCHF",
+    "USDJPY"
+   ],
+   "data_from": 1730073600,
+   "data_to": 1793707200,
+   "source": "yahoo",
+   "engine_version": "0.8.0",
+   "best_exit": "ATR14 TP 1× SL 0.5× max 24",
+   "is_mean_r": -0.077015,
+   "oos_mean_r": -0.097603,
+   "oos_mean_pips": -1.899218,
+   "oos_trades": 117,
+   "demo": false
+  },
+  {
    "id": "4tnm7GF0IMeRNDuIabi7",
    "name": "RSI 2",
    "run_id": "20261103-113008",
