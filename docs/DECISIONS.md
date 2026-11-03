@@ -16,6 +16,7 @@ Najnowsze na górze.
   - **Mapy usunięte z decyzji:** przy rzadkich głosach dopasowanie do podobnych map znów nic nie przewiduje (korelacja rang z wynikiem −0,016, p 0,62; dane bez przewagi: +0,020 i +0,008), a w v1 też nie. Zostaje zapis, kto głosował. Nauka to teraz wymiana inwestorów.
 - **Nauka:** las wybierany od nowa co 4 tygodnie na wszystkich zamkniętych danych. Pula 150 tys. reguł jest stała, więc numer inwestora nie zmienia się między odświeżeniami. Wyniki reguł są trzymane tydzień po tygodniu: pełne przeliczenie ok. 1 min, odświeżenie sekundy.
 - **Dane bez przewagi:** wspólny losowy znak dla wszystkich par na blok 24 h. Stary test odwracał każdą świecę każdej pary osobno, co niszczy korelację między parami i robi ten test zbyt łatwym przy długich horyzontach.
+- **Jedyne spojrzenie na świece po 2026-05-03 (kod zamrożony przed nim):** Manager 377 transakcji, −1,28 pipsa netto (t −0,3), po nocach −2,65; Kontrola 522, +1,01 netto, po nocach −0,26. Zależność od zgody się odwróciła: 50–60%: +5,4, ≥ 90%: −2,7 pipsa. Dane bez przewagi: Manager −8,41 i −3,67. Wniosek: przewagi z HISTORII nie potwierdzono, a próg 90% był dopasowaniem. Progów nie wolno teraz zmieniać pod ten wynik (F6). Rozstrzyga LIVE.
 - **Z4:** 0 odczytów i zapisów Firestore.
 - **Odrzucone:** 1000 inwestorów na siłę (przy t ≥ 2,5 wchodzi 220–790); Manager sam zmieniający progi (kolejny stopień swobody bez dowodu, że pomaga); dalsze szukanie najlepszej kratki progów (przy tylu próbach zawsze coś wyjdzie); kary za noce wpisane w model (brak danych o swapach, tylko test wrażliwości).
 

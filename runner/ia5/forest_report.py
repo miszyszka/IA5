@@ -186,19 +186,15 @@ def conclusions(st: dict) -> list[dict]:
                 f"{pl(m['net'])} vs {pl(c['net'])} pipsa netto.",
             }
         )
-    last = st["generations"][-1] if st["generations"] else None
+    gens = st["generations"]
     z = st.get("zero") or []
-    if last and z:
+    if gens and z:
+        real = float(np.mean([x["passed"] for x in gens]))
         zp = float(np.mean([x["passed"] for x in z]))
-        sh = zp / max(1, last["passed"]) * 100
-        L.append(
-            {
-                "state": "ok" if sh < 25 else "warn",
-                "text": f"Szczęście: na danych bez przewagi te same bramki przechodzi średnio {zp:.0f} reguł, "
-                f"na prawdziwych {last['passed']}. "
-                f"Około {sh:.0f}% wybranych może być dziełem przypadku.",
-            }
-        )
+        sh = min(100.0, zp / max(1.0, real) * 100)
+        L.append({"state": "ok" if sh < 25 else "warn",
+                  "text": f"Szczęście: warunki spełnia średnio {real:.0f} reguł na prawdziwych danych i {zp:.0f} na danych bez przewagi. "
+                          f"Około {sh:.0f}% wyboru mogło być przypadkiem. Spełnienie warunków nie oznacza zysku na kolejnych świecach."})
     return L
 
 

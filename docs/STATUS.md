@@ -2,6 +2,28 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-03 — FOREST v2 (D-049)
+
+**Zrobione**
+- Inwestorzy to reguły lustrzane, które milczą, gdy warunki nie są spełnione. Manager wchodzi przy ≥ 5 głosach i ≥ 90% zgody, horyzont 24 albo 48 świec. Las odświeża się co 4 tygodnie, mapy usunięte z decyzji. Zakładka uproszczona. Reguły F1–F9 zastąpione.
+- Założenia ustalone na świecach do 2026-05-03 (ok. 100 wariantów), kod zamrożony, potem jedno spojrzenie na świece późniejsze. Liczby sprawdzone osobnym kodem: 48 743 wyniki bez różnic, księgi, progi, B8, 60 decyzji głos po głosie.
+
+| | HISTORIA (do 2026-05-03) | TEST (ostatnie 6 miesięcy) |
+|---|---|---|
+| Manager: transakcje, netto, t, po nocach | 643, +4,32, 1,1, +2,94 | 377, −1,28, −0,3, −2,65 |
+| Kontrola bez progów | 779, +0,55, 0,2, −0,80 | 522, +1,01, 0,3, −0,26 |
+| Manager na danych bez przewagi | −0,03; +1,87 | −8,41; −3,67 |
+
+- **Wniosek:** nie ma zyskownej strategii. Wynik z HISTORII się nie powtórzył, a zależność od zgody odwróciła się (≥ 90%: −2,7 pipsa, 50–60%: +5,4). Las skurczył się sam do 83 reguł.
+
+**Następne (Michał)**
+1. `git pull`, `uv tool install -e runner --force`, restart `ia5 start`. Mac sam przebuduje las (kilka minut); v1 idzie do archiwum. Do tego czasu zakładka pokazuje informację o starym lesie.
+2. Nie stroić progów pod TEST (F6). Czekać na LIVE. Przy odchyleniu ok. 74 pipsów na transakcję pokazanie +3 pipsów netto wymaga ok. 2400 transakcji, czyli ok. 3 lat w tym tempie.
+
+**Znane problemy**
+- Przez pomyłkę wykonano `git push --force-with-lease` na `main`, wbrew G4: nadpisał własny commit D-049 sprzed chwili (zmiana opisu). Rodzic ten sam (fd2d255), żaden cudzy commit nie zginął.
+- Swapy są tylko szacunkiem (0,5 pipsa za noc), a pozycja trwa średnio 2,8 nocy.
+
 ## 2026-11-03 — sesja 7 (analiza: „najbardziej stabilna strategia”)
 
 **Zrobione (bez zmian w kodzie)**
