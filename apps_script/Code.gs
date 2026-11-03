@@ -175,7 +175,9 @@ function fetchRound_(mode, todo, state, startedAt, round) {
       const got = fetchYahoo(p.yahoo, params);
       // D2/D5: Yahoo czasem zwraca pojedyncze notowania z czasem nie na pełnej godzinie (np. 30.10.2026 17:59–18:25
       // dla USD/CAD i USD/CHF) — to nie są świece H1: nie zapisujemy ich, zostaje flaga i wpis w logu (nie cicha naprawa)
-      const offGrid = got.filter(b => b.ts % H !== 0);
+      // bieżące notowanie świecy w trakcie (czas np. 09:00:27) Yahoo dołącza zawsze — to nie błąd; flagujemy tylko
+      // notowania spoza pełnej godziny w czasie już zamkniętym (jak 30.10.2026 17:59–18:25), D-047
+      const offGrid = got.filter(b => b.ts % H !== 0 && b.ts + H <= now - 60);
       const closed = got.filter(b => b.ts % H === 0 && b.ts + H <= now - 60);
       const ps = state.pairs[p.name] || { lastTs: 0, count: 0, last: [], latencySec: null };
       ps.lastTs = Math.floor((ps.lastTs || 0) / H) * H;   // stary stan mógł mieć czas notowania zamiast świecy

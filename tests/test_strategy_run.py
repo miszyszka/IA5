@@ -108,3 +108,10 @@ def test_full_run_writes_results_and_report(h1_dir, tmp_path):
 def test_full_run_refuses_lookahead(h1_dir, tmp_path):
     with pytest.raises(SystemExit, match="look-ahead"):
         run_file(PEEKING, "zla", h1_dir, tmp_path / "results", log=lambda m: None)
+
+
+def test_exit_reason_explains_killed_process():
+    """D-047: „Proces strategii przerwany” bez komunikatu — w błędzie widać, czy to system (pamięć), czy Ctrl+C."""
+    from ia5.sandbox import exit_reason
+
+    assert "pamięci" in exit_reason(-9) and "Ctrl+C" in exit_reason(-2) and "kod wyjścia 1" in exit_reason(1)

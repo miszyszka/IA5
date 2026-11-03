@@ -5,6 +5,11 @@ Najnowsze na górze.
 
 ---
 
+### D-047 · 2026-11-03 · Flaga `ts` tylko dla zamkniętego czasu; powód przerwania procesu strategii
+- **Fakt 1:** po D-042 przegląd zdrowia pokazywał 9 flag `ts@…` (np. 09:00:27) — to bieżące notowanie świecy w trakcie, które Yahoo dołącza do każdej odpowiedzi; nigdy nie było zapisywane (filtr D2), a mimo to dostawało flagę. Fałszywy alarm wprowadzony w D-042.
+- **Decyzja:** flaga i wpis w logu tylko dla notowań spoza pełnej godziny w czasie już zamkniętym (`ts + 1 h ≤ teraz − 60 s`), jak śmieci z 30.10 17:59–18:25. Stare flagi znikną z `meta/status` przy kolejnych zapisach.
+- **Fakt 2:** forward test RSI 2 skończył się „Proces strategii przerwany:” bez treści — proces strategii zakończył się sygnałem systemu, bez komunikatu. **Decyzja:** błąd podaje kod wyjścia i jego znaczenie (−9: zabity przez system — zwykle pamięć albo zamknięcie programu; −2: Ctrl+C, np. restart `ia5 start` w trakcie liczenia). Od D-046 taki błąd przy forward teście nie wyłącza strategii — ponowi się za 6 h.
+
 ### D-046 · 2026-11-03 · Forward test bez trwałego „błędu”, wersja programu w przeglądzie zdrowia, zwijane panele
 - **Fakt:** wynik zamrożonej „RSI 2” na gałęzi `data` stał od 1.11 04:18, a Michał widział przy niej błąd. Przyczyna w kodzie: nieudany forward test (np. chwilowy brak sieci przy publikacji) zmieniał status strategii na `blad`, a lista zamrożonych brała tylko `policzona` — strategia wypadała z forward testu **na zawsze**.
 - **Decyzja:** nieudany forward test zostawia strategię `policzona` (z poprzednim wynikiem) i zapisuje `forwardError {at, message}`; następna próba za 6 h; udany kasuje błąd i zapisuje `forwardAt`. Strategie zamrożone, które wcześniej dostały `blad`, a mają wynik, wracają do forward testu przy starcie. Błąd forward testu widać na liście (chip), w karcie i w przeglądzie zdrowia. Zwykłe liczenie z błędem — bez zmian (`blad` + „Popraw kod”).

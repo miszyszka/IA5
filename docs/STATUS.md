@@ -43,6 +43,8 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
 - **D-046:** nieudany forward test nie wyłącza już zamrożonej strategii na zawsze (RSI 2 wróci do forward testu przy starcie); przegląd zdrowia sprawdza wersję programu na Macu; zwijane panele w kartach.
 
+- **D-047:** koniec fałszywych flag `ts@…` (bieżąca świeca Yahoo); błąd „Proces strategii przerwany” podaje powód (kod wyjścia).
+
 **Następne (Michał)**
 0. Wkleić nowe `firestore.rules` (Firebase → Firestore → Rules, `<OWNER_UID>` → swój UID → Publish), na Macu `cd ~/IA5 && git pull` i ponownie `ia5 start`.
 1. Wkleić nowy `apps_script/Code.gs` do Apps Script (bez fałszywych flag „luka” na otwarciu tygodnia). Opcjonalnie raz `backfill()` — uzupełni 3 przerwy Yahoo, jeśli Yahoo ma już te świece.

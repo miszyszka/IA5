@@ -209,6 +209,16 @@ def _limit_memory():  # pragma: no cover — zależne od systemu
         pass
 
 
+def exit_reason(code: int | None) -> str:
+    """Czytelny powód końca procesu strategii (D-047) — „przerwany” bez komunikatu to zwykle sygnał systemu."""
+    names = {-9: "zabity przez system — zwykle brak pamięci albo zamknięcie programu",
+             -2: "przerwany Ctrl+C — np. restart ia5 start w trakcie liczenia",
+             -15: "zakończony z zewnątrz (SIGTERM)", -11: "błąd pamięci procesu (SIGSEGV)"}
+    if code is None:
+        return "kod wyjścia nieznany"
+    return f"kod wyjścia {code}: {names.get(code, 'błąd procesu')}"
+
+
 def run_strategy_code(code: str, h1_dir: Path, timeout: int = 1800,
                       param_ids: list[int] | None = None) -> tuple[pd.DataFrame, dict]:
     """Sprawdza kontrakt, uruchamia kod w osobnym procesie, zwraca (sygnały, meta).
@@ -234,7 +244,7 @@ def run_strategy_code(code: str, h1_dir: Path, timeout: int = 1800,
             raise StrategyError(f"Przekroczony limit czasu ({timeout} s)") from e
         meta_path = Path(tmp) / "meta.json"
         if not meta_path.exists():
-            raise StrategyError(f"Proces strategii przerwany: {r.stderr.strip()[-500:]}")
+            raise StrategyError(f"Proces strategii przerwany ({exit_reason(r.returncode)}): {r.stderr.strip()[-500:] or 'bez komunikatu'}")
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
         if meta["errors"]:
             raise StrategyError("; ".join(meta["errors"]))
