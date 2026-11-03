@@ -503,8 +503,8 @@ def handle_forest(state: dict) -> None:
             made = st["counts"]["decyzje"]
         else:
             st, made = forest_run.step(frames, log=step)
-        log(f"FOREST: {made} nowych decyzji · mapy {st['counts']['mapy']:,} · " + " · ".join(
-            f"{b.upper()} {x['equity']:,.0f} USD" for b, x in st["books"].items()))
+        log(f"FOREST: {made} nowych decyzji · w lesie {st['counts']['las']} · " + " · ".join(
+            f"{x['name']} {x['equity']:,.0f} USD" for x in st["books"].values()))
         publish.publish_forest(forest_run.public_dir(), log=log)
     except Exception as e:  # noqa: BLE001 — błąd lasu nie może zatrzymać programu
         log(f"FOREST: błąd — {type(e).__name__}: {e}")
@@ -666,7 +666,7 @@ def cmd_forest(args) -> int:
             return 0
         st = json.loads((forest_run.public_dir() / "state.json").read_text(encoding="utf-8"))
         print(f"Las {st['id']} · dane do {time.strftime('%Y-%m-%d %H:%M', time.gmtime(st['dataTo']))} UTC · "
-              f"decyzje {st['counts']['decyzje']:,} · mapy {st['counts']['mapy']:,}")
+              f"decyzje {st['counts']['decyzje']:,} · w lesie {st['counts']['las']}")
         for b, x in st["books"].items():
             print(f"  {b.upper()} {x['name']}: {x['equity']:,.2f} USD ({x['return_pct']:+.2f}%), {x['closed']} transakcji")
         for c in st["conclusions"]:
@@ -681,8 +681,7 @@ def cmd_forest(args) -> int:
     caffeinate = subprocess.Popen(["caffeinate", "-i", "-w", str(os.getpid())]) if sys.platform == "darwin" else None
     try:
         if args.co == "build":
-            st = forest_run.build(frames, n_candidates=args.kandydaci, zero=args.zero, seed=args.nasiono, workers=args.procesy,
-                                  log=log, ledger=HOME)
+            st = forest_run.build(frames, zero=args.zero, seed=args.nasiono, log=log, ledger=HOME)
         else:
             if not forest_run.exists():
                 print("Lasu jeszcze nie ma — najpierw ia5 forest build.")
@@ -743,10 +742,8 @@ def main(argv=None) -> int:
     p_fr = sub.add_parser("forest", help="FOREST: las 1000 inwestorów (D-048); ia5 start liczy go sam, to tylko ręczne sterowanie")
     p_fr.add_argument("co", choices=["build", "krok", "status"],
                       help="build = nowy las (poprzedni do archiwum), krok = nowe świece, status")
-    p_fr.add_argument("--kandydaci", type=int, default=300_000, help="ilu kandydatów ocenić przy kuciu")
     p_fr.add_argument("--zero", type=int, default=1, help="przebiegi na danych bez przewagi")
-    p_fr.add_argument("--nasiono", type=int, default=1)
-    p_fr.add_argument("--procesy", type=int, help="równoległe procesy (domyślnie liczba rdzeni, max 8)")
+    p_fr.add_argument("--nasiono", type=int, default=5)
     p_fr.add_argument("--lokalnie", action="store_true", help="bez publikacji na gałąź data")
     p_fr.set_defaults(func=cmd_forest)
     sub.add_parser("status").set_defaults(func=cmd_status)

@@ -1,4 +1,4 @@
-"""FOREST (D-048): księgi, statystyki „co znaczy głos”, stan dla dashboardu i raport."""
+"""FOREST v2 (D-049): wyniki, „dlaczego”, stan dla dashboardu i raport."""
 
 from __future__ import annotations
 
@@ -11,334 +11,225 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import forest_rules as FR
 from .config import LEVERAGE, PAIRS, START_CAPITAL
-from .forest import HORIZONS, NH, H, Panel
-from .forest_manager import BOOKS, K_MAPS, MIN_MAPS, SEGMENTS, Z_MIN, Manager, hex_votes
+from .forest import DESIGN_END, HORIZONS, MAX_INVESTORS, MIN_EVENTS, RHO_CAP, T_MIN, H, Panel
+from .forest_manager import BOOKS, CONSENSUS, QUORUM, SEGMENTS, WHY, Manager
 from .investors import book
 
-BOOK_PCT = 5.0  # depozyt na wejście, % kapitału (B4); przy 30:1 nominał = 1,5 × kapitał
-BANDS = {
-    "przewaga": ("przewaga głosów", [0, 0.05, 0.10, 0.20, 0.30, 1.01], ["< 5%", "5–10%", "10–20%", "20–30%", "≥ 30%"], 1),
-    "z": ("z podobnych map", [-99, -2, -1, 0, 1, 2, 99], ["z < −2", "−2…−1", "−1…0", "0…1", "1…2", "z ≥ 2"], 1),
-    "dop": ("dopasowanie do map", [0, 0.65, 0.70, 0.75, 1.01], ["< 65%", "65–70%", "70–75%", "≥ 75%"], 1),
-}
+BOOK_PCT = 5.0
+SWAP_PIPS = 0.5  # założenie do testu wrażliwości: koszt nocy, której model nie liczy (O5)
+GRID_N = (1, 3, 5, 10, 20)
+GRID_C = (0.5, 0.6, 0.7, 0.8, 0.9)
+EMPTY = "seq seg pair dir h ts entry_ts entry_px exit_ts gross spread weight status pips_net n cons noce".split()
 
 
-def _num(x, nd=3):
+def num(x, nd=2):
     x = float(x)
     return None if not math.isfinite(x) else round(x, nd)
 
 
-EMPTY_TRADES = "seq seg pair dir h signal_ts entry_ts entry_px exit_ts gross spread weight status pips_net".split()
+def nights(entry, exit_) -> np.ndarray:
+    """Ile razy pozycja przeszła przez 21:00 UTC (rolowanie)."""
+    e, x = (np.asarray(entry, float) - 21 * H) // 86400, (np.asarray(exit_, float) - 21 * H) // 86400
+    return np.nan_to_num(x - e)
 
 
-def outcomes(df: pd.DataFrame, d: np.ndarray, hh: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """(wynik brutto w pipsach dla kierunku d i horyzontu hh, zamknięta?, czas wyjścia)."""
-    g = df[[f"g{h}" for h in HORIZONS]].to_numpy(float)
-    xt = df[[f"xt{h}" for h in HORIZONS]].to_numpy(float)
-    i = np.arange(len(df))
-    k = hh - 1
-    return d * g[i, k], df["known"].to_numpy() >= hh, xt[i, k]
+def result(df: pd.DataFrame, hh: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(wynik brutto w pipsach, czy zamknięta, czas wyjścia) dla kierunku decyzji i horyzontu hh."""
+    g24, g48 = df["g24"].to_numpy(float), df["g48"].to_numpy(float)
+    x24, x48 = df["xt24"].to_numpy(float), df["xt48"].to_numpy(float)
+    known = df["known"].to_numpy()
+    is24 = hh == HORIZONS[0]
+    return df["dir"].to_numpy() * np.where(is24, g24, g48), np.where(is24, known >= 1, known >= 2), np.where(is24, x24, x48)
 
 
-def book_trades(df: pd.DataFrame, b: str, last_px: dict[str, float]) -> pd.DataFrame:
-    """Transakcje księgi b: zamknięte, otwarte (wycena po ostatnim zamknięciu) i anulowane (B12). Bez wejścia = jeszcze nie ma."""
-    d = (df["dir_c"] if b == "c" else df["dir"]).to_numpy()
-    hh = (df["h_c"] if b == "c" else df["h_b"] if b == "b" else df["h"]).to_numpy()
-    gross, closed, xts = outcomes(df, d, hh)
-    t = pd.DataFrame(
-        {
-            "seq": df["seq"].to_numpy(),
-            "seg": df["seg"].to_numpy(),
-            "pair": df["pair"].to_numpy(),
-            "dir": d,
-            "h": hh,
-            "signal_ts": df["ts"].to_numpy(),
-            "entry_ts": df["e_ts"].to_numpy(),
-            "entry_px": df["e_px"].to_numpy(),
-            "exit_ts": xts,
-            "gross": gross,
-            "spread": df["spread"].to_numpy(),
-            "weight": 1.0,
-        }
-    )
-    t["status"] = np.where(closed, np.where(np.isfinite(gross), "zamknięta", "anulowana: przerwa w danych"), "otwarta")
-    keep = df[f"ex_{b}"].to_numpy(bool) & (t["entry_ts"].to_numpy() > 0)
-    t = t[keep].reset_index(drop=True)
+def trades(df: pd.DataFrame, mask: np.ndarray, last_px: dict[str, float]) -> pd.DataFrame:
+    """Transakcje: zamknięte, otwarte (wycena po ostatnim zamknięciu), anulowane (B12)."""
+    if not len(df):
+        return pd.DataFrame(columns=EMPTY)
+    gross, closed, xt = result(df, df["h"].to_numpy())
+    t = df.loc[mask, ["seq", "seg", "pair", "dir", "h", "ts", "spread", "n", "cons"]].copy()
+    t["entry_ts"], t["entry_px"] = df.loc[mask, "e_ts"].to_numpy(), df.loc[mask, "e_px"].to_numpy()
+    t["exit_ts"], t["gross"], c = xt[mask], gross[mask], closed[mask]
+    t["weight"] = 1.0
+    t["status"] = np.where(c, np.where(np.isfinite(t["gross"]), "zamknięta", "anulowana: przerwa w danych"), "otwarta")
+    t = t[t["entry_ts"] > 0].reset_index(drop=True)
     if len(t):
         op = (t["status"] == "otwarta").to_numpy()
         pip = t["pair"].map({p: c.pip for p, c in PAIRS.items()}).to_numpy(float)
         mark = t["pair"].map(last_px).to_numpy(float)
         t["gross"] = np.where(op, (mark - t["entry_px"].to_numpy()) * t["dir"].to_numpy() / pip, t["gross"].to_numpy())
     t["pips_net"] = t["gross"] - t["spread"]
+    t["noce"] = nights(t["entry_ts"], t["exit_ts"]) if len(t) else []
     return t
 
 
-def cell(gross: np.ndarray, net: np.ndarray) -> dict:
-    n = len(net)
+def cell(t: pd.DataFrame) -> dict:
+    n = len(t)
     if not n:
-        return {"n": 0, "win": None, "gross": None, "net": None, "t": None, "t_gross": None}
-    sd, sdg = net.std(ddof=1) if n > 1 else 0.0, gross.std(ddof=1) if n > 1 else 0.0
+        return {"n": 0, "win": None, "gross": None, "net": None, "t": None, "swap": None, "noce": None}
+    w = t.groupby(t["ts"] // (7 * 86400))["pips_net"].sum()
+    sd = w.std()
     return {
         "n": n,
-        "win": _num((net > 0).mean() * 100, 1),
-        "gross": _num(gross.mean(), 2),
-        "net": _num(net.mean(), 2),
-        "t": _num(net.mean() / (sd / math.sqrt(n)), 2) if sd > 0 else None,
-        "t_gross": _num(gross.mean() / (sdg / math.sqrt(n)), 2) if sdg > 0 else None,
+        "win": num((t["pips_net"] > 0).mean() * 100, 1),
+        "gross": num(t["gross"].mean()),
+        "net": num(t["pips_net"].mean()),
+        "t": num(w.mean() / sd * math.sqrt(len(w))) if len(w) > 2 and sd > 0 else None,
+        "suma": num(t["pips_net"].sum(), 0),
+        "swap": num((t["pips_net"] - SWAP_PIPS * t["noce"]).mean()),
+        "noce": num(t["noce"].mean(), 1),
     }
 
 
-def book_stats(t: pd.DataFrame, capital: float = START_CAPITAL) -> dict:
-    res = book(t, capital, BOOK_PCT)
+def book_stats(t: pd.DataFrame) -> tuple[dict, pd.DataFrame]:
+    res = book(t, START_CAPITAL, BOOK_PCT)
     tt = res["trades"]
     closed = tt[tt["status"] == "zamknięta"]
-    eq = np.array([capital] + res["curve"]["equity"], float)
-    dd = float(((eq - np.maximum.accumulate(eq)) / np.maximum.accumulate(eq)).min() * 100) if len(eq) else 0.0
+    eq = np.array([START_CAPITAL] + res["curve"]["equity"], float)
+    peak = np.maximum.accumulate(eq)
     now = res["realized"] + res["unrealized"]
-    seg = {
-        s: cell(closed.loc[closed.seg == s, "gross"].to_numpy(float), closed.loc[closed.seg == s, "pips_net"].to_numpy(float))
-        for s in SEGMENTS
-    }
-    for s in SEGMENTS:
-        part = closed[closed.seg == s]
-        seg[s]["usd"] = _num(part["pnl_usd"].fillna(0).sum(), 2)
     ts, ev = res["curve"]["ts"], res["curve"]["equity"]
-    step = max(1, len(ts) // 1500)
+    step = max(1, len(ts) // 800)
+    seg = {s: cell(closed[closed["seg"] == s]) for s in SEGMENTS}
+    for s in SEGMENTS:
+        seg[s]["usd"] = num(closed.loc[closed["seg"] == s, "pnl_usd"].fillna(0).sum(), 0)
     return {
-        "equity": _num(now, 2),
-        "return_pct": _num((now / capital - 1) * 100, 2),
-        "max_dd_pct": _num(dd, 2),
-        "realized": _num(res["realized"], 2),
-        "unrealized": _num(res["unrealized"], 2),
+        "equity": num(now),
+        "return_pct": num((now / START_CAPITAL - 1) * 100),
+        "max_dd_pct": num(((eq - peak) / peak).min() * 100),
         "closed": len(closed),
         "open": int((tt["status"] == "otwarta").sum()),
         "cancelled": int(tt["status"].str.startswith("anulowana").sum()),
-        "skipped_margin": int(res["skipped_margin"]),
         "seg": seg,
         "curve": {
-            "ts": [int(x) for x in ts[::step]] + ([int(ts[-1])] if ts else []),
-            "equity": [_num(x, 2) for x in ev[::step]] + ([_num(ev[-1], 2)] if ev else []),
+            "ts": [int(x) for x in ts[::step]] + [int(x) for x in ts[-1:]],
+            "equity": [num(x) for x in ev[::step]] + [num(x) for x in ev[-1:]],
         },
     }, tt
 
 
-def rank_test(x: np.ndarray, y: np.ndarray, n_rot: int = 2000, seed: int = 7) -> dict:
-    """Czy x (w kolejności czasu) mówi coś o y: korelacja rang i p z losowych obrotów y względem x. Obrót zachowuje skupienia
-    w czasie, które przy zwykłym tasowaniu dałyby fałszywie małe p (kolejne decyzje są mocno zależne)."""
-    ok = np.isfinite(x) & np.isfinite(y)
-    x, y = x[ok], y[ok]
-    n = len(x)
-    if n < 200:
-        return {"n": n, "rho": None, "p": None}
-    rx = pd.Series(x).rank().to_numpy() - (n + 1) / 2
-    ry = pd.Series(y).rank().to_numpy() - (n + 1) / 2
-    den = np.sqrt((rx**2).sum() * (ry**2).sum())
-    rho = float((rx * ry).sum() / den)
-    rng = np.random.default_rng(seed)
-    s = rng.integers(n // 20, n - n // 20, n_rot)
-    fx = np.fft.rfft(rx)
-    fy = np.fft.rfft(ry)
-    cc = np.fft.irfft(fx * np.conj(fy), n) / den  # korelacje wszystkich obrotów naraz
-    null = cc[s]
-    return {"n": n, "rho": _num(rho, 4), "p": _num((np.sum(np.abs(null) >= abs(rho)) + 1) / (n_rot + 1), 4)}
+def chain(df: pd.DataFrame, n_min: int, c_min: float, last_px: dict) -> pd.DataFrame:
+    """Te same decyzje przy innych progach, z zasadą jednej pozycji na parę (B8), po liczbie świec."""
+    x = df[(df["dir"] != 0) & (df["n"] >= n_min) & (df["cons"] >= c_min)]
+    keep, busy = x["seq"].tolist(), {}
+    t = trades(df, df["seq"].isin(keep).to_numpy(), last_px)
+    t = t[t["status"] == "zamknięta"].sort_values("entry_ts", kind="stable")
+    out = []
+    for r in t.itertuples():
+        if r.entry_ts >= busy.get(r.pair, 0):
+            busy[r.pair] = r.exit_ts
+            out.append(r.Index)
+    return t.loc[out]
 
 
-def meaning(df: pd.DataFrame) -> dict:
-    """Statystyczny obraz głosu: każda decyzja (także niewykonana) liczona wirtualnie na swoim horyzoncie."""
-    gross, closed, _ = outcomes(df, df["dir"].to_numpy(), df["h"].to_numpy())
-    d = df.assign(gross=gross, net=gross - df["spread"].to_numpy())
-    d = d[closed & np.isfinite(gross)]
-    gb, cb, _ = outcomes(df, df["dir"].to_numpy(), df["h_b"].to_numpy())
-    db = df.assign(gross=gb, net=gb - df["spread"].to_numpy())[cb & np.isfinite(gb)]
+def grid(df: pd.DataFrame, last_px: dict) -> dict:
+    """Wszystkie sprawdzane progi naraz: żeby nie wybierać najlepszego po fakcie, widać całą tabelę."""
     out = {}
     for seg in (*SEGMENTS, "RAZEM"):
-        x = d if seg == "RAZEM" else d[d.seg == seg]
-        xb = db if seg == "RAZEM" else db[db.seg == seg]
-        t = {"wszystkie": cell(x.gross.to_numpy(), x.net.to_numpy())}
-        for key, (name, edges, labels, _) in BANDS.items():
-            cut = pd.cut(x[key].to_numpy(float), edges, labels=labels, right=False)
-            t[key] = {
-                "name": name,
-                "rows": [{"band": lb, **cell(x.gross[cut == lb].to_numpy(), x.net[cut == lb].to_numpy())} for lb in labels],
-            }
-        cut = pd.cut(xb["z_b"].to_numpy(float), BANDS["z"][1], labels=BANDS["z"][2], right=False)
-        t["z_b"] = {
-            "name": "najlepszy z (księga B, jej horyzont)",
-            "rows": [{"band": lb, **cell(xb.gross[cut == lb].to_numpy(), xb.net[cut == lb].to_numpy())} for lb in BANDS["z"][2]],
-        }
-        t["horyzont"] = {
-            "name": "horyzont",
-            "rows": [{"band": f"{h} św.", **cell(x.gross[x.h == h].to_numpy(), x.net[x.h == h].to_numpy())} for h in HORIZONS],
-        }
-        t["kierunek"] = {
-            "name": "kierunek",
-            "rows": [
-                {"band": nm, **cell(x.gross[x.dir == s].to_numpy(), x.net[x.dir == s].to_numpy())} for s, nm in ((1, "long"), (-1, "short"))
-            ],
-        }
-        t["para"] = {
-            "name": "para",
-            "rows": [{"band": p, **cell(x.gross[x.pair == p].to_numpy(), x.net[x.pair == p].to_numpy())} for p in sorted(x.pair.unique())],
-        }
-        s = x.sort_values("ts", kind="stable")
-        t["uczenie"] = {
-            "z_vs_wynik": rank_test(s.z.to_numpy(float), s.net.to_numpy(float)),
-            "przewaga_vs_wynik": rank_test(s.przewaga.to_numpy(float), s.net.to_numpy(float)),
-            "g_map_vs_wynik": rank_test(s.g_map.to_numpy(float), s.net.to_numpy(float)),
-        }
-        out[seg] = t
-    return out
-
-
-def investor_rows(g: Manager) -> list[dict]:
-    w = g.weights()
-    rows = []
-    for k, i in enumerate(g.fr["investors"]):
-        hit, net = {}, {}
-        for s, seg in enumerate(SEGMENTS):
-            seen = g.seen[s]
-            if seen.max() > 0:
-                with np.errstate(divide="ignore", invalid="ignore"):
-                    hit[seg] = [_num(x, 2) for x in g.hits[s, k] / seen * 100]
-                    net[seg] = [_num(x, 4) for x in g.nets[s, k] / seen]
-        rows.append(
-            {
-                "id": i["id"],
-                "fam": i["fam"],
-                "families": i["families"],
-                "rule": i["rule"],
-                "t_cv": i["t_cv"],
-                "folds": i["folds"],
-                "stany": len(i["table"]),
-                "hit": hit,
-                "net": net,
-                "punkty": int(g.pos[k] - g.neg[k]),
-                "waga": _num(w[k], 2) if w is not None else None,
-            }
-        )
-    return rows
-
-
-def forest_quality(g: Manager) -> dict:
-    """Trafność i wynik inwestorów na świecach, których nie widzieli przy kuciu."""
-    out = {}
-    for s, seg in enumerate(SEGMENTS):
-        seen = g.seen[s]
-        if not seen.max():
+        d = df if seg == "RAZEM" else df[df["seg"] == seg]
+        if not len(d):
             continue
-        with np.errstate(divide="ignore", invalid="ignore"):
-            hit = g.hits[s] / seen * 100
-            net = g.nets[s] / seen
-        out[seg] = {
-            "decyzje": int(seen.max()),
-            "trafnosc_srednia": [_num(x, 2) for x in hit.mean(0)],
-            "trafnosc_p95": [_num(x, 2) for x in np.quantile(hit, 0.95, axis=0)],
-            "ponad_51": int((hit.mean(1) > 51).sum()),
-            "ponad_50": int((hit.mean(1) > 50).sum()),
-            "net_atr": [_num(x, 4) for x in net.mean(0)],
-        }
+        out[seg] = [{"n_min": a, "c_min": c, **cell(chain(d, a, c, last_px))} for a in GRID_N for c in GRID_C]
     return out
 
 
-def pl(x, d: int = 2, sign: bool = False) -> str:
-    """Liczba po polsku: przecinek i prawdziwy minus."""
-    t = f"{float(x):+.{d}f}" if sign else f"{float(x):.{d}f}"
-    return t.replace(".", ",").replace("-", "−")
+def bands(df: pd.DataFrame) -> dict:
+    """Co znaczy zgoda: każda decyzja, także niewykonana, na swoim horyzoncie."""
+    out = {}
+    gross, closed, _ = result(df, df["h"].to_numpy())
+    d = df.assign(gross=gross, pips_net=gross - df["spread"].to_numpy(), noce=nights(df["e_ts"], df["xt48"]))[
+        closed & np.isfinite(gross) & (df["dir"].to_numpy() != 0)
+    ]
+    for seg in (*SEGMENTS, "RAZEM"):
+        x = d if seg == "RAZEM" else d[d["seg"] == seg]
+        if not len(x):
+            continue
+        rows = []
+        for lo, hi, name in ((0.5, 0.6, "50–60%"), (0.6, 0.7, "60–70%"), (0.7, 0.8, "70–80%"), (0.8, 0.9, "80–90%"), (0.9, 1.01, "≥ 90%")):
+            rows.append({"band": name, **cell(x[(x["cons"] >= lo) & (x["cons"] < hi)])})
+        out[seg] = rows
+    return out
 
 
 def conclusions(st: dict) -> list[dict]:
-    """Automatyczne, dosłowne wnioski: te same progi przy każdym przeliczeniu. Rozstrzyga najczystszy odcinek, który ma dane."""
+    b = st["books"]["m"]["seg"]
+    k = st["books"]["k"]["seg"]
+    seg = "LIVE" if (b["LIVE"]["n"] or 0) >= 100 else "TEST" if (b["TEST"]["n"] or 0) else "HISTORIA"
+    pl = lambda x, d=2: f"{x:+.{d}f}".replace(".", ",").replace("-", "−")  # noqa: E731
     L = []
-    books = st["books"]
-    seg = "LIVE" if (books["a"]["seg"]["LIVE"]["n"] or 0) >= 200 else "OOS" if (books["a"]["seg"]["OOS"]["n"] or 0) else "MAPY"
-    q = st["quality"].get(seg) or {}
-    z = st["zero"][0].get("quality", {}).get(seg, {}) if st.get("zero") else {}
-    if q:
-        h = float(np.nanmean(np.array(q["trafnosc_srednia"], float)))
-        msg = f"Inwestorzy na świecach, których nie widzieli ({seg}): średnia trafność {pl(h)}%"
-        if z:
-            msg += f" (na danych bez przewagi {pl(np.nanmean(np.array(z['trafnosc_srednia'], float)))}%)"
-        L.append({"state": "ok" if h >= 51 else "warn" if h >= 50.3 else "bad", "text": msg + ". Przewaga wymaga wyraźnie ponad 50%."})
-    a, b, c = books["a"]["seg"][seg], books["b"]["seg"][seg], books["c"]["seg"][seg]
-    if a["n"]:
-        L.append({"state": "ok" if (a["t_gross"] or 0) >= 2 else "warn" if (a["gross"] or 0) > 0 else "bad",
-                  "text": f"Demokracja ({seg}): {pl(a['gross'], 2, True)} pipsa brutto na transakcję (t {pl(a['t_gross'] or 0, 1)}), "
-                          f"{pl(a['net'], 2, True)} netto, wygrane {pl(a['win'], 1)}%."})
-    u = st["meaning"].get(seg, {}).get("uczenie", {}).get("z_vs_wynik", {})
-    if u.get("rho") is not None:
-        good = u["p"] < 0.05 and u["rho"] > 0
-        L.append({"state": "ok" if good else "bad",
-                  "text": f"Czy mapy przewidują wynik ({seg}): korelacja rang z i wyniku {pl(u['rho'], 3, True)}, p = {pl(u['p'], 3)}. "
-                          + ("Wyższe z idzie w parze z lepszym wynikiem." if good else "Na razie brak dowodu, że mapy coś przewidują.")})
-    for name, x in (("Mapy", b), ("Reputacja", c)):
-        if x["n"] and a["n"]:
-            better = (x["net"] or 0) > (a["net"] or 0)
-            L.append({"state": "ok" if better and (x["net"] or 0) > 0 else "warn" if better else "bad",
-                      "text": f"{name} kontra demokracja ({seg}): {pl(x['net'], 2, True)} vs {pl(a['net'], 2, True)} "
-                              f"pipsa netto na transakcję "
-                              f"({x['n']} vs {a['n']} transakcji)."})
-    n_eff = st["forge"].get("n_eff")
-    if n_eff:
-        L.append({"state": "ok" if n_eff >= 50 else "warn",
-                  "text": f"Różnorodność: {st['n_investors']} inwestorów to około {n_eff:.0f} niezależnych głosów "
-                          f"(średnia |korelacja| {pl(st['forge']['srednia_abs_rho'], 3)})."})
+    m, c = b[seg], k[seg]
+    if m["n"]:
+        good = (m["t"] or 0) >= 2 and (m["net"] or 0) > 0
+        L.append(
+            {
+                "state": "ok" if good else "warn" if (m["net"] or 0) > 0 else "bad",
+                "text": f"Manager ({seg}): {m['n']} transakcji, {pl(m['net'])} pipsa netto na transakcję, "
+                f"pewność t = {f'{m["t"] or 0:.1f}'.replace('.', ',').replace('-', '−')}. "
+                + ("To już mocny sygnał." if good else "Żeby uznać to za przewagę, t musi wynosić co najmniej 2."),
+            }
+        )
+        if m["swap"] is not None:
+            L.append(
+                {
+                    "state": "ok" if m["swap"] > 0 else "bad",
+                    "text": f"Po doliczeniu nocy ({str(SWAP_PIPS).replace('.', ',')} pipsa za noc, średnio "
+                    f"{str(m['noce']).replace('.', ',')} nocy "
+                    f"na transakcję): {pl(m['swap'])} pipsa. Model silnika nocy nie liczy.",
+                }
+            )
+    if c["n"] and m["n"]:
+        L.append(
+            {
+                "state": "ok" if (m["net"] or 0) > (c["net"] or 0) else "bad",
+                "text": f"Progi ({QUORUM} głosów, {int(CONSENSUS * 100)}% zgody) kontra bez progów ({seg}): "
+                f"{pl(m['net'])} vs {pl(c['net'])} pipsa netto.",
+            }
+        )
+    last = st["generations"][-1] if st["generations"] else None
+    z = st.get("zero") or []
+    if last and z:
+        zp = float(np.mean([x["passed"] for x in z]))
+        sh = zp / max(1, last["passed"]) * 100
+        L.append(
+            {
+                "state": "ok" if sh < 25 else "warn",
+                "text": f"Szczęście: na danych bez przewagi te same bramki przechodzi średnio {zp:.0f} reguł, "
+                f"na prawdziwych {last['passed']}. "
+                f"Około {sh:.0f}% wybranych może być dziełem przypadku.",
+            }
+        )
     return L
-
-
-def top_maps(g: Manager, df: pd.DataFrame, n: int = 12) -> dict:
-    k = g.n_mem
-    if not k:
-        return {"zysk": [], "strata": []}
-    pts = g.mem_pts[:k]
-    seqs = g.mem_seq[:k]
-    order = np.argsort(pts, kind="stable")
-
-    def item(j):
-        r = df.iloc[int(seqs[j])]
-        za = max(int(r["buy"]), int(r["sell"]))
-        return {
-            "seq": int(r["seq"]),
-            "punkty": int(pts[j]),
-            "pair": r["pair"],
-            "ts": int(r["ts"]),
-            "dir": int(r["dir"]),
-            "h": int(r["h"]),
-            "za": za,
-            "przeciw": 1000 - za if g.forest.m == 1000 else g.forest.m - za,
-        }
-
-    return {"zysk": [item(j) for j in order[::-1][:n] if pts[j] > 0], "strata": [item(j) for j in order[:n] if pts[j] < 0]}
 
 
 def build_state(g: Manager, pn: Panel, now: int | None = None) -> tuple[dict, dict]:
     now = int(time.time()) if now is None else int(now)
     df = g.frame()
     last_px = {p: float(pn.P[p]["c"][-1]) for p in pn.pairs}
-    books, trades = {}, {}
+    books, tr = {}, {}
     for b, name in BOOKS.items():
-        st, tt = book_stats(book_trades(df, b, last_px) if len(df) else pd.DataFrame(columns=EMPTY_TRADES))
-        books[b] = {"name": name, **st}
-        trades[b] = tt
+        t = trades(df, df[f"ex_{b}"].to_numpy(bool), last_px) if len(df) else pd.DataFrame(columns=EMPTY)
+        s, tt = book_stats(t)
+        books[b], tr[b] = {"name": name, **s}, tt
     pos = []
-    for b in BOOKS:
-        tt = trades[b]
-        for r in tt[tt["status"] == "otwarta"].itertuples() if len(tt) else []:
-            pos.append(
-                {
-                    "book": b,
-                    "pair": r.pair,
-                    "dir": int(r.dir),
-                    "h": int(r.h),
-                    "entry_ts": int(r.entry_ts),
-                    "entry_px": float(r.entry_px),
-                    "wycena": _num(r.pips_net, 2),
-                    "pnl_usd": _num(r.pnl_usd, 2),
-                    "seq": int(r.seq),
-                }
-            )
+    tt = tr["m"]
+    for r in tt[tt["status"] == "otwarta"].itertuples() if len(tt) else []:
+        pos.append(
+            {
+                "pair": r.pair,
+                "dir": int(r.dir),
+                "h": int(r.h),
+                "entry_ts": int(r.entry_ts),
+                "entry_px": float(r.entry_px),
+                "wycena": num(r.pips_net, 1),
+                "pnl_usd": num(r.pnl_usd),
+                "seq": int(r.seq),
+            }
+        )
     fr = g.fr
+    gens = [{k: x[k] for k in ("week", "ts", "passed", "kept", "added", "retired")} for x in fr["generations"]]
+    why = df["why"].value_counts().to_dict() if len(df) else {}
+    active = fr["generations"][-1]["investors"] if fr["generations"] else []
     st = {
         "id": fr["id"],
         "version": fr["version"],
@@ -347,163 +238,106 @@ def build_state(g: Manager, pn: Panel, now: int | None = None) -> tuple[dict, di
         "computedAt": now,
         "dataTo": int(pn.ts.max()) + H,
         "cursor": max(g.cursor.values()),
-        "cuts": fr["cuts"],
+        "built_to": fr["built_to"],
+        "design_end": DESIGN_END,
         "pairs": fr["pairs"],
-        "families": list(FR.FAMILIES),
-        "n_investors": g.forest.m,
+        "horizons": list(HORIZONS),
         "params": {
-            "K_MAPS": K_MAPS,
-            "MIN_MAPS": MIN_MAPS,
-            "Z_MIN": Z_MIN,
+            "QUORUM": QUORUM,
+            "CONSENSUS": CONSENSUS,
+            "T_MIN": T_MIN,
+            "MIN_EVENTS": MIN_EVENTS,
+            "RHO_CAP": RHO_CAP,
+            "MAX_INVESTORS": MAX_INVESTORS,
             "BOOK_PCT": BOOK_PCT,
             "LEVERAGE": LEVERAGE,
             "START_CAPITAL": START_CAPITAL,
+            "SWAP_PIPS": SWAP_PIPS,
         },
-        "forge": fr["forge"],
+        "counts": {"decyzje": len(df), "las": len(active), "dlaczego": {WHY[k]: int(v) for k, v in why.items()}},
+        "generations": gens,
         "zero": fr.get("zero") or [],
-        "oos_open": bool(fr.get("oos_open", True)),
-        "counts": {
-            "decyzje": len(df),
-            "zamkniete": int((df["known"] == NH).sum()) if len(df) else 0,
-            "mapy": g.n_mem,
-            "zyskowne": g.n_win,
-            "stratne": g.n_loss,
-        },
         "books": books,
         "open": pos,
         "now": g.view_now(pn),
-        "meaning": meaning(df) if len(df) else {},
-        "quality": forest_quality(g),
-        "maps": top_maps(g, df) if len(df) else {},
-        "mapa_zysku": hex_votes(g.forest.pack(g.pos > 0)),
-        "mapa_straty": hex_votes(g.forest.pack(g.neg > 0)),
-        "order": [int(i) for i in np.lexsort((np.arange(g.forest.m), g.forest.fam_idx))],
-        "fam": [int(x) for x in g.forest.fam_idx],
+        "grid": grid(df, last_px) if len(df) else {},
+        "bands": bands(df) if len(df) else {},
     }
     st["months"] = sorted(pd.to_datetime(df["ts"], unit="s", utc=True).dt.strftime("%Y-%m").unique().tolist()) if len(df) else []
     st["conclusions"] = conclusions(st) if len(df) else []
-    return st, trades
-
-
-def _table(rows: list[dict]) -> list[str]:
-    L = ["| przedział | n | wygrane % | brutto (pips) | netto (pips) | t netto |", "|---|---|---|---|---|---|"]
-    for r in rows:
-        L.append(f"| {r['band']} | {r['n']} | {r['win']} | {r['gross']} | {r['net']} | {r['t']} |")
-    return L
+    return st, tr
 
 
 def report(st: dict) -> str:
-    c = st["cuts"]
     day = lambda x: time.strftime("%Y-%m-%d", time.gmtime(x))  # noqa: E731
-    f = st["forge"]
     L = [
-        f"# FOREST (D-048) — las {st['id']}",
+        f"# FOREST v2 (D-049) — las {st['id']}",
         "",
-        f"- Silnik {st['engine_version']} · FOREST {st['version']} · dane do {day(st['dataTo'])} · świece H1 Yahoo po czyszczeniu, 8 par.",
-        f"- KUCIE {day(c['t0'])} – {day(c['forge'])}; MAPY do {day(c['oos'])}; OOS do {day(c['t1'])}; LIVE później.",
-        f"- Kandydaci: {f['candidates']:,}, po bramkach kucia {f['passed']:,}, wybrani {st['n_investors']} "
-        f"(limit |ρ| ≤ {f['rho_cap']}, rodzina ≤ 25%).",
-        f"- Różnorodność: N_eff {f.get('n_eff', 0):.1f}, średnia |ρ| {f.get('srednia_abs_rho', 0):.3f}, "
-        f"p95 {f.get('p95_abs_rho', 0):.3f}. Rodziny: {f.get('rodziny')}.",
-        f"- Parametry ustalone przed liczeniem, niedobierane: K = {K_MAPS}, min. map = {MIN_MAPS}, z ≥ {Z_MIN} (księga B). "
-        f"Depozyt {BOOK_PCT:g}% kapitału, dźwignia {LEVERAGE}:1.",
+        f"- Dane do {day(st['dataTo'])}. Założenia ustalone na świecach do {day(st['design_end'])}. "
+        f"HISTORIA = do tej daty, TEST = do budowy ({day(st['built_to'])}), LIVE = później.",
+        f"- Inwestorzy: reguły lustrzane, horyzonty {st['horizons']} świec. Bramki: t ≥ {st['params']['T_MIN']}, "
+        f"≥ {st['params']['MIN_EVENTS']} zdarzeń, 3/4 bloków dodatnich, |ρ| ≤ {st['params']['RHO_CAP']}. Odświeżenie co 4 tygodnie.",
+        f"- Manager: ≥ {QUORUM} głosów i ≥ {int(CONSENSUS * 100)}% zgody. W lesie teraz {st['counts']['las']} inwestorów.",
         "",
         "## Wnioski",
         "",
     ]
-    L += [f"- [{x['state']}] {x['text']}" for x in st["conclusions"]]
+    L += [f"- [{c['state']}] {c['text']}" for c in st["conclusions"]]
     L += [
         "",
         "## Księgi",
         "",
-        "| księga | odcinek | transakcje | wygrane % | brutto | netto | t netto | t brutto | wynik USD |",
+        "| księga | odcinek | n | wygrane % | brutto | netto | t | po nocach | wynik USD |",
         "|---|---|---|---|---|---|---|---|---|",
     ]
-    for b, x in st["books"].items():
-        for seg, v in x["seg"].items():
+    for x in st["books"].values():
+        for s, v in x["seg"].items():
             if v["n"]:
-                L.append(
-                    f"| {b.upper()} {x['name']} | {seg} | {v['n']} | {v['win']} | {v['gross']} | {v['net']} | {v['t']} "
-                    f"| {v['t_gross']} | {v['usd']} |"
-                )
-    L += ["", "| księga | kapitał | wynik % | maks. obsunięcie % | zamknięte | otwarte | anulowane |", "|---|---|---|---|---|---|---|"]
-    for b, x in st["books"].items():
-        L.append(
-            f"| {b.upper()} {x['name']} | {x['equity']} | {x['return_pct']} | {x['max_dd_pct']} | {x['closed']} | {x['open']} "
-            f"| {x['cancelled']} |"
-        )
-    L += [
-        "",
-        "## Inwestorzy na świecach niewidzianych przy kuciu",
-        "",
-        "| odcinek | decyzje | średnia trafność h=1…5 | p95 | ponad 50% | ponad 51% |",
-        "|---|---|---|---|---|---|",
-    ]
-    for seg, q in st["quality"].items():
-        L.append(f"| {seg} | {q['decyzje']} | {q['trafnosc_srednia']} | {q['trafnosc_p95']} | {q['ponad_50']} | {q['ponad_51']} |")
+                L.append(f"| {x['name']} | {s} | {v['n']} | {v['win']} | {v['gross']} | {v['net']} | {v['t']} | {v['swap']} | {v['usd']} |")
+    L += ["", "## Wszystkie progi (nie wybieraj najlepszego po fakcie)", ""]
+    for seg, rows in st["grid"].items():
+        L += [f"### {seg}", "", "| głosy ≥ | zgoda ≥ | n | netto | t |", "|---|---|---|---|---|"]
+        L += [f"| {r['n_min']} | {int(r['c_min'] * 100)}% | {r['n']} | {r['net']} | {r['t']} |" for r in rows]
+        L.append("")
+    L += ["## Odświeżenia lasu", "", "| data | przeszło bramki | w lesie | doszło | odpadło |", "|---|---|---|---|---|"]
+    L += [f"| {day(x['ts'])} | {x['passed']} | {x['kept']} | {x['added']} | {x['retired']} |" for x in st["generations"]]
     for z in st["zero"]:
         L += [
             "",
-            f"### Test zerowy: to samo na danych bez przewagi (nasiono {z['seed']})",
+            f"## Dane bez przewagi (nasiono {z['seed']})",
             "",
-            f"- średnia CV kucia: prawdziwe {f.get('t_cv_mean', 0):.2f}, zerowe {z['forge']['t_cv_mean']:.2f}; "
-            f"najlepszy kandydat: prawdziwe {f['t_cv_top'][0]:.2f}, zerowe {z['forge']['t_cv_top'][0]:.2f}; "
-            f"po bramkach: prawdziwe {f['passed']:,}, zerowe {z['forge']['passed']:,}.",
+            f"- Średnio przeszło bramki {z['passed']}, w lesie {z['kept']}.",
+            f"- Manager: {z['seg']}",
         ]
-        for seg, q in z["quality"].items():
-            L.append(f"- {seg}: trafność {q['trafnosc_srednia']}, ponad 51%: {q['ponad_51']}.")
-        for b, v in z["books"].items():
-            for seg, s in v.items():
-                if s["n"]:
-                    L.append(f"- księga {b.upper()} {seg}: {s['n']} transakcji, brutto {s['gross']}, netto {s['net']}.")
-        for seg, u in z["uczenie"].items():
-            if u.get("rho") is not None:
-                L.append(f"- mapy {seg}: ρ {u['rho']}, p {u['p']}.")
-    for seg, t in st["meaning"].items():
-        if not t["wszystkie"]["n"]:
-            continue
-        L += ["", f"## Co znaczy głos — {seg} (wszystkie decyzje, wirtualnie)", "", f"Razem: {t['wszystkie']}", f"Uczenie: {t['uczenie']}"]
-        for key in ("przewaga", "z", "z_b", "dop", "horyzont", "kierunek", "para"):
-            L += ["", f"### {t[key]['name']}", ""] + _table(t[key]["rows"])
-    L += [
-        "",
-        "## Jak to czytać",
-        "",
-        "- Wynik MAPY to część IS (W1), OOS to ostatnie 25% historii, LIVE to nowe świece. Rozstrzyga LIVE.",
-        "- Księga A jest grupą kontrolną: handluje zawsze, więc pokazuje pełny koszt spreadu. "
-        "Mapy mają sens tylko wtedy, gdy B albo C biją A poza próbą.",
-        "- t liczone na transakcji zakłada ich niezależność; decyzje na kolejnych świecach i parach są zależne, "
-        "więc prawdziwa pewność jest niższa. p przy mapach pochodzi z obrotów w czasie i ten problem omija.",
-        "- Nie dobieraj K, progu z ani okresu do wyniku OOS. Każda taka zmiana robi z OOS kolejne IS.",
-    ]
     return "\n".join(L)
 
 
-JOURNAL_DROP = ("known",)
-
-
 def write_public(g: Manager, pn: Panel, folder: Path, now: int | None = None) -> dict:
-    """Pliki dla gałęzi data: state.json, investors.json, report.md, journal/{RRRR-MM}.parquet (z pełną mapą głosów)."""
-    st, trades = build_state(g, pn, now)
+    st, tr = build_state(g, pn, now)
     new = folder.with_name(folder.name + ".new")
     if new.exists():
         shutil.rmtree(new)
     (new / "journal").mkdir(parents=True)
     (new / "state.json").write_text(json.dumps(st, ensure_ascii=False, separators=(",", ":"), allow_nan=False), encoding="utf-8")
+    fr = g.fr
+    now_rules = {i["rule"] for i in fr["generations"][-1]["investors"]} if fr["generations"] else set()
+    known: dict[int, dict] = {}
+    for x in fr["generations"]:
+        for i in x["investors"]:
+            d = known.setdefault(i["rule"], {"id": i["rule"], "od": x["ts"], "rule": g.texts(i["rule"])})
+            d.update({"h": HORIZONS[i["k"]], "t": i["t"], "ev": i["ev"], "do": x["ts"]})
+    inv = sorted(({**d, "aktywny": d["id"] in now_rules} for d in known.values()), key=lambda d: (not d["aktywny"], -d["t"]))
     (new / "investors.json").write_text(
-        json.dumps({"id": st["id"], "investors": investor_rows(g)}, ensure_ascii=False, separators=(",", ":"), allow_nan=False),
-        encoding="utf-8",
+        json.dumps({"id": st["id"], "investors": inv}, ensure_ascii=False, separators=(",", ":"), allow_nan=False), encoding="utf-8"
     )
     (new / "report.md").write_text(report(st), encoding="utf-8")
     df = g.frame()
     if len(df):
-        df["votes"] = [hex_votes(b) for b in g.bits]
-        for b in BOOKS:
-            tt = trades[b]
-            for col, src in (("usd", "pnl_usd"), ("kap", "equity_after")):
-                df[f"{col}_{b}"] = np.nan
-                if len(tt):
-                    df.loc[tt["seq"].to_numpy(int), f"{col}_{b}"] = tt[src].to_numpy(float)
+        tt = tr["m"]
+        df["usd"], df["kap"] = np.nan, np.nan
+        if len(tt):
+            df.loc[tt["seq"].to_numpy(int), "usd"] = tt["pnl_usd"].to_numpy(float)
+            df.loc[tt["seq"].to_numpy(int), "kap"] = tt["equity_after"].to_numpy(float)
         month = pd.to_datetime(df["ts"], unit="s", utc=True).dt.strftime("%Y-%m")
         for m, part in df.groupby(month):
             part.reset_index(drop=True).to_parquet(new / "journal" / f"{m}.parquet", index=False)

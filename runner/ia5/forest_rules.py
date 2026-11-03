@@ -24,6 +24,41 @@ WARMUP = 500  # świec na rozgrzewkę najdłuższych wskaźników (SMA/EMA 480)
 EPS = 1e-12
 
 
+# Cechy bez kierunku są tylko filtrem (ta sama wartość dla long i short); pozostałe mają lustro: x ≥ e dla long = x ≤ −e dla short.
+FILTERS = {
+    "atr5_50",
+    "atr14_100",
+    "atr14_480",
+    "szer_boll",
+    "zakres1",
+    "zakres3",
+    "wewnetrzna",
+    "cien_gora",
+    "cien_dol",
+    "wczoraj_max",
+    "wczoraj_min",
+}
+
+
+def center(name: str) -> float:
+    """Środek cechy z kierunkiem: wartość, przy której rynek nie mówi ani long, ani short."""
+    if name.startswith(("rsi", "stoch")):
+        return 50.0
+    if name.startswith(("donchian", "udzial_wzrostow")) or name in (
+        "wczoraj_poz",
+        "tydzien_poz",
+        "zeszly_tydz_poz",
+        "azja_poz",
+        "poz_zamkniecia",
+    ):
+        return 0.5
+    return 0.0
+
+
+def has_direction(name: str, family: str) -> bool:
+    return not (family == "kalendarz" or name in FILTERS or name.startswith(("sila_baza", "sila_kwota")))
+
+
 def frame_index(raw: pd.DataFrame) -> pd.DataFrame:
     """Świece z indeksem UTC (czas otwarcia), jak w strategiach."""
     return raw.set_index(pd.to_datetime(raw["ts"], unit="s", utc=True))[["open", "high", "low", "close"]]

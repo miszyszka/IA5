@@ -1,18 +1,14 @@
-"""FOREST (D-048): 1000 wirtualnych inwestorów, Manager, mapy głosów — demokratyczny eksperyment samouczący się.
+"""FOREST v2 (D-049): inwestorzy, którzy mówią tylko wtedy, gdy mają co powiedzieć.
 
-Inwestor (zamrożony po kuciu) = tablica decyzyjna: 1–4 testy cech rynku dzielą każdą świecę na stany, a każdy stan ma
-policzone na danych kucia oczekiwane ruchy na 1–5 świec. Dzięki temu inwestor ZAWSZE ma zdanie: każda świeca wpada w jakiś
-stan, stan mówi BUY albo SELL i ile (statystycznie) można zarobić na każdym horyzoncie. Jedna reguła działa na 8 parach.
+Inwestor = reguła lustrzana: 1–3 warunki rynku i horyzont. Ta sama logika działa na long i short (warunek x ≥ e dla long to
+x ≤ −e dla short), więc jednostronny dryf pary nie może udawać przewagi. Gdy warunki nie są spełnione, inwestor milczy.
 
-Oś czasu (granice jak w search.py, wspólne dla par):
-  KUCIE [0, 50%)      wybór 1000 inwestorów i ich tablic. Walidacja krzyżowa blokami czasu.
-  MAPY  [50, 75%)     inwestorzy nie widzieli tych świec; Manager zbiera pierwsze mapy. Razem z kuciem to IS (W1).
-  OOS   [75, 100%]    ostatnie 25% (W1): ten sam proces, nic już nie jest dobierane.
-  LIVE                nowe świece po kuciu: paper trading przy działającym ia5 start.
+Pula reguł jest stała (nasiono, progi z pierwszych 39 tygodni). Co 4 tygodnie las jest odświeżany: reguła wchodzi do lasu, gdy na
+wszystkich dotąd zamkniętych danych ma zysk po spreadzie, minimalną liczbę transakcji i stabilny wynik; wypada, gdy to straci.
+Do lasu wchodzi najwyżej 1000 reguł, korelacja głosów dwóch inwestorów ≤ 0,6. Każda decyzja używa lasu wybranego wcześniej niż
+ona sama, więc cała historia po 39. tygodniu jest liczona poza próbą względem reguł (test: zmiana przyszłych cen niczego nie zmienia).
 
-Model wykonania jak silnik: sygnał na zamknięciu t, wejście na open t+1 (B1), wyjście czasowe na zamknięciu t+h
-(Exit("time", n=h, cap=h)), spread raz (B3), wejścia w oknie 07–17 (B11), jedna pozycja na parę (B8), transakcja nachodząca
-na przerwę lub świecę uzupełnioną anulowana (B12). Test: wynik każdej transakcji = engine.simulate co do pipsa.
+Model wykonania jak silnik: B1, B3, B8, B11, B12, wyjście czasowe `Exit("time", n=h, cap=h)`.
 """
 
 from __future__ import annotations
@@ -20,57 +16,43 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import multiprocessing as mp
-import os
 import time
-from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 import pandas as pd
 
 from . import ENGINE_VERSION
 from . import forest_rules as FR
-from .config import OOS_FRACTION, PAIRS
+from .config import PAIRS
 from .engine import data_cancel, prepare
 from .session import in_trading_hours
 
-FOREST_VERSION = "1.0"  # zmiana logiki kucia, Managera albo map = podbicie (jak B10)
+FOREST_VERSION = "2.0"
 H = 3600
-HORIZONS = (1, 2, 3, 4, 5)
+WEEK = 7 * 86400
+HORIZONS = (24, 48)  # świece; spread jest stały, a ruch rośnie z czasem — na 1–5 świec koszt zjada wszystko
 NH = len(HORIZONS)
-N_INVESTORS = 1000
-N_CANDIDATES = 300_000
-SPLIT_FORGE = 0.50  # KUCIE [0, 50%), MAPY [50%, 75%), OOS [75%, 100%]
-FOLDS = 4  # bloki czasu w walidacji krzyżowej kucia
-MIN_LEAF = 100  # każdy stan inwestora musi mieć tyle świec w kuciu, inaczej to nie statystyka
-MIN_FOLDS_POS = 3  # dodatni wynik poza próbą w co najmniej tylu blokach
-BUY_SHARE = (0.15, 0.85)  # inwestor musi zmieniać zdanie: udział głosów BUY na danych kucia
-RHO_CAP = 0.60  # największa dozwolona |korelacja| głosów dwóch inwestorów
-FAMILY_CAP = 0.25  # najwyżej tyle inwestorów z jedną rodziną główną
-SHORTLIST = 40_000
-SHRINK = 30.0  # ściąganie średnich stanu do zera (świece „pseudo-zerowe”)
-QUANTILES = (0.15, 0.35, 0.50, 0.65, 0.85)
-MAX_DEPTH = 4
-
-
-def popcount(a: np.ndarray) -> np.ndarray:
-    return np.bitwise_count(a)
-
-
-# ---------- dane: każda świeca każdej pary jako jeden wiersz ----------
-
-
-def cuts_for(frames: dict[str, pd.DataFrame]) -> dict:
-    t0 = min(int(df["ts"].iloc[0]) for df in frames.values())
-    t1 = max(int(df["ts"].iloc[-1]) for df in frames.values())
-    return {"t0": t0, "forge": int(t0 + SPLIT_FORGE * (t1 - t0)), "oos": int(t0 + (1 - OOS_FRACTION) * (t1 - t0)), "t1": t1}
+DESIGN_END = 1777793400  # 2026-05-03: założenia v2 ustalone wyłącznie na świecach sprzed tej chwili (D-049)
+N_RULES = 150_000
+MAX_INVESTORS = 1000
+START_WEEKS = 39  # pierwsze 9 miesięcy: tylko nauka
+REFRESH_WEEKS = 4
+PURGE_WEEKS = 1  # świece tuż przed odświeżeniem nie uczą: ich wynik na 48 świec nie byłby jeszcze znany
+QUANT_DIR = (0.25, 0.5, 0.75, 0.9)
+QUANT_FLT = (0.25, 0.5, 0.75)
+MIN_EVENTS = 30  # minimalna liczba oddzielnych zdarzeń w danych nauki
+T_MIN = 2.5  # zysk tygodniowy po spreadzie: co najmniej tyle odchyleń standardowych od zera
+BLOCKS, MIN_BLOCKS = 4, 3  # zysk w co najmniej 3 z 4 kolejnych bloków czasu
+BUY_SHARE = (0.25, 0.75)  # reguła musi działać w obie strony
+RHO_CAP = 0.60
+SHORTLIST = 4000
+MODE_WITH, MODE_AGAINST, MODE_GE, MODE_LT = 1, -1, 2, 3
 
 
 def forward(P: dict) -> np.ndarray:
-    """r[t, k] = ruch rynku od wejścia na open t+1 do zamknięcia t+h, w ATR14 świecy t (+ = w górę, przed spreadem).
-    Wiersz bez pełnych danych albo anulowany (B12) = NaN."""
+    """r[t, k] = ruch od open t+1 do close t+h w ATR14 świecy t (+ = w górę, przed spreadem); NaN = brak danych albo B12."""
     n = len(P["o"])
-    r = np.full((n, NH), np.nan, np.float64)
+    r = np.full((n, NH), np.nan)
     for k, h in enumerate(HORIZONS):
         t = np.arange(0, max(0, n - h))
         if not len(t):
@@ -83,7 +65,7 @@ def forward(P: dict) -> np.ndarray:
 
 
 class Panel:
-    """Wiersze: wszystkie świece wszystkich par. Cechy i ruchy liczone raz."""
+    """Wszystkie świece wszystkich par jako wiersze; cechy i ruchy liczone raz."""
 
     def __init__(self, frames: dict[str, pd.DataFrame]):
         self.pairs = sorted(frames)
@@ -91,8 +73,7 @@ class Panel:
         cur = FR.currency_panel(self.frames)
         self.P, xs, self.offset = {}, [], {}
         ts, pid, idx, atr, cost, r = [], [], [], [], [], []
-        pos = 0
-        names = None
+        pos, names = 0, None
         for k, pair in enumerate(self.pairs):
             raw = self.frames[pair]
             P = prepare(raw)
@@ -110,323 +91,243 @@ class Panel:
             pid.append(np.full(m, k, np.int16))
             idx.append(np.arange(m))
             atr.append(P["atr14"])
-            spread = PAIRS[pair].spread_pips * PAIRS[pair].pip
             with np.errstate(divide="ignore", invalid="ignore"):
-                cost.append(spread / P["atr14"])
+                cost.append(PAIRS[pair].spread_pips * PAIRS[pair].pip / P["atr14"])
             r.append(forward(P))
-        self.names = names
-        self.col = {n: j for j, n in enumerate(names)}
+        self.names, self.col = names, {n: j for j, n in enumerate(names)}
         self.X = np.vstack(xs)
         self.ts, self.pid, self.idx = np.concatenate(ts), np.concatenate(pid), np.concatenate(idx)
         self.atr, self.cost, self.r = np.concatenate(atr), np.concatenate(cost), np.vstack(r)
-        self.window = in_trading_hours(self.ts + H)  # B11: wejście na świecy o ts + 1 h
+        self.window = in_trading_hours(self.ts + H)
         self.n = len(self.ts)
+        self.t0 = int(self.ts.min())
 
     def row(self, pair: str, i: int) -> int:
         return self.offset[pair] + i
 
+    def week(self, ts) -> np.ndarray:
+        return (np.asarray(ts) - self.t0) // WEEK
 
-# ---------- kucie ----------
-
-
-def forge_sample(pn: Panel, cut: int) -> np.ndarray:
-    """Wiersze kucia: okno B11, po rozgrzewce, z pełnym wynikiem na 5 świec zamkniętym przed granicą (czysta granica)."""
-    ok = (pn.ts + (NH + 1) * H <= cut) & (pn.idx >= FR.WARMUP) & pn.window
-    ok &= np.isfinite(pn.r).all(1) & np.isfinite(pn.cost)
-    return np.flatnonzero(ok)
+    def usable(self) -> np.ndarray:
+        return self.window & (self.idx >= FR.WARMUP) & np.isfinite(self.cost)
 
 
-def make_tests(pn: Panel, sample: np.ndarray) -> list[dict]:
-    """Testy „cecha ≥ próg”. Progi z próby kucia (nigdy z całej historii); cechy zero-jedynkowe mają jeden próg."""
-    tests = []
-    x = pn.X[sample]
-    for j, name in enumerate(pn.names):
-        v = x[:, j]
-        v = v[np.isfinite(v)].astype(float)
-        if not len(v):
+def make_conditions(pn: Panel, t_end: int) -> list[dict]:
+    """Warunki z progami policzonymi wyłącznie na świecach sprzed t_end."""
+    ok = pn.usable() & (pn.ts < t_end)
+    out = []
+    for j, n in enumerate(pn.names):
+        fam = pn.family[n]
+        x = pn.X[ok, j].astype(float)
+        x = x[np.isfinite(x)]
+        if not len(x):
             continue
-        u = np.unique(v)
-        if len(u) <= 3:
-            edges = (u[:-1] + u[1:]) / 2
+        if FR.has_direction(n, fam):
+            c = FR.center(n)
+            for e in sorted(set(np.round(np.quantile(np.abs(x - c), QUANT_DIR), 4))):
+                out.append({"f": n, "fam": fam, "label": pn.label[n], "kind": "dir", "e": float(e), "c": c})
         else:
-            edges = np.unique(np.round(np.quantile(v, QUANTILES), 5))
-        for e in edges:
-            tests.append({"f": name, "e": float(e), "fam": pn.family[name], "label": pn.label[name]})
-    return tests
+            u = np.unique(x)
+            edges = (u[:-1] + u[1:]) / 2 if len(u) <= 3 else np.unique(np.round(np.quantile(x, QUANT_FLT), 4))
+            for e in edges:
+                out.append({"f": n, "fam": fam, "label": pn.label[n], "kind": "flt", "e": float(e), "c": 0.0})
+    return out
 
 
-def test_columns(X: np.ndarray, names: dict, tests: list[dict]) -> np.ndarray:
-    """Macierz (testy, wiersze) uint8; NaN = fałsz. Kolumna fikcyjna na końcu (same zera) dopełnia płytsze drzewa."""
-    out = np.zeros((len(tests) + 1, len(X)), np.uint8)
+def condition_masks(X: np.ndarray, col: dict, conds: list[dict]) -> tuple[np.ndarray, np.ndarray]:
+    """(warunek, wiersz): U = strona long, D = strona short. Dla filtra obie są takie same. NaN = fałsz."""
+    U = np.zeros((len(conds), len(X)), bool)
+    D = np.zeros_like(U)
     with np.errstate(invalid="ignore"):
-        for k, t in enumerate(tests):
-            out[k] = X[:, names[t["f"]]] >= t["e"]
-    return out
+        for k, c in enumerate(conds):
+            x = X[:, col[c["f"]]].astype(float)
+            if c["kind"] == "dir":
+                y = x - c["c"]
+                U[k], D[k] = (y > 0, y < 0) if c["e"] == 0 else (y >= c["e"], y <= -c["e"])
+            else:
+                U[k] = D[k] = x >= c["e"]
+    return U, D
 
 
-def make_candidates(tests: list[dict], n: int, seed: int) -> list[tuple[int, ...]]:
-    """Wszystkie pojedyncze testy + losowe kombinacje 2–4 testów na różnych cechach: pół z jednej rodziny, pół mieszane."""
+def make_rules(conds: list[dict], n: int, seed: int) -> list[tuple]:
+    """Pula reguł: każda ma co najmniej jeden warunek z kierunkiem (za nim albo przeciw niemu) i do 2 kolejnych."""
     rng = np.random.default_rng(seed)
-    by_fam: dict[str, list[int]] = {}
-    for k, t in enumerate(tests):
-        by_fam.setdefault(t["fam"], []).append(k)
-    fams = sorted(by_fam)
-    feat = [t["f"] for t in tests]
-    out = {(k,) for k in range(len(tests))}
-    u = rng.random((int(n * 2.5) + 1000, 6))
-    pick = rng.random((len(u), 4))
-    for row, pk in zip(u, pick):
-        if len(out) >= n:
-            break
-        d = 2 if row[0] < 0.30 else 3 if row[0] < 0.75 else 4
-        pure = row[1] < 0.5
-        f0 = fams[int(row[2] * len(fams))]
-        items, used = [], set()
-        for k in range(d):
-            fam = f0 if pure or k == 0 else fams[int(row[3 + k % 3] * len(fams))]
-            lst = by_fam[fam]
-            t = lst[int(pk[k] * len(lst))]
-            if feat[t] in used:
+    dirs = [k for k, c in enumerate(conds) if c["kind"] == "dir"]
+    flts = [k for k, c in enumerate(conds) if c["kind"] == "flt"]
+    feat = [c["f"] for c in conds]
+    seen = {((k, m),) for k in dirs for m in (MODE_WITH, MODE_AGAINST)}
+    guard = 0
+    while len(seen) < n and guard < n * 20:
+        guard += 1
+        d = int(rng.integers(2, 4))
+        k = dirs[int(rng.integers(len(dirs)))]
+        it, used = [(k, MODE_WITH if rng.random() < 0.5 else MODE_AGAINST)], {feat[k]}
+        for _ in range(d - 1):
+            if rng.random() < 0.55 or not flts:
+                k, m = dirs[int(rng.integers(len(dirs)))], MODE_WITH if rng.random() < 0.5 else MODE_AGAINST
+            else:
+                k, m = flts[int(rng.integers(len(flts)))], MODE_GE if rng.random() < 0.5 else MODE_LT
+            if feat[k] not in used:
+                used.add(feat[k])
+                it.append((k, m))
+        if len(it) >= 2:
+            seen.add(tuple(sorted(it)))
+    return sorted(seen)
+
+
+def rule_masks(U: np.ndarray, D: np.ndarray, rule, idx=None) -> tuple[np.ndarray, np.ndarray]:
+    """(kiedy reguła mówi BUY, kiedy SELL)."""
+    b = s = None
+    for k, m in rule:
+        u = U[k] if idx is None else U[k][idx]
+        d = D[k] if idx is None else D[k][idx]
+        x, y = (u, d) if m == MODE_WITH else (d, u) if m == MODE_AGAINST else (u, u) if m == MODE_GE else (~u, ~u)
+        b = x if b is None else b & x
+        s = y if s is None else s & y
+    return b, s
+
+
+def rule_text(rule, conds: list[dict]) -> str:
+    """Opis reguły od strony BUY; strona SELL jest lustrem."""
+    parts = []
+    for k, m in rule:
+        c = conds[k]
+        e, name, mid = c["e"], c["label"], c["c"]
+        if m == MODE_GE:
+            parts.append(f"{name} ≥ {e:g}" if not (e == 0.5 and c["fam"] == "kalendarz") else name)
+        elif m == MODE_LT:
+            parts.append(f"{name} < {e:g}" if not (e == 0.5 and c["fam"] == "kalendarz") else f"nie: {name}")
+        else:
+            a, op = (mid + e, "≥") if m == MODE_WITH else (mid - e, "≤")
+            parts.append(f"{name} {op} {a:g}")
+    return " · ".join(parts)
+
+
+class Cube:
+    """Wyniki każdej reguły tydzień po tygodniu: dzięki temu odświeżenie lasu to sekundy, a nie godziny."""
+
+    def __init__(self, pn: Panel, rules: list[tuple], conds: list[dict], log=print):
+        t0 = time.time()
+        self.rows = np.flatnonzero(pn.usable())
+        self.wk = pn.week(pn.ts[self.rows]).astype(np.int32)
+        self.nw = int(self.wk.max()) + 1 if len(self.wk) else 0
+        self.U, self.D = condition_masks(pn.X[self.rows], pn.col, conds)
+        self.rules = rules
+        nr = len(rules)
+        self.S = np.zeros((nr, self.nw, NH), np.float32)  # suma ruchów w stronę reguły
+        self.C = np.zeros((nr, self.nw), np.float32)  # suma kosztów
+        self.E = np.zeros((nr, self.nw), np.float32)  # oddzielne zdarzenia
+        self.B = np.zeros((nr, self.nw), np.int32)  # ile razy BUY
+        self.N = np.zeros((nr, self.nw), np.int32)  # ile razy reguła mówiła
+        r = np.nan_to_num(pn.r[self.rows])
+        cost = pn.cost[self.rows]
+        key = pn.idx[self.rows].astype(np.int64) + pn.pid[self.rows].astype(np.int64) * 1_000_000
+        for c, rule in enumerate(rules):
+            b, s = rule_masks(self.U, self.D, rule)
+            ib, ik = np.flatnonzero(b), np.flatnonzero(s)
+            if len(ib) + len(ik) < 30:
                 continue
-            used.add(feat[t])
-            items.append(t)
-        if len(items) >= 2:
-            out.add(tuple(sorted(items)))
-    return sorted(out)
+            i = np.r_[ib, ik]
+            w = self.wk[i]
+            sg = np.r_[np.ones(len(ib)), -np.ones(len(ik))]
+            for h in range(NH):
+                self.S[c, :, h] = np.bincount(w, weights=sg * r[i, h], minlength=self.nw)
+            self.C[c] = np.bincount(w, weights=cost[i], minlength=self.nw)
+            ev = []
+            for part in (ib, ik):
+                if len(part):
+                    # ta sama seria świec z rzędu to jedno zdarzenie
+                    o = part[np.argsort(key[part], kind="stable")]
+                    ev.append(self.wk[o[np.r_[True, np.diff(key[o]) != 1]]])
+            self.E[c] = np.bincount(np.concatenate(ev), minlength=self.nw)
+            self.B[c] = np.bincount(self.wk[ib], minlength=self.nw)
+            self.N[c] = np.bincount(w, minlength=self.nw)
+            if (c + 1) % 50_000 == 0:
+                log(f"  reguły: {c + 1:,}/{nr:,} · {(time.time() - t0) / 60:.1f} min")
 
 
-_W: dict = {}
+def select(cube: Cube, week: int, cap: int = MAX_INVESTORS, rho: float = RHO_CAP) -> tuple[pd.DataFrame, dict]:
+    """Las na tydzień `week`: tylko tygodnie zamknięte przed odświeżeniem (bez ostatniego — ich wyniku jeszcze nie znamy)."""
+    b = week - PURGE_WEEKS
+    C = cube.C[:, :b]
+    nw = C.shape[1]
+    E = cube.E[:, :b].sum(1)
+    blocks = np.array_split(np.arange(nw), BLOCKS)
+    share = cube.B[:, :b].sum(1) / np.maximum(1, cube.N[:, :b].sum(1))
+    parts = []
+    for h in range(NH):
+        p = cube.S[:, :b, h] - C
+        m, sd = p.mean(1), p.std(1, ddof=1)
+        with np.errstate(all="ignore"):
+            t = np.nan_to_num(m / sd * math.sqrt(nw))
+        pos = sum((p[:, x].sum(1) > 0).astype(int) for x in blocks)
+        i = np.flatnonzero((E >= MIN_EVENTS) & (t >= T_MIN) & (pos >= MIN_BLOCKS) & (share >= BUY_SHARE[0]) & (share <= BUY_SHARE[1]))
+        parts.append(pd.DataFrame({"rule": i, "k": h, "t": t[i], "ev": E[i]}))
+    t = pd.concat(parts, ignore_index=True)
+    t = t.sort_values(["t", "rule"], ascending=[False, True], kind="stable").drop_duplicates("rule")
+    passed = len(t)
+    t = t.head(SHORTLIST)
+    tr = np.flatnonzero(cube.wk < b)[::3]
+    vecs, keep = [], []
+    for j, c in enumerate(t["rule"].to_numpy()):
+        bu, se = rule_masks(cube.U, cube.D, cube.rules[c], tr)
+        v = bu.astype(np.float32) - se.astype(np.float32)
+        v -= v.mean()
+        nr = np.linalg.norm(v)
+        if nr == 0:
+            continue
+        v /= nr
+        if vecs and np.abs(np.asarray(vecs) @ v).max() > rho:
+            continue
+        vecs.append(v)
+        keep.append(j)
+        if len(keep) == cap:
+            break
+    sel = t.iloc[keep].reset_index(drop=True)
+    info = {"week": int(week), "passed": int(passed), "kept": len(sel)}
+    return sel, info
 
 
-def _init_worker(cols, y, sd, fold, K):
-    _W.update(cols=cols, y=y, sd=sd, fold=fold, K=K)
-
-
-def _score_block(block: list[tuple[int, ...]]) -> np.ndarray:
-    """Walidacja krzyżowa kandydatów: kierunek stanu z pozostałych bloków, ocena na bloku odłożonym.
-    Zwraca (score, liczba dodatnich bloków, najmniejszy stan)."""
-    cols, y, sd, fold, K = _W["cols"], _W["y"], _W["sd"], _W["fold"], _W["K"]
-    out = np.zeros((len(block), 3))
-    total = y.shape[0]
-    for c, tree in enumerate(block):
-        leaf = np.zeros(total, np.int32)
-        for b, t in enumerate(tree):
-            leaf += cols[t].astype(np.int32) << b
-        nleaf = 1 << len(tree)
-        key = leaf + nleaf * fold
-        N = np.bincount(key, minlength=K * nleaf).reshape(K, nleaf)
-        S = np.stack([np.bincount(key, weights=y[:, h], minlength=K * nleaf) for h in range(NH)]).reshape(NH, K, nleaf)
-        other = S.sum(1, keepdims=True) - S
-        d = np.sign(other.sum(0))
-        d[d == 0] = 1
-        perf = (d[None] * S).sum(2)  # (horyzont, blok): suma ruchów w stronę prognozy
-        std = perf / sd[:, None]
-        fold_n = N.sum(1)
-        out[c] = (std.sum(1).mean() / math.sqrt(total), ((std.mean(0) / fold_n) > 0).sum(), N.sum(0).min())
+def null_blocks(frames: dict[str, pd.DataFrame], seed: int, hours: int = 24) -> dict[str, pd.DataFrame]:
+    """Dane bez przewagi: na każdy blok czasu wszystkie pary dostają ten sam losowy znak. Zostaje zmienność, korelacja między parami
+    i ruch wewnątrz bloku, a znika zależność następnych dni od przeszłości. Żadna reguła długiego horyzontu nie ma tu przewagi."""
+    rng = np.random.default_rng(seed)
+    t0 = min(int(d["ts"].iloc[0]) for d in frames.values())
+    t1 = max(int(d["ts"].iloc[-1]) for d in frames.values())
+    sign = rng.choice((-1.0, 1.0), (t1 - t0) // (hours * H) + 2)
+    out = {}
+    for p, df in frames.items():
+        o, hi, lo, c = (df[k].to_numpy(float) for k in ("open", "high", "low", "close"))
+        prev = np.r_[o[0], c[:-1]]
+        lr = {k: np.log(v / prev) for k, v in (("o", o), ("h", hi), ("l", lo), ("c", c))}
+        s = sign[((df["ts"].to_numpy() - t0) // (hours * H)).astype(int)]
+        step = s * lr["c"]
+        base = c[0] * np.exp(np.r_[0.0, np.cumsum(step)[:-1]])
+        new = df.copy()
+        new["open"] = base * np.exp(s * lr["o"])
+        new["high"] = base * np.exp(np.where(s > 0, lr["h"], -lr["l"]))
+        new["low"] = base * np.exp(np.where(s > 0, lr["l"], -lr["h"]))
+        new["close"] = base * np.exp(step)
+        out[p] = new
     return out
 
 
-def score_candidates(cands, cols, y, sd, fold, K, workers: int, log=print) -> np.ndarray:
-    size = 4000
-    blocks = [cands[i : i + size] for i in range(0, len(cands), size)]
-    t0 = time.time()
-    if workers > 1:
-        res = [None] * len(blocks)
-        ctx = mp.get_context("spawn")
-        with ProcessPoolExecutor(max_workers=workers, mp_context=ctx, initializer=_init_worker, initargs=(cols, y, sd, fold, K)) as ex:
-            for k, r in enumerate(ex.map(_score_block, blocks)):
-                res[k] = r
-                if (k + 1) % max(1, len(blocks) // 5) == 0:
-                    log(f"  kandydaci: {min((k + 1) * size, len(cands)):,}/{len(cands):,} · {(time.time() - t0) / 60:.1f} min")
-    else:
-        _init_worker(cols, y, sd, fold, K)
-        res = []
-        for k, b in enumerate(blocks):
-            res.append(_score_block(b))
-            if (k + 1) % max(1, len(blocks) // 5) == 0:
-                log(f"  kandydaci: {min((k + 1) * size, len(cands)):,}/{len(cands):,} · {(time.time() - t0) / 60:.1f} min")
-    return np.vstack(res) if res else np.zeros((0, 3))
-
-
-def fit_table(tree: tuple[int, ...], cols: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Tablica stanów: oczekiwany ruch (ATR) na 5 horyzontów, ze ściągnięciem do zera, i liczba świec w stanie."""
-    leaf = np.zeros(y.shape[0], np.int32)
-    for b, t in enumerate(tree):
-        leaf += cols[t].astype(np.int32) << b
-    nleaf = 1 << len(tree)
-    n = np.bincount(leaf, minlength=nleaf).astype(float)
-    S = np.stack([np.bincount(leaf, weights=y[:, h], minlength=nleaf) for h in range(NH)], axis=1)
-    return S / (n[:, None] + SHRINK), n
-
-
-def primary_family(tree, tests) -> str:
-    fams = [tests[t]["fam"] for t in tree]
-    return sorted(set(fams), key=lambda f: (-fams.count(f), FR.FAMILIES.index(f)))[0]
-
-
-def select_diverse(
-    order: np.ndarray, votes: np.ndarray, fam: list[str], k: int, cap: float, fam_cap: float, log=print
-) -> tuple[list[int], dict]:
-    """Chciwy dobór od najlepszego: kandydat wchodzi tylko, gdy jego głosy nie są skorelowane (także odwrotnie) z nikim z
-    już wybranych ponad `cap`, a jego rodzina główna nie przekroczyła limitu. To „1000 różnych”, a nie 1000 kopii lidera."""
-    n = votes.shape[1]
-    packed = np.packbits(votes > 0, axis=1)
-    pad = (-packed.shape[1]) % 8
-    packed = np.pad(packed, ((0, 0), (0, pad))).view(np.uint64)
-    mean = votes.mean(1).astype(float)
-    sd = np.sqrt(np.maximum(1e-9, 1 - mean**2))
-    chosen: list[int] = []
-    sel_bits = np.zeros((k, packed.shape[1]), np.uint64)
-    sel_m, sel_s = np.zeros(k), np.zeros(k)
-    per_fam: dict[str, int] = {}
-    limit = int(math.ceil(k * fam_cap))
-    rej_rho = rej_fam = 0
-    for c in order:
-        if per_fam.get(fam[c], 0) >= limit:
-            rej_fam += 1
-            continue
-        m = len(chosen)
-        if m:
-            diff = popcount(sel_bits[:m] ^ packed[c]).sum(1)
-            agree = 1 - 2 * diff / n
-            rho = (agree - sel_m[:m] * mean[c]) / (sel_s[:m] * sd[c])
-            if np.abs(rho).max() > cap:
-                rej_rho += 1
-                continue
-        sel_bits[m] = packed[c]
-        sel_m[m], sel_s[m] = mean[c], sd[c]
-        chosen.append(int(c))
-        per_fam[fam[c]] = per_fam.get(fam[c], 0) + 1
-        if len(chosen) == k:
-            break
-    return chosen, {"odrzuceni_korelacja": rej_rho, "odrzuceni_rodzina": rej_fam, "rodziny": per_fam}
-
-
-def diversity(votes: np.ndarray) -> dict:
-    """Ile niezależnych głosów naprawdę jest: N_eff = (Σλ)²/Σλ² z macierzy korelacji głosów."""
-    v = votes.astype(np.float32)
-    v = (v - v.mean(1, keepdims=True)) / (v.std(1, keepdims=True) + 1e-9)
-    c = v @ v.T / v.shape[1]
-    np.fill_diagonal(c, np.nan)
-    a = np.abs(c)
-    m = len(c)
-    return {
-        "srednia_abs_rho": float(np.nanmean(a)),
-        "max_abs_rho": float(np.nanmax(a)),
-        "p95_abs_rho": float(np.nanquantile(a, 0.95)),
-        "n_eff": float(m**2 / (m + np.nansum(c**2))),
-    }
-
-
-def forest_id(fr: dict) -> str:
-    core = json.dumps({"tests": fr["tests"], "inv": [(i["tests"], i["table"]) for i in fr["investors"]]}, sort_keys=True)
+def pool_id(conds: list[dict], seed: int) -> str:
+    core = json.dumps({"c": conds, "s": seed, "v": FOREST_VERSION, "n": N_RULES}, sort_keys=True)
     return hashlib.sha256(core.encode()).hexdigest()[:12]
 
 
-def forge(
-    frames: dict[str, pd.DataFrame],
-    n_candidates: int = N_CANDIDATES,
-    n_investors: int = N_INVESTORS,
-    seed: int = 1,
-    workers: int | None = None,
-    log=print,
-    pn: Panel | None = None,
-    rho_cap: float = RHO_CAP,
-) -> dict:
-    """Kucie lasu: tylko świece z pierwszych 50% historii."""
-    t_start = time.time()
-    pn = pn or Panel(frames)
-    cuts = cuts_for(pn.frames)
-    sample = forge_sample(pn, cuts["forge"])
-    log(f"Kucie: {len(sample):,} świec (8 par × okno 07–17, pierwsze 50% historii), {len(pn.names)} cech.")
-    tests = make_tests(pn, sample)
-    cols = test_columns(pn.X[sample], pn.col, tests)
-    # bez dryfu pary: rok trendu EUR/USD to nie wiedza o rynku — bez tego las głosuje BUY z przyzwyczajenia (D-048)
-    y = pn.r[sample].copy()
-    pair_id = pn.pid[sample]
-    for k in np.unique(pair_id):
-        y[pair_id == k] -= y[pair_id == k].mean(0)
-    sd = y.std(0)
-    ts = pn.ts[sample]
-    edges = np.quantile(ts, np.linspace(0, 1, FOLDS + 1)[1:-1])
-    fold = np.searchsorted(edges, ts).astype(np.int32)
-    cands = make_candidates(tests, n_candidates, seed)
-    workers = workers or min(8, os.cpu_count() or 1)
-    log(f"  {len(tests)} testów, {len(cands):,} kandydatów, {workers} proc.")
-    sc = score_candidates(cands, cols, y, sd, fold, FOLDS, workers, log)
-    good = np.flatnonzero((sc[:, 0] > 0) & (sc[:, 1] >= MIN_FOLDS_POS) & (sc[:, 2] >= MIN_LEAF))
-    log(f"  bramki kucia (wynik > 0 poza próbą, ≥ {MIN_FOLDS_POS}/{FOLDS} bloków, stan ≥ {MIN_LEAF} świec): {len(good):,}")
-    order = good[np.argsort(-sc[good, 0], kind="stable")][:SHORTLIST]
-    sub = np.arange(0, len(sample), 2)
-    trees = [cands[c] for c in order]
-    votes, keep = [], []
-    for k, tree in enumerate(trees):
-        table, _ = fit_table(tree, cols, y)
-        side = np.where(table.mean(1) >= 0, 1, -1).astype(np.int8)
-        leaf = np.zeros(len(sub), np.int32)
-        for b, t in enumerate(tree):
-            leaf += cols[t][sub].astype(np.int32) << b
-        v = side[leaf]
-        share = (v > 0).mean()
-        if BUY_SHARE[0] <= share <= BUY_SHARE[1]:
-            keep.append(k)
-            votes.append(v)
-    votes = np.array(votes, np.int8)
-    fam = [primary_family(trees[k], tests) for k in keep]
-    log(f"  po warunku „zmienia zdanie” (BUY {BUY_SHARE[0]:.0%}–{BUY_SHARE[1]:.0%}): {len(keep):,}")
-    chosen, info = select_diverse(np.arange(len(keep)), votes, fam, n_investors, rho_cap, FAMILY_CAP, log)
-    if len(chosen) < n_investors:
-        log(f"  UWAGA: przy limicie korelacji {rho_cap} zmieściło się tylko {len(chosen)} inwestorów.")
-    sel = [keep[c] for c in chosen]
-    div = diversity(votes[chosen]) if len(chosen) > 1 else {}
-    used = sorted({t for k in sel for t in trees[k]})
-    remap = {t: j for j, t in enumerate(used)}
-    investors = []
-    for rank, k in enumerate(sel):
-        tree = trees[k]
-        table, nn = fit_table(tree, cols, y)
-        c = order[k]
-        investors.append(
-            {
-                "id": rank + 1,
-                "tests": [remap[t] for t in tree],
-                "table": np.round(table, 6).tolist(),
-                "n": nn.astype(int).tolist(),
-                "fam": primary_family(tree, tests),
-                "families": sorted({tests[t]["fam"] for t in tree}),
-                "rule": " · ".join(f"{tests[t]['label']} ≥ {tests[t]['e']:g}" for t in tree),
-                "t_cv": round(float(sc[c, 0]), 3),
-                "folds": int(sc[c, 1]),
-                "min_leaf": int(nn.min()),
-            }
-        )
-    fr = {
+def new_forest(pn: Panel, seed: int = 5) -> dict:
+    """Pula: progi z pierwszych 39 tygodni, reguły z nasiona. Niezmienne przez cały eksperyment."""
+    conds = make_conditions(pn, pn.t0 + START_WEEKS * WEEK)
+    return {
         "version": FOREST_VERSION,
         "engine_version": ENGINE_VERSION,
         "created": int(time.time()),
         "pairs": pn.pairs,
-        "cuts": cuts,
-        "tests": [tests[t] for t in used],
-        "investors": investors,
-        "forge": {
-            "candidates": len(cands),
-            "passed": int(len(good)),
-            "sample": int(len(sample)),
-            "tests_all": len(tests),
-            "rho_cap": rho_cap,
-            "seed": seed,
-            "t_cv_top": [round(float(x), 3) for x in sc[order[:5], 0]],
-            "t_cv_mean": float(np.mean([i["t_cv"] for i in investors])) if investors else 0.0,
-            "t_cv_min": float(np.min([i["t_cv"] for i in investors])) if investors else 0.0,
-            "minutes": round((time.time() - t_start) / 60, 1),
-            **info,
-            **div,
-        },
+        "t0": pn.t0,
+        "seed": seed,
+        "conds": conds,
+        "id": pool_id(conds, seed),
+        "generations": [],
     }
-    fr["id"] = forest_id(fr)
-    log(
-        f"  las {fr['id']}: {len(investors)} inwestorów · N_eff {div.get('n_eff', 0):.1f} "
-        f"· średnia |ρ| {div.get('srednia_abs_rho', 0):.3f} "
-        f"· {fr['forge']['minutes']} min"
-    )
-    return fr

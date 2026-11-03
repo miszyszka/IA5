@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.37 · 2026-11-03 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku; `ia5 search` (D-044); zakładka Inwestorzy (D-045); eksperyment FOREST (D-048) — `docs/STATUS.md`
+Wersja 0.38 · 2026-11-03 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku; `ia5 search` (D-044); zakładka Inwestorzy (D-045); eksperyment FOREST (D-048, v2: D-049) — `docs/STATUS.md`
 
 ---
 
@@ -14,7 +14,7 @@ Dashboard ma odpowiadać na dwa pytania naraz: *ile strategia by zarobiła* i *c
 
 Zakres teraz: system świec + program na Macu (`ia5`) + dashboard (zakładki **Strategie**, **Stats**, **Inwestorzy**, **FOREST**).
 Zakładka **Inwestorzy** (D-045): wirtualni inwestorzy — paper trading wybranymi strategiami od chwili dodania, na żywych świecach Yahoo.
-Zakładka **FOREST** (D-048): demokratyczny eksperyment — 1000 wirtualnych inwestorów głosuje po każdej świecy, Manager decyduje i uczy się na mapach głosów, które układy kończyły się zyskiem.
+Zakładka **FOREST** (D-048, v2: D-049): demokratyczny eksperyment — do 1000 reguł mówi tylko wtedy, gdy ma co powiedzieć, Manager wchodzi przy szerokiej zgodzie, a las odświeża się co 4 tygodnie.
 
 ---
 
@@ -66,16 +66,16 @@ Zakładka **FOREST** (D-048): demokratyczny eksperyment — 1000 wirtualnych inw
 - **K2.** Strategia definiuje wyłącznie wejścia (`signals`). Wyjścia, spread, dźwignię i wielkość pozycji liczy silnik; własne `EXITS` / `SIZING` tylko na wyraźne życzenie.
 - **K3.** Claude nie podaje przewidywanych wyników strategii. Wyniki liczy Mac; ocenę robi się na raporcie według sekcji 9.
 
-### FOREST (F) — eksperyment demokratyczny (D-048; zgoda Michała na reguły własne eksperymentu z 2026-11-03)
-- **F1. Inwestor** = zamrożona tablica decyzyjna: 1–4 testy cech rynku dzielą świece na stany, a każdy stan ma policzone na danych kucia oczekiwane ruchy na 1–5 świec. Dzięki temu inwestor ZAWSZE ma zdanie: BUY albo SELL i prognozę na 5 horyzontów. Jedna reguła na 8 par. Cechy tylko z przeszłości (`forest_rules.py`, wskaźniki z `ia5.indicators`), progi cech tylko z kucia.
-- **F2. Oś czasu:** KUCIE 0–50% historii, MAPY 50–75% (razem IS, W1), OOS 75–100%, LIVE = nowe świece po zbudowaniu lasu. Kucie nie widzi niczego po swojej granicy (test). Dryf pary jest odejmowany przed kuciem: rok trendu to nie wiedza o rynku.
-- **F3. Różnorodność** jest mierzona, nie deklarowana: |korelacja głosów| dowolnych dwóch inwestorów ≤ 0,6, rodzina cech ≤ 25% lasu, inwestor musi zmieniać zdanie (BUY 15–85% świec), ≥ 3/4 bloków czasu dodatnich poza próbą, każdy stan ≥ 100 świec. Raport zawsze podaje N_eff (ile niezależnych głosów naprawdę jest).
-- **F4. Manager:** kierunek = większość głosów; horyzont = najwyższy średni prognozowany zysk obozu zwycięzców po spreadzie. Wykonanie jak silnik: B1, B3, B4, B8, B11, B12; wyjście na zamknięciu świecy t+h (`Exit("time", n=h, cap=h)`), bez SL — B7 spełnia limit czasu ≤ 5 świec. Test: każda transakcja = `engine.simulate` co do pipsa.
-- **F5. Mapy:** mapa = 1000 głosów jednej decyzji + wynik. Zysk netto: mapa „za” +1, mapa „przeciw” −1; strata odwrotnie; punkty dostają też mapy podobne i inwestorzy. Porównanie: K = 151 najbliższych map (podobieństwo = zgodne − niezgodne głosy, także lustrzane), z = (W−L)/√K. **Mapa wchodzi do pamięci dopiero po zamknięciu 5. horyzontu** (test). Uczą się wszystkie decyzje, także niewykonane: uczenie tylko na wykonanych byłoby obciążone. Mapy tej samej pary z ostatnich 24 h nie są dowodem.
-- **F6. Księgi na tych samych decyzjach:** A Demokracja (grupa kontrolna, nic się nie uczy), B Mapy (wejście tylko przy z ≥ 1, horyzont z najlepszym z), C Reputacja (głos waży tyle, ile inwestor zarobił punktów na mapach). K, próg z i minimum 1000 map ustalone przed pierwszym liczeniem; **nie wolno ich dobierać pod wynik OOS ani LIVE**. Zmiana = nowy las i wpis w `DECISIONS.md`.
-- **F7. Dziennik:** każda decyzja zapisuje głosy za/przeciw, kierunek, horyzont, 5 prognoz, dopasowanie do map, W, L, siłę, z, dopasowanie do Mapy Zysku i Straty, wynik brutto i netto na 5 horyzontów, punkty i pełną mapę głosów. Rozliczonych wierszy się nie zmienia.
-- **F8. Liczy tylko Mac, przy `ia5 start`.** Stan leży na dysku; po przerwie nowe świece są nadrabiane po kolei i wynik jest ten sam, co bez przerwy (test). Firestore: 0 odczytów i zapisów.
-- **F9. Ocena:** las i mapy oceniamy tylko poza próbą, zawsze obok księgi A i testu zerowego (to samo na danych bez przewagi). Kontrola pozytywna w testach: gdy rynek ma podłożoną zależność, las i mapy ją znajdują. Rozstrzyga LIVE. Zmiana logiki = podbicie `FOREST_VERSION`.
+### FOREST (F) — eksperyment demokratyczny (D-048, v2: D-049; zgoda Michała z 2026-11-03)
+- **F1. Inwestor** = reguła lustrzana: 1–3 warunki rynku + horyzont. Ta sama logika działa na long i short (warunek x ≥ e dla long to x ≤ −e dla short), więc jednostronny dryf pary nie udaje przewagi. Gdy warunki nie są spełnione, inwestor milczy. Jedna reguła na 8 par. Cechy tylko z przeszłości (`forest_rules.py`, wskaźniki z `ia5.indicators`).
+- **F2. Pula i las:** 150 tys. reguł (nasiono, progi z pierwszych 39 tygodni) jest stała. Do lasu wchodzi reguła z zyskiem po spreadzie (t tygodniowe ≥ 2,5), ≥ 30 oddzielnymi zdarzeniami, dodatnia w ≥ 3 z 4 bloków czasu, działająca w obie strony (BUY 25–75%), |korelacja głosów| ≤ 0,6, najwyżej 1000 reguł.
+- **F3. Nauka:** pierwsze 39 tygodni to tylko nauka; potem co 4 tygodnie las jest wybierany od nowa na wszystkich zamkniętych danych. Każda decyzja używa lasu wybranego wcześniej niż ona sama. Test: zmiana przyszłych cen nie zmienia żadnej wcześniejszej decyzji ani lasu.
+- **F4. Manager:** kierunek = większość. Wejście tylko przy ≥ 5 głosach i ≥ 90% zgody, gdy para jest wolna; inaczej zapisuje powód. Horyzont = mediana obozu zwycięzców (24 albo 48 świec). Wykonanie jak silnik: B1, B3, B4, B8, B11, B12; wyjście na zamknięciu t+h, bez SL (B7: limit czasu). Test: każda transakcja = `engine.simulate` co do pipsa.
+- **F5. Kontrola:** druga księga bierze każdą większość bez progów. Raport zawsze pokazuje całą tabelę progów, a nie tylko wybrany próg.
+- **F6. Odcinki:** HISTORIA = świece do 2026-05-03, na nich ustalono zasady. TEST = od tej daty do budowy lasu. LIVE = później. Progi i horyzonty nie są dobierane pod wynik TEST ani LIVE; zmiana = nowa wersja i wpis w `DECISIONS.md`.
+- **F7. Dziennik:** każda decyzja z co najmniej jednym głosem zapisuje kto i jak głosował, zgodę, kierunek, horyzont, powód decyzji, wynik na obu horyzontach. Rozliczonych wierszy się nie zmienia.
+- **F8. Liczy tylko Mac, przy `ia5 start`.** Stan leży na dysku; po przerwie świece są nadrabiane po kolei, wynik jest ten sam (test). Firestore: 0 odczytów i zapisów.
+- **F9. Ocena:** zawsze obok Kontroli i danych bez przewagi (wspólny losowy znak dla par na blok 24 h). Raport liczy też noce: model silnika ich nie uwzględnia (O5), a pozycja trwa 2–3 noce. Rozstrzyga LIVE. Zmiana logiki = podbicie `FOREST_VERSION`.
 
 ### Praca w repo (Claude)
 - **G1.** Start sesji: `git pull`, przeczytaj ten plik, `docs/STATUS.md`, `docs/DECISIONS.md`.
@@ -208,9 +208,9 @@ scans/{run}/                         # wyniki skanera hipotez (D-037)
 searches/{run}/                      # głębokie poszukiwanie (D-044): search.md, candidates_is.csv, top_oos.csv, strategy.py
 investors/index.json                 # lista inwestorów: kapitał teraz, wynik, liczba transakcji (D-045)
 investors/{id}/state.json            # stan inwestora: kapitał (zrealizowany + wycena otwartych), krzywa, wszystkie transakcje
-forest/state.json                    # FOREST (D-048): głosy teraz, księgi, statystyki „co znaczy głos”, wnioski, test zerowy
-forest/investors.json                # 1000 inwestorów: reguła, rodzina, trafność na odcinkach, punkty, waga głosu
-forest/journal/{RRRR-MM}.parquet     # dziennik decyzji z pełną mapą głosów (zmienia się tylko bieżący miesiąc)
+forest/state.json                    # FOREST (D-049): decyzje teraz, księgi, progi, odświeżenia, wnioski
+forest/investors.json                # inwestorzy: reguła, horyzont, w lesie od, czy aktywny
+forest/journal/{RRRR-MM}.parquet     # dziennik decyzji z listą głosujących (zmienia się tylko bieżący miesiąc)
 forest/report.md                     # raport dla Claude
 ```
 
@@ -227,7 +227,7 @@ forest/report.md                     # raport dla Claude
   results/{id}/{run}/  scans/{run}/        # wyniki liczenia i skanów (to samo trafia na gałąź data)
   searches/{run}/                          # głębokie poszukiwanie (D-044); all_is.parquet tylko lokalnie
   oos_ledger.json                          # dziennik otwarć OOS przez poszukiwanie i las (D-044, D-048)
-  forest/current/                          # FOREST: las, dziennik, mapy głosów, pamięć, stan (D-048); forest/archive/{id}/ = poprzednie lasy
+  forest/current/                          # FOREST: las z odświeżeniami, dziennik, stan (D-049); forest/archive/{id}/ = poprzednie lasy
   forest/public/                           # to, co idzie na gałąź data
 ```
 
@@ -262,11 +262,11 @@ forest/report.md                     # raport dla Claude
   7. Nasłuch `strategies` ze statusem `do_policzenia` / `do_usuniecia`; kolejka FIFO, jedna strategia na raz.
   8. Co godzinę (5 min po pełnej godzinie) kroki 2–5 od nowa; co 6 h ponowne liczenie zamrożonych strategii (forward test, W4).
   8a. **Inwestorzy (D-045):** po każdej kopii świec i po każdej zmianie listy `investors` — przeliczenie wszystkich aktywnych inwestorów właściciela (`ia5/investors.py`) i publikacja `investors/` na gałęzi `data`; inwestorzy `do_usuniecia` znikają z gałęzi i z Firestore.
-  8b. **FOREST (D-048):** po każdej kopii świec: brak lasu → budowa (kilka–kilkanaście minut); jest las → nowe świece po kolei, publikacja `forest/` na gałęzi `data`.
+  8b. **FOREST (D-049):** po każdej kopii świec: brak lasu albo starsza wersja → budowa (kilka minut); jest las → nowe świece po kolei, co 4 tygodnie odświeżenie lasu, publikacja `forest/` na gałęzi `data`.
   9. `Ctrl+C` → heartbeat `offline`, czyste wyjście.
 - `ia5 scan [--duzy] [--pary …]` — **skaner hipotez** (D-037): tysiące–miliony prostych reguł na wszystkich parach, FDR 5% w odkryciu (pierwsze 50%), potwierdzenie (50–75%), ostatnie 25% pominięte; wynik `~/.ia5/scans/{run}/` i gałąź `data` `scans/{run}/`. To hipotezy do zbudowania strategii, nie werdykt.
 - `ia5 search [--rozmiar szybki|duzy|gigant] [--zero N] [--top K] [--bez-oos]` — **głębokie poszukiwanie** (D-044): 7 tys. / 0,71 mln / 3,1 mln konfiguracji (wyzwalacz × tryb × wyjście silnika × filtry), jedna konfiguracja = te same zasady na 8 parach. IS-A (FDR 5%) → IS-B (t ≥ 2) → ≥ 5/8 par → płaskowyż; K (domyślnie 20) wybranych **tylko po IS** otwartych raz na OOS i zapisanych w `oos_ledger.json`; `--zero N` = N przebiegów na danych bez przewagi (test szczęścia, liczony przed OOS). Ten sam model co silnik (test zgodności transakcji). Wynik `~/.ia5/searches/{run}/` + `strategy.py` (≤ 12 konfiguracji) do dashboardu.
-- `ia5 forest build|krok|status [--kandydaci N] [--zero N] [--nasiono S] [--lokalnie]` — ręczne sterowanie FOREST (D-048), przy wyłączonym `ia5 start`. Normalnie niepotrzebne: `ia5 start` robi to sam. `build` tworzy nowy las (poprzedni idzie do `forest/archive/`) i otwiera OOS (wpis w dzienniku).
+- `ia5 forest build|krok|status [--zero N] [--nasiono S] [--lokalnie]` — ręczne sterowanie FOREST (D-049), przy wyłączonym `ia5 start`. Normalnie niepotrzebne: `ia5 start` robi to sam. `build` liczy las od nowa (poprzedni idzie do `forest/archive/`) i zapisuje wpis w dzienniku OOS.
 - Pozostałe komendy (pomocnicze, na kopii lokalnej): `ia5 health` (opisowy raport zdrowia w terminalu + zapis na dashboard), `ia5 status`, `ia5 run <plik.py>` (liczenie lokalne, bez dashboardu; wyniki w `~/.ia5/results/{nazwa}/{run}/`), `ia5 check <plik.py>`.
 - Dashboard pokazuje „połączony", gdy `teraz − lastSeen < 90 s`.
 
@@ -369,7 +369,7 @@ Przy jednym wariancie PBO „nie dotyczy” (nie liczy się ani za, ani przeciw)
 ### 10.2 Zakładki
 **Strategie** | **Stats** | **Inwestorzy** (D-045) | **FOREST** (D-048).
 
-**FOREST** (0 odczytów Firestore, wszystko z `forest/` na gałęzi `data`): stan lasu (LAS DZIAŁA / LICZY / BUDOWA LASU / WSTRZYMANY — Mac rozłączony / OPÓŹNIONY), oś czasu KUCIE–MAPY–OOS–LIVE, wnioski liczone automatycznie, **Teraz** (8 par: głosy, Manager, horyzont, prognoza, mapy W:L, z, dopasowanie, księgi B i C, otwarte pozycje), **Mapa głosów** (1000 kratek po rodzinach: pomarańczowe = obóz „za”, szare = „przeciw”; także Mapa Zysku i Mapa Straty), **Księgi** (kapitał A, B, C i wyniki na odcinkach), **Co znaczy głos** (wygrane, brutto, netto wg przewagi głosów, z, dopasowania, horyzontu, kierunku, pary; korelacje rang z p z obrotów), **Dziennik decyzji** (miesiąc, księga, filtry, klik = mapa tej decyzji, eksport CSV), najsilniejsze mapy, skąd las i czy się różni (N_eff, test zerowy), katalog 1000 inwestorów, raport dla Claude.
+**FOREST** (0 odczytów Firestore, wszystko z `forest/` na gałęzi `data`): stan lasu i jedno zdanie, jak to działa; **Teraz** (8 par: ilu głosuje, BUY, SELL, zgoda, decyzja i jej powód po ludzku, otwarta pozycja); **Co wiadomo** (wnioski liczone automatycznie); **Wynik** (kapitał Managera i Kontroli, tabela odcinków z wynikiem po nocach); **Dziennik** (klik = kto głosował, eksport CSV); **Czego się uczy** (odświeżenia: ile doszło, ile odpadło); **Co znaczy zgoda**; rozwijane **Szczegóły** (inwestorzy, cała tabela progów, dane bez przewagi, raport dla Claude).
 
 **Inwestorzy** — wirtualne konta (paper trading). Dodawanie: nazwa, kapitał początkowy (USD), % kapitału jako depozyt na każde wejście, strategie wyłącznie z listy policzonych strategii, każda z wariantem wybranym przy dodaniu (domyślnie zamrożony albo #1 IS); kod i wariant zapisują się w tej wersji. Ustawień nie da się zmienić — tylko usunąć inwestora. Model: te same zasady co silnik (B1–B12), sygnały tylko ze świec zamkniętych po dodaniu, wszystkie strategie na wspólnym kapitale (B4: suma depozytów ≤ 100%, nominał = 30 × depozyt), pozycja bez wyjścia = otwarta, wyceniana po ostatnim zamknięciu. Lista: wskaźnik stanu (INWESTOR DZIAŁA / URUCHAMIANIE / WSTRZYMANY — Mac rozłączony / OPÓŹNIONY / BŁĄD), kapitał teraz, wynik. Karta: stan, kapitał (zrealizowany + wycena otwartych), wykres kapitału z obsunięciem, strategie inwestora, sygnały czekające na wejście i chronologiczna lista wszystkich transakcji (także pominiętych z braku depozytu i anulowanych), eksport CSV. Wskaźnik stanu inwestora to kropka bez poświaty — poświata zostaje tylko w nagłówku (D-019).
 
@@ -441,7 +441,7 @@ IA5/
 │           scan.py                                                       # skaner hipotez (D-037)
 │           search.py  search_rules.py                                    # głębokie poszukiwanie (D-044)
 │           investors.py                                                  # wirtualni inwestorzy — paper trading (D-045)
-│           forest_rules.py  forest.py  forest_manager.py  forest_report.py  forest_run.py   # FOREST (D-048): cechy, kucie, Manager i mapy, statystyki, budowa i krok
+│           forest_rules.py  forest.py  forest_manager.py  forest_report.py  forest_run.py   # FOREST (D-049): cechy, reguły i las, Manager, statystyki, budowa i krok
 ├─ tests/                    # wskaźniki vs TA-Lib, złote scenariusze, zgodność z backtesting.py, walidacja,
 │                            #   strategie, publikacja, przykłady, web/ (Node)
 ├─ strategies/examples/
@@ -464,7 +464,7 @@ Gałąź `data` — osobna, tylko dane (sekcja 4).
 | **E4** Dashboard | Status, lista, nowa strategia, karta, raport | Pierwsza strategia policzona od wpisania do raportu |
 | **E5** Walidacja | OOS, walk-forward, benchmark losowy, DSR, PBO, zamrażanie + forward | Werdykt w karcie |
 | **E6** Inwestorzy | Wirtualni inwestorzy (paper trading): dodawanie/usuwanie, kapitał, % na wejście, wiele strategii naraz, wykres kapitału, lista transakcji (D-045) | Pierwszy inwestor liczony na Macu i widoczny na stronie |
-| **E7** FOREST | 1000 inwestorów, Manager, mapy głosów, księgi A/B/C, dziennik, zakładka (D-048) | Las zbudowany na Macu, LIVE liczony co godzinę, widoczny na stronie |
+| **E7** FOREST | Las reguł z progami Managera, odświeżenie co 4 tygodnie, dziennik, zakładka (D-048, D-049) | Las zbudowany na Macu, LIVE liczony co godzinę, widoczny na stronie |
 
 Każdy etap: testy zielone → push → `STATUS.md` zaktualizowany → działa na żywej stronie. Aktualny stan etapów: `docs/STATUS.md`.
 

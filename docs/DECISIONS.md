@@ -5,6 +5,20 @@ Najnowsze na górze.
 
 ---
 
+### D-049 · 2026-11-03 · FOREST v2: inwestorzy mówią tylko, gdy mają co powiedzieć; progi Managera; nauka co 4 tygodnie
+- **Decyzja (Michał):** inwestor nie musi mieć zdania zawsze; strategie mają być zyskowne i mieć minimalną liczbę transakcji; Manager wchodzi tylko powyżej progu zgody; prostszy dashboard; strategia ma się dalej uczyć. Zastępuje F1–F9 z D-048.
+- **Metoda:** wszystkie założenia ustalone na świecach do 2026-05-03; późniejsze świece były fizycznie odcięte. Na tych danych sprawdzono ok. 100 wariantów (horyzonty, próg t, progi Managera, mapy); wszystko liczone krocząco: każda decyzja używa reguł wybranych wcześniej.
+- **Co pokazały dane i co z tego wynika:**
+  - Pierwsze podejście (reguła z jednym kierunkiem) dało +2 pipsy netto na horyzontach 24–48 świec, ale okazało się jednym zakładem: 98% reguł to long, cały wynik z USD/JPY i EUR/JPY. Dlatego **reguły lustrzane**: ta sama logika na long i short; udział long spadł do ok. 50%.
+  - Horyzonty 1–5 świec: −1,4 do −2 pipsów netto przy każdym progu. Spread jest stały, a ruch rośnie z czasem. Dlatego **24 i 48 świec**. Cena: pozycja trwa średnio 2,8 nocy, a model nie liczy swapów (O5), więc raport podaje wynik po 0,5 pipsa za noc.
+  - Bramki przechodzi średnio ok. 790 reguł na prawdziwych danych i 120–170 na danych bez przewagi (t ≥ 2,5, 24–48 świec). Około 20% wyboru to szczęście, ale przejście bramek nie oznacza zysku na następnych świecach.
+  - **Próg zgody:** wynik decyzji rośnie ze zgodą: 50–60%: −6,6 pipsa, 60–70%: −3,5, 70–80%: +1,2, 80–90%: +1,0, ≥ 90%: +2,6 netto. Michał podał 70% jako przykład; wybrany 90% przy ≥ 5 głosach (+4,3 pipsa, t 1,1). To dobór na tych samych danych, a t 1,1 to nie dowód; raport zawsze pokazuje całą tabelę progów.
+  - **Mapy usunięte z decyzji:** przy rzadkich głosach dopasowanie do podobnych map znów nic nie przewiduje (korelacja rang z wynikiem −0,016, p 0,62; dane bez przewagi: +0,020 i +0,008), a w v1 też nie. Zostaje zapis, kto głosował. Nauka to teraz wymiana inwestorów.
+- **Nauka:** las wybierany od nowa co 4 tygodnie na wszystkich zamkniętych danych. Pula 150 tys. reguł jest stała, więc numer inwestora nie zmienia się między odświeżeniami. Wyniki reguł są trzymane tydzień po tygodniu: pełne przeliczenie ok. 1 min, odświeżenie sekundy.
+- **Dane bez przewagi:** wspólny losowy znak dla wszystkich par na blok 24 h. Stary test odwracał każdą świecę każdej pary osobno, co niszczy korelację między parami i robi ten test zbyt łatwym przy długich horyzontach.
+- **Z4:** 0 odczytów i zapisów Firestore.
+- **Odrzucone:** 1000 inwestorów na siłę (przy t ≥ 2,5 wchodzi 220–790); Manager sam zmieniający progi (kolejny stopień swobody bez dowodu, że pomaga); dalsze szukanie najlepszej kratki progów (przy tylu próbach zawsze coś wyjdzie); kary za noce wpisane w model (brak danych o swapach, tylko test wrażliwości).
+
 ### D-048 · 2026-11-03 · FOREST: 1000 wirtualnych inwestorów, Manager, mapy głosów (reguły F1–F9)
 - **Decyzja (Michał, „masz wszystkie zgody żeby dostosować reguły do nowego eksperymentu”):** nowa zakładka FOREST obok Inwestorów. 1000 strategii, które zawsze mówią, co statystycznie będzie za 1–5 świec; 1000 inwestorów głosuje BUY/SELL po każdej świecy; Manager decyduje i wybiera horyzont ze średnich prognozowanych zysków; zamknięta transakcja daje mapę „za” (+1 przy zysku) i mapę „przeciw” (−1); system uczy się, które układy kończą się zyskiem; pełny zapis każdej transakcji; liczy tylko Mac przy `ia5 start`.
 - **Inwestor = tablica decyzyjna, nie strategia zdarzeniowa.** Strategie z `ia5 search` milczą przez większość świec, a inwestor musi mówić zawsze. 1–4 testy cech (138 cech, 8 rodzin, ok. 590 testów, progi z próby kucia) dzielą świece na stany; każdy stan ma średni ruch na 5 horyzontów w ATR, liczony od open t+1 do close t+h, czyli dokładnie transakcja silnika. Jedna reguła na 8 par: to jedna próba, a nie osiem.

@@ -259,34 +259,31 @@ export function forestStatus(st, mac, now = Date.now() / 1000) {
   return { state: 'ok', word: 'LAS DZIAŁA', detail: 'Liczony po każdej nowej świecy.' };
 }
 
-/** Mapa głosów z zapisu szesnastkowego: tablica m wartości true = BUY (kolejność bitów jak numpy.packbits). */
-export function votesFromHex(hex, m) {
-  const out = new Array(m);
-  for (let k = 0; k < m; k++) {
-    const byte = parseInt(hex.slice((k >> 3) * 2, (k >> 3) * 2 + 2), 16);
-    out[k] = (byte & (0x80 >> (k & 7))) !== 0;
-  }
-  return out;
-}
-
-/** Wiersz dziennika widziany przez księgę: kierunek, horyzont, wynik brutto/netto, status. book = a | b | c. */
-export function forestRow(r, book = 'a') {
-  const dir = book === 'c' ? r.dir_c : r.dir;
-  const h = book === 'c' ? r.h_c : book === 'b' ? r.h_b : r.h;
-  const g = r[`g${h}`];
-  const done = r.known >= h;
+/** Wiersz dziennika: wynik decyzji na jej horyzoncie. */
+export function forestRow(r) {
+  const g = r[`g${r.h}`];
+  const done = r.known >= (r.h === 24 ? 1 : 2);
   const cancelled = done && (g == null || Number.isNaN(g));
-  const gross = done && !cancelled ? dir * g : null;
-  const net = gross == null ? null : gross - r.spread;
-  const za = dir > 0 ? r.buy : r.sell;
-  return { ...r, b_dir: dir, b_h: h, gross, net, za, przeciw: r.buy + r.sell - za, forecast: r[`f${h}`],
-    status: cancelled ? 'anulowana' : done ? 'zamknięta' : 'otwarta', executed: !!r[`ex_${book}`], exit_ts: r[`xt${h}`] || null };
+  const gross = done && !cancelled ? r.dir * g : null;
+  return { ...r, gross, net: gross == null ? null : gross - r.spread, status: cancelled ? 'anulowana' : done ? 'zamknięta' : 'otwarta' };
 }
 
-/** Filtry dziennika: book (a/b/c), only (tylko wykonane), pair, dir (1/−1), status, wynik (zysk/strata). */
+/** only = tylko transakcje Managera; pair, wynik (zysk/strata) opcjonalnie. */
 export function filterJournal(rows, f = {}) {
-  const book = f.book || 'a';
-  return rows.map((r) => forestRow(r, book)).filter((r) => (!f.only || r.executed) && (!f.pair || r.pair === f.pair)
-    && (!f.dir || r.b_dir === f.dir) && (!f.status || r.status === f.status)
+  return rows.map(forestRow).filter((r) => (!f.only || r.ex_m) && (!f.pair || r.pair === f.pair)
     && (!f.wynik || (f.wynik === 'zysk' ? r.net > 0 : r.net != null && r.net <= 0)));
+}
+
+/** Zdanie po ludzku: dlaczego Manager wszedł albo nie wszedł. */
+export function forestReason(n, p) {
+  const side = n.dir > 0 ? 'BUY' : 'SELL';
+  const proc = `${Math.round(n.cons * 100)}%`;
+  switch (n.why) {
+    case 'go': return { enter: true, text: `Wchodzi: ${side} na ${n.h} świec` };
+    case 'busy': return { enter: false, text: `Sygnał ${side}, ale para jest już zajęta` };
+    case 'split': return { enter: false, text: `Nie wchodzi: zgoda ${proc}, a trzeba ${Math.round(p.CONSENSUS * 100)}%` };
+    case 'few': return { enter: false, text: `Nie wchodzi: ${n.n} głosów, a trzeba ${p.QUORUM}` };
+    case 'okno': return { enter: false, text: 'Poza oknem 07–17' };
+    default: return { enter: false, text: 'Nikt nie zabiera głosu' };
+  }
 }
