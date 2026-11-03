@@ -1,25 +1,16 @@
-HYPOTHESIS = """Wersja 2 strategii „simple” (wersja 1: tylko EUR/USD, spadek 50–150 pipsów z 10 świec, 8 transakcji OOS).
-Po gwałtownym spadku rynek jest wyprzedany: sprzedający kończą, a zielona świeca pokazuje powrót kupujących —
-oczekujemy krótkiego odbicia na long. To samo dotyczy każdej pary, więc spadek mierzymy w jednostkach zmienności
-pary (ATR14 · √N), a nie w pipsach: 50 pipsów na EUR/USD to coś innego niż 50 pipsów na EUR/GBP czy USD/JPY.
-Sprawdzamy: krótsze i dłuższe okno spadku, mniejszy i większy spadek, wejście po pierwszej albo po drugiej zielonej."""
+HYPOTHESIS = """„simple” na wszystkich 8 parach (wersja 1: tylko EUR/USD, najlepszy wariant IS: spadek 50 pipsów,
+wyjście TP 1 × ATR14, SL 0,5 × ATR14, max 24 świece). Po gwałtownym spadku z 10 świec rynek jest wyprzedany:
+sprzedający kończą, a pierwsza zielona świeca pokazuje powrót kupujących. Oczekujemy krótkiego odbicia na long.
+Ta sama reguła i to samo wyjście, bez zmian — tylko więcej par. Spadek w pipsach danej pary (JPY: 0,01)."""
 
-PARAMS = {
-    "okno": [10, 20],           # ile świec obejmuje spadek przed zieloną świecą
-    "spadek": [1.0, 1.35, 1.7],  # spadek ≥ tyle × ATR14 · √okno (EUR/USD, okno 10: ok. 37 / 50 / 63 pipsy)
-    "zielona": [1, 2],          # wejście po pierwszej zielonej albo po drugiej zielonej z rzędu
-}
+PARAMS = {"drop_pips": [50]}   # jak najlepszy wariant wersji 1
+
+EXITS = [{"kind": "atr", "n": 14, "tp": 1.0, "sl": 0.5, "cap": 24}]   # TP 1 × ATR14, SL 0,5 × ATR14, max 24 świece
 
 
 def signals(df, p, ind):
-    n, k, g = p["okno"], p["spadek"], p["zielona"]
+    pip = 0.01 if "JPY" in df.attrs.get("pair", "") else 0.0001
+    drop = df.close.shift(1) - df.close.shift(11)  # 10 świec zakończonych tuż przed bieżącą
     green = df.close > df.open
-    if g == 1:
-        trigger = green & ~green.shift(1, fill_value=False)                      # pierwsza zielona po czerwonej
-    else:
-        trigger = green & green.shift(1, fill_value=False) & ~green.shift(2, fill_value=False)   # druga zielona z rzędu
-    ref = g                                     # ostatnia świeca przed pierwszą zieloną
-    drop = df.close.shift(ref) - df.close.shift(ref + n)
-    atr = ind.atr(df, 14).shift(ref)
-    deep = drop <= -k * atr * (n ** 0.5)
-    return (trigger & deep).astype("int8")      # +1 = long, wszystkie pary
+    first_green = green & ~green.shift(1, fill_value=False)
+    return (first_green & (drop <= -p["drop_pips"] * pip)).astype("int8")   # +1 = long, wszystkie pary

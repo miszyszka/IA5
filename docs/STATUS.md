@@ -11,7 +11,7 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 - RSI 2 (#12): poza przestrzenią `ia5 search` (bez okna B11, dokładanie do 5 pozycji z wagą do 3, wyjście „seria RSI”, trend jako nachylenie EMA w ATR). IS t = 3,2 — słabiej niż najlepsze z poszukiwania (4,55); różnica jest w OOS. Profil: 71% wygranych, warianty ze stopem ≈ 0 w IS (przewaga = brak stopu), 5 najgorszych epizodów dokładania = −32% całego zysku, najgorszy −465 pipsów × waga (USD/JPY 29.09.2025).
 
 - Dwie nowe strategie do dashboardu (sesja 7, na prośbę Michała):
-  - `strategies/examples/simple_v2_wszystkie_pary.py` — „simple” na 8 parach: spadek w jednostkach ATR14·√okno (nie w pipsach), okno 10/20 świec, spadek 1,0/1,35/1,7, wejście po 1. albo 2. zielonej; 12 × 233 = 2796 wariantów. Na Yahoo 85–1 892 sygnałów na wariant (wersja 1: 8 transakcji OOS).
+  - `strategies/examples/simple_v2_wszystkie_pary.py` — „simple” 1:1 na 8 parach: spadek 50 pipsów z 10 świec + pierwsza zielona, wyjście TP 1 × ATR14, SL 0,5 × ATR14, max 24 (najlepszy wariant IS wersji 1); 1 wariant. (Poprawka: pierwsza wersja pliku była rozbudową z siatką 12 × 233 — nie o to chodziło.)
   - `strategies/examples/rsi_trend_v3_bez_cad_gbp.py` — RSI 2 bez USD/CAD i EUR/GBP (najwyższy spread względem ATR; najsłabsze też w IS). Pary wybrane po obejrzeniu OOS wersji 2 — OOS nie jest czysty, łącznie 1 + 24 + 24 prób.
 
 **Następne (Michał)**
