@@ -1,6 +1,36 @@
 {
  "strategies": [
   {
+   "id": "2W3eWBPjoorOBt24EX23",
+   "name": "RSI 3",
+   "run_id": "20261103-131828",
+   "created": 1793711908,
+   "verdict": "red",
+   "verdict_note": "brak przewagi",
+   "n_variants": 466,
+   "hypothesis": "Dlaczego ta strategia ma działać — 1–3 zdania, spisane PRZED liczeniem.",
+   "pairs": [
+    "AUDUSD",
+    "EURGBP",
+    "EURJPY",
+    "EURUSD",
+    "GBPUSD",
+    "USDCAD",
+    "USDCHF",
+    "USDJPY"
+   ],
+   "data_from": 1730073600,
+   "data_to": 1793707200,
+   "source": "yahoo",
+   "engine_version": "0.8.0",
+   "best_exit": "po 120 świecach",
+   "is_mean_r": 1.370134,
+   "oos_mean_r": -4.263555,
+   "oos_mean_pips": -53.32811,
+   "oos_trades": 22,
+   "demo": false
+  },
+  {
    "id": "FaC8c8947CS977MriiYh",
    "name": "simple",
    "run_id": "20261103-125900",
