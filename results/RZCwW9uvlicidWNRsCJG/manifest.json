@@ -1,10 +1,10 @@
 {
  "id": "RZCwW9uvlicidWNRsCJG",
  "name": "RSI jedna para",
- "run_id": "20261103-160755",
- "engine_version": "0.8.0",
+ "run_id": "20261105-205721",
+ "engine_version": "0.9.0",
  "code_hash": "261e758df7f609bd",
- "data_hash": "d2e0931ceff35b9d",
+ "data_hash": "b1d6df1e00064526",
  "data_source": "yahoo",
  "candles": "pełne",
  "pairs": [
@@ -26,7 +26,7 @@
  ],
  "n_variants": 1,
  "n_exits": 1,
- "oos_cutoff": 1777806900,
+ "oos_cutoff": 1777947300,
  "sizing": [
   5.0,
   10.0,
@@ -35,9 +35,20 @@
   30.0
  ],
  "pyramid": 5,
+ "max_pairs": 1,
+ "pair_rank": [
+  "USDCHF",
+  "AUDUSD",
+  "EURJPY",
+  "EURUSD",
+  "GBPUSD",
+  "USDJPY",
+  "USDCAD",
+  "EURGBP"
+ ],
  "hours": "bez okna",
  "data_from": 1730073600,
- "data_to": 1793718000,
+ "data_to": 1793905200,
  "data_clean": {
   "AUDUSD": {
    "version": "5",
@@ -113,16 +124,17 @@
   }
  },
  "skipped": {
-  "B8": 11,
+  "B8": 6,
   "brak_danych": 0,
   "rozgrzewka": 0,
   "poza_godzinami": 0,
   "luka_danych": 1,
-  "swieca_uzupelniona": 0
+  "swieca_uzupelniona": 0,
+  "limit_par": 250
  },
  "hypothesis": "Część RSI strategii łączonej „RSI 2 + Powrót” (D-050). Logika RSI 2 bez zmian (RSI14 przebija 70/30 przeciw\nwyraźnemu trendowi H1 = chwilowa przesada; dokładanie do 5 pozycji w jednej parze; wyjście TP 1,5 × ATR14 albo seria\n6 zamknięć RSI za 70/30, bez stopu, max 120 świec), wariant #12 — najlepszy w IS wersji 2 (EMA200, nachylenie 0,15,\nbez filtra szoku). Nowe: naraz otwarta jest najwyżej JEDNA para (seria dokładania w niej to jedna „transakcja”);\ngdy kilka par daje sygnał na tej samej świecy, wygrywa para z najwyższym średnim zyskiem w IS wersji 2 (PAIR_RANK).\nOOS nie jest czysty (wariant i ranking z danych, na których oglądano wersję 2).",
- "trades_rows": 599,
- "created": 1793722075,
- "seconds": 7.5,
- "verdict": "green"
+ "trades_rows": 354,
+ "created": 1793912241,
+ "seconds": 5.6,
+ "verdict": "yellow"
 }
