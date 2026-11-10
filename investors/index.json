@@ -1,20 +1,20 @@
 {
  "investors": [
   {
-   "id": "rrpC6pPtxgyGH4GQR6kr",
+   "id": "Zed3yb2lC8KLH5LgwOuF",
    "name": "Combined",
    "capital": 10000.0,
    "pct": 10.0,
-   "start": 1793722242,
-   "computedAt": 1794326514,
-   "dataTo": 1794326400,
-   "equity": 10300.7,
-   "return_pct": 3.007,
-   "closed": 4,
+   "start": 1794328948,
+   "computedAt": 1794330107,
+   "dataTo": 1794330000,
+   "equity": 10000.0,
+   "return_pct": 0.0,
+   "closed": 0,
    "open": 0,
    "strategies": [
-    "Powrót v2 jedna para",
-    "RSI jedna para"
+    "RSI 2",
+    "Powrót"
    ],
    "errors": 0
   }
