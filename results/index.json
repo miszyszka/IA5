@@ -1,36 +1,6 @@
 {
  "strategies": [
   {
-   "id": "RZCwW9uvlicidWNRsCJG",
-   "name": "RSI jedna para",
-   "run_id": "20261110-164131",
-   "created": 1794328891,
-   "verdict": "yellow",
-   "verdict_note": "zaliczone 3 z 4 testów",
-   "n_variants": 1,
-   "hypothesis": "Część RSI strategii łączonej „RSI 2 + Powrót” (D-050). Logika RSI 2 bez zmian (RSI14 przebija 70/30 przeciw\nwyraźnemu trendowi H1 = chwilowa przesada; dokładanie do 5 pozycji w jednej parze; wyjście TP 1,5 × ATR14 albo seria\n6 zamknięć RSI za 70/30, bez stopu, max 120 świec), wariant #12 — najlepszy w IS wersji 2 (EMA200, nachylenie 0,15,\nbez filtra szoku). Nowe: naraz otwarta jest najwyżej JEDNA para (seria dokładania w niej to jedna „transakcja”);\ngdy kilka par daje sygnał na tej samej świecy, wygrywa para z najwyższym średnim zyskiem w IS wersji 2 (PAIR_RANK).\nOOS nie jest czysty (wariant i ranking z danych, na których oglądano wersję 2).",
-   "pairs": [
-    "AUDUSD",
-    "EURGBP",
-    "EURJPY",
-    "EURUSD",
-    "GBPUSD",
-    "USDCAD",
-    "USDCHF",
-    "USDJPY"
-   ],
-   "data_from": 1730073600,
-   "data_to": 1794322800,
-   "source": "yahoo",
-   "engine_version": "0.9.0",
-   "best_exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
-   "is_mean_r": 0.353068,
-   "oos_mean_r": 0.237973,
-   "oos_mean_pips": 3.72529,
-   "oos_trades": 101,
-   "demo": false
-  },
-  {
    "id": "4tnm7GF0IMeRNDuIabi7",
    "name": "RSI 2",
    "run_id": "20261110-164114",
