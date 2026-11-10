@@ -31,36 +31,6 @@
    "demo": false
   },
   {
-   "id": "NrcZrD4fykbUX5eodAL5",
-   "name": "Powrót v2 jedna para",
-   "run_id": "20261110-164121",
-   "created": 1794328881,
-   "verdict": "yellow",
-   "verdict_note": "zaliczone 3 z 4 testów",
-   "n_variants": 1,
-   "hypothesis": "Część Powrót strategii łączonej „RSI 2 + Powrót” (D-050). Reguły FX-POWRÓT v2 bez zmian (impuls ≥ 2 × ATR100,\npierwsza czerwona w ciągu 3 świec, short, bez stopu, max 60 świec, jedna pozycja na parę). Wyjście: TP 1,5 × ATR14 —\nnajlepsze w IS spośród przybliżeń celu „połowa drogi”. Nowe: naraz otwarta jest najwyżej JEDNA para; gdy kilka par daje\nsygnał na tej samej świecy, wygrywa para z najwyższym średnim zyskiem w IS (PAIR_RANK, liczone 2026-11-03 na IS).",
-   "pairs": [
-    "AUDUSD",
-    "EURGBP",
-    "EURJPY",
-    "EURUSD",
-    "GBPUSD",
-    "USDCAD",
-    "USDCHF",
-    "USDJPY"
-   ],
-   "data_from": 1730073600,
-   "data_to": 1794322800,
-   "source": "yahoo",
-   "engine_version": "0.9.0",
-   "best_exit": "ATR14 TP 1.5× SL 0× max 60",
-   "is_mean_r": 0.307364,
-   "oos_mean_r": -0.045006,
-   "oos_mean_pips": 2.459208,
-   "oos_trades": 41,
-   "demo": false
-  },
-  {
    "id": "4tnm7GF0IMeRNDuIabi7",
    "name": "RSI 2",
    "run_id": "20261110-164114",
