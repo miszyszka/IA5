@@ -1,6 +1,7 @@
 /**
  * IA5 — pobieranie świec H1 z Yahoo do Firestore (CLAUDE.md, sekcja 5).
  * Uruchom raz: setup()  (backfill 730 dni + wyzwalacz co 1 min). Po wklejeniu nowej wersji: installTrigger().
+ * Świece dzienne (D-053): raz backfillD1() — potem tick() dopisuje je sam.
  * Źródło prawdy tego pliku: repo miszyszka/IA5, katalog apps_script/.
  *
  * Budżet Firestore (Z4): ok. 8 zapisów świec + 1–4 zapisy statusu na godzinę (po każdej rundzie z nową świecą)
@@ -10,6 +11,11 @@
  * najwyżej ok. 100 s na uruchomienie → ok. 30–40 min czasu wykonania na dobę (limit konta: 90 min).
  * Dziennik (meta/status.daily) i audyt świeca po świecy z 3 tygodni (meta/status.recent, ok. 4 KB): bez dodatkowych zapisów — jadą w zapisie statusu;
  * jednorazowo 16 odczytów (2 miesiące × 8 par) przy pierwszym uruchomieniu i przy rebuildDaily().
+ *
+ * Świece dzienne (D1, D-053): backfillD1() raz — cała historia Yahoo (interval=1d, od 1970: Yahoo zwraca od pierwszej
+ * notowanej daty, dla par FX ok. 2003), zapis w candles_d1/{PARA}_{RRRR}: ok. 200 zapisów jednorazowo.
+ * Potem tick() po północy w Londynie dopisuje zamkniętą świecę dnia: ok. 8 zapisów świec + 1 statusu na dobę,
+ * ponawia brakujące pary co 15 min. 0 odczytów.
  */
 const PROJECT_ID = 'project-ia5';
 const DB = 'projects/' + PROJECT_ID + '/databases/(default)';
@@ -42,7 +48,15 @@ function setup() {
 
 function backfill() { withLock_(() => run_('backfill')); }
 
-function tick() { withLock_(() => run_('tick')); }
+function tick() {
+  withLock_(() => {
+    run_('tick');
+    try { tickD1_(); } catch (e) { log_('tickD1', '-', 0, null, 'BŁĄD ' + e.message); } // D1 nigdy nie zatrzymuje H1
+  });
+}
+
+/** Ręcznie, raz (D-053): cała historia świec dziennych Yahoo dla 8 par → candles_d1/*, meta/status.d1. Można powtórzyć (upsert). */
+function backfillD1() { withLock_(() => runD1_('backfill', PAIRS, loadD1_(), nowSec())); }
 
 /** Ręcznie: przelicza dziennik świec (meta/status.daily) z dokumentów candles/* w Firestore. */
 function rebuildDaily() {
@@ -359,14 +373,15 @@ function crossCheck_(state) {
 
 // ---------- Yahoo ----------
 
-function fetchYahoo(ticker, params) {
-  const url = 'https://query1.finance.yahoo.com/v8/finance/chart/' +
-    encodeURIComponent(ticker) + '?interval=1h&' + params;
+function fetchYahoo(ticker, params) { return fetchYahooRaw_(ticker, 'interval=1h&' + params, parseYahoo); }
+
+function fetchYahooRaw_(ticker, params, parse) {
+  const url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(ticker) + '?' + params;
   let lastErr = '';
   for (let i = 0; i < 3; i++) {
     try {
       const r = UrlFetchApp.fetch(url, { muteHttpExceptions: true, headers: { 'User-Agent': 'Mozilla/5.0' } });
-      if (r.getResponseCode() === 200) return parseYahoo(JSON.parse(r.getContentText()));
+      if (r.getResponseCode() === 200) return parse(JSON.parse(r.getContentText()));
       lastErr = 'HTTP ' + r.getResponseCode();
     } catch (e) {
       lastErr = e.message;
@@ -387,6 +402,149 @@ function parseYahoo(j) {
     out.push({ ts: res.timestamp[i], o: o, h: h, l: l, c: c });
   }
   return out;
+}
+
+// ---------- świece dzienne D1 (D-053) ----------
+// Ta sama logika dnia co runner/ia5/daily.py. Znacznik = czas otwarcia = północ dnia w strefie Yahoo (dla par FX
+// Europe/London). Świeca dnia d jest zamknięta, gdy w tej strefie zaczął się dzień d+1 (+60 s, jak D2).
+
+const D1_TZ = 'Europe/London';
+const D1_RETRY_S = 15 * 60;   // brakująca świeca dnia: ponowienie co 15 min
+const D1_KEEP = 4;            // tyle ostatnich zamkniętych dni nadpisujemy przy każdym pobraniu (Yahoo je koryguje)
+
+function localStamp_(ts, tz) { return Utilities.formatDate(new Date(ts * 1000), tz, 'yyyy-MM-dd HH:mm:ss'); }
+
+function isExpectedDay_(day) {           // 'RRRR-MM-DD': dzień roboczy, bez 25.12 i 1.01 (D-028)
+  const d = new Date(day + 'T12:00:00Z');
+  const md = day.slice(5);
+  return d.getUTCDay() >= 1 && d.getUTCDay() <= 5 && md !== '12-25' && md !== '01-01';
+}
+
+function prevDay_(day) { return new Date(new Date(day + 'T12:00:00Z').getTime() - 86400000).toISOString().slice(0, 10); }
+
+/** Najnowszy dzień, którego zamkniętej świecy oczekujemy: ostatni dzień roboczy przed dzisiejszym w strefie Yahoo. */
+function expectedDayD1_(now, tz) {
+  let d = prevDay_(localStamp_(now - 60, tz).slice(0, 10));
+  for (let i = 0; i < 10 && !isExpectedDay_(d); i++) d = prevDay_(d);
+  return d;
+}
+
+function parseYahooD1_(j) {
+  const res = j && j.chart && j.chart.result && j.chart.result[0];
+  if (!res) throw new Error('brak danych w odpowiedzi');
+  const meta = res.meta || {};
+  if (meta.dataGranularity && meta.dataGranularity !== '1d') throw new Error('Yahoo zwróciło interwał ' + meta.dataGranularity + ' zamiast 1d');
+  const tz = meta.exchangeTimezoneName || D1_TZ;
+  if (!res.timestamp) return { tz: tz, bars: [] };
+  const q = res.indicators.quote[0];
+  const bars = [];
+  for (let i = 0; i < res.timestamp.length; i++) {
+    const o = q.open[i], h = q.high[i], l = q.low[i], c = q.close[i];
+    if ([o, h, l, c].some(v => v === null || v === undefined)) continue;
+    bars.push({ ts: res.timestamp[i], o: o, h: h, l: l, c: c });
+  }
+  return { tz: tz, bars: bars };
+}
+
+function loadD1_() {
+  const raw = PropertiesService.getScriptProperties().getProperty('d1');
+  return raw ? JSON.parse(raw) : { pairs: {}, tz: D1_TZ };
+}
+
+function saveD1_(st) { PropertiesService.getScriptProperties().setProperty('d1', JSON.stringify(st)); }
+
+/** Z tick(): tanio — bez zapytań, gdy każda para ma świecę oczekiwanego dnia albo ostatnia próba była < 15 min temu. */
+function tickD1_() {
+  const st = loadD1_();
+  if (!st.backfilled) return;            // najpierw backfillD1() — inaczej liczniki świec nie miałyby sensu
+  const now = nowSec();
+  const exp = expectedDayD1_(now, st.tz || D1_TZ);
+  const todo = PAIRS.filter(p => !(st.pairs[p.name] && st.pairs[p.name].lastDay >= exp));
+  if (!todo.length || now - (st.triedAt || 0) < D1_RETRY_S) return;
+  st.triedAt = now;
+  saveD1_(st);
+  runD1_('tick', todo, st, now);
+}
+
+function runD1_(mode, todo, st, now) {
+  const errors = [];
+  const updated = {};
+  todo.forEach(p => {
+    try {
+      const params = 'interval=1d&' + (mode === 'backfill' ? 'period1=0&period2=' + now : 'range=10d');
+      const got = fetchYahooRaw_(p.yahoo, params, parseYahooD1_);
+      const tz = st.tz = got.tz;
+      const today = localStamp_(now - 60, tz).slice(0, 10);
+      const ps = mode === 'backfill' ? { lastTs: 0, count: 0, last: [] } : (st.pairs[p.name] || { lastTs: 0, count: 0, last: [] });
+      const flags = [];
+      const bars = [];
+      got.bars.forEach(b => {
+        const loc = localStamp_(b.ts, tz);
+        b.day = loc.slice(0, 10);
+        if (b.day >= today) return;                                   // dzień w trakcie (D2) — nigdy do bazy
+        if (loc.slice(11) !== '00:00:00') { flags.push('ts@' + b.day); return; } // nie świeca dnia — flaga, nie cicha naprawa
+        bars.push(b);
+      });
+      const from = mode === 'backfill' ? 0 : ps.lastTs - D1_KEEP * 86400;
+      const keep = bars.filter(b => b.ts >= from);
+      if (!keep.length) { if (flags.length) log_('D1 ' + mode, p.name, 0, null, flags.slice(0, 5).join(' ')); return; }
+      keep.forEach(b => {
+        if (!(b.o > 0 && b.h > 0 && b.l > 0 && b.c > 0)) flags.push('cena<=0@' + b.day);
+        if (b.h < Math.max(b.o, b.c) || b.l > Math.min(b.o, b.c)) flags.push('ohlc@' + b.day);
+        const old = (ps.last || []).find(x => x.ts === b.ts);
+        if (old && Math.abs(old.c - b.c) > 0.5 * p.pip) flags.push('revised@' + b.day);
+      });
+      const fresh = keep.filter(b => b.ts > ps.lastTs);
+      // ponowienie bez nowego dnia i bez korekty Yahoo — bez zapisu (Z4)
+      if (mode === 'tick' && !fresh.length && !flags.some(f => f.startsWith('revised'))) return;
+      writeBarsD1_(p.name, keep, tz);
+      const newest = keep[keep.length - 1];
+      ps.count = mode === 'backfill' ? keep.length : ps.count + fresh.length;
+      if (mode === 'backfill' || !ps.firstDay) ps.firstDay = keep[0].day;
+      ps.lastTs = Math.max(ps.lastTs, newest.ts);
+      ps.lastDay = ps.lastDay && ps.lastDay > newest.day ? ps.lastDay : newest.day;
+      ps.last = keep.slice(-D1_KEEP).map(b => ({ ts: b.ts, c: b.c }));
+      ps.flags = flags.slice(-10);
+      ps.savedAt = nowSec();
+      st.pairs[p.name] = ps;
+      updated[p.name] = { firstDay: ps.firstDay, lastTs: ps.lastTs, lastDay: ps.lastDay, count: ps.count, flags: ps.flags, savedAt: ps.savedAt };
+      log_('D1 ' + mode, p.name, fresh.length, null, (ps.firstDay + ' – ' + ps.lastDay + ' ' + flags.slice(0, 5).join(' ')).trim());
+    } catch (e) {
+      errors.push(p.name + ': ' + e.message);
+      log_('D1 ' + mode, p.name, 0, null, 'BŁĄD ' + e.message);
+    }
+  });
+  if (mode === 'backfill' && !errors.length) st.backfilled = true;
+  saveD1_(st);
+  if (mode === 'tick' && !Object.keys(updated).length && !errors.length) return;
+  const total = PAIRS.reduce((s, p) => s + ((st.pairs[p.name] || {}).count || 0), 0);
+  const fields = { tz: st.tz || D1_TZ, totalBars: total,
+    lastRun: { mode: mode, at: nowSec(), ok: !errors.length, error: errors.join('; ') || null }, pairs: updated };
+  const paths = ['d1.tz', 'd1.totalBars', 'd1.lastRun'].concat(Object.keys(updated).map(p => 'd1.pairs.' + p));
+  commit_([{ update: { name: DB + '/documents/meta/status', fields: { d1: toValue_(fields) } }, updateMask: { fieldPaths: paths } }]);
+  if (errors.length && mode === 'backfill') throw new Error('backfillD1: ' + errors.join('; '));
+}
+
+/** candles_d1/{PARA}_{RRRR} (rok wg dnia w strefie Yahoo): pola pair, year, tz, bars { ts: [o, h, l, c] } — upsert (D3). */
+function writeBarsD1_(pair, bars, tz) {
+  const groups = {};
+  bars.forEach(b => { const y = b.day.slice(0, 4); (groups[y] = groups[y] || []).push(b); });
+  commit_(Object.keys(groups).map(y => {
+    const fields = {};
+    const paths = ['pair', 'year', 'tz'];
+    groups[y].forEach(b => {
+      fields[String(b.ts)] = { arrayValue: { values: [b.o, b.h, b.l, b.c].map(v => ({ doubleValue: v })) } };
+      paths.push('bars.`' + b.ts + '`');
+    });
+    return {
+      update: {
+        name: DB + '/documents/candles_d1/' + pair + '_' + y,
+        fields: { pair: { stringValue: pair }, year: { stringValue: y }, tz: { stringValue: tz }, bars: { mapValue: { fields: fields } } },
+      },
+      updateMask: { fieldPaths: paths },
+      updateTransforms: [{ fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' }],
+    };
+  }));
 }
 
 // ---------- Firestore (REST, upsert przez commit z updateMask — D3, bez odczytów) ----------

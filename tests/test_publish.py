@@ -101,3 +101,16 @@ def test_publish_forest_tylko_zmiany(tmp_path, monkeypatch):
     (src / "journal" / "2026-12.parquet").write_bytes(b"b")
     assert pb.publish_forest(src, log=lambda m: None) == "abc1234"
     assert sorted(f.name for f in (repo / "forest" / "journal").iterdir()) == ["2026-12.parquet"]
+
+
+def test_publish_candles_d1_only_when_changed(repo):
+    """D-053: świece dzienne — plik pary i manifest; bez zmian = bez commitu."""
+    from test_daily import d1_frame
+
+    d1 = {"EURUSD": d1_frame(), "USDJPY": d1_frame(seed=2)}
+    assert publish.publish_candles_d1(d1, "Europe/London", log=lambda m: None)
+    files = ls_remote_files(repo)
+    assert {"candles_d1/EURUSD.parquet", "candles_d1/USDJPY.parquet", "candles_d1/manifest.json"} <= files
+    m = json.loads((publish.DATA_REPO / "candles_d1" / "manifest.json").read_text())
+    assert m["interval"] == "1d" and m["files"]["candles_d1/EURUSD.parquet"]["first_day"] == "2024-01-02"
+    assert publish.publish_candles_d1(d1, "Europe/London", log=lambda m: None) is None

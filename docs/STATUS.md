@@ -2,6 +2,15 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-10 — świece dzienne D1 (D-053)
+
+**Zrobione:** Apps Script `backfillD1()` + dopisywanie zamkniętego dnia w `tick()`; Firestore `candles_d1/{PARA}_{RRRR}`, `meta/status.d1`; reguła odczytu dla właściciela; Mac: kopia `~/.ia5/data/yahoo_d1/`, kontrola (`ia5/daily.py`), publikacja `candles_d1/` na gałęzi `data`, kontrola „Świece dzienne (D1)” w przeglądzie zdrowia; testy (`tests/test_daily.py`, publikacja). Logika dnia w JS i Pythonie sprawdzona na tych samych przypadkach; Apps Script przetestowany na symulowanym Yahoo (Node). CLAUDE.md 0.44 (D7, D7a), STRATEGIE.md 0.40.
+
+**Następne (Michał):** `docs/SETUP.md`, sekcja „Świece dzienne D1”: Code.gs → `backfillD1()` → `installTrigger()` → reguły → restart `ia5 start`.
+
+**Znane problemy / do sprawdzenia na żywych danych:** nie dało się zapytać Yahoo z tej sesji — znacznik północy w Londynie i początek historii (ok. 2003) to wiedza o Yahoo, nie pomiar. Jeśli Yahoo zwróci inną strefę lub godzinę, `backfillD1` zapisze flagi `ts@…` w arkuszu `log` zamiast świec — wtedy do poprawki. Strategie jeszcze nie widzą D1 (osobna decyzja).
+
+
 ## 2026-11-03 — maile bez Maca (D-052)
 
 **Zrobione:** workflow `alerts.yml`, `ia5 live`, wyzwalacz w Apps Script, mail ostrzegawczy, dziennik maili na gałęzi `data`, stan inwestora niezależny od Maca.

@@ -6,6 +6,7 @@ service cloud.firestore {
     match /meta/{d}     { allow read: if true;      allow write: if false; }
     match /runner/{d}   { allow read: if true;      allow write: if false; }
     match /candles/{d}  { allow read: if isOwner(); allow write: if false; }
+    match /candles_d1/{d} { allow read: if isOwner(); allow write: if false; }   // D-053: świece dzienne Yahoo
     match /strategies/{id} {
       allow read, delete: if isOwner();
       allow create: if isOwner()

@@ -141,8 +141,10 @@ def local_data(home: Path, yahoo: dict) -> dict:
     import json
 
     data = home / "data"
-    foreign = [f.name for f in data.iterdir() if f.name not in ("yahoo", "h1_ready")] if data.exists() else []
-    foreign += [f"yahoo/{f.name}" for f in (data / "yahoo").iterdir() if f.stem not in PAIRS] if (data / "yahoo").exists() else []
+    foreign = [f.name for f in data.iterdir() if f.name not in ("yahoo", "h1_ready", "yahoo_d1")] if data.exists() else []
+    for sub in ("yahoo", "yahoo_d1"):   # D-053: obok H1 także kopia świec dziennych Yahoo
+        if (data / sub).exists():
+            foreign += [f"{sub}/{f.name}" for f in (data / sub).iterdir() if f.suffix != ".parquet" or f.stem not in PAIRS]
     ready = data / "h1_ready"
     srcs = {}
     for f in sorted(ready.glob("*.parquet")) if ready.exists() else []:
@@ -157,6 +159,55 @@ def local_data(home: Path, yahoo: dict) -> dict:
                      "ia5 start usuwa je przy każdym starcie i synchronizacji (D-041) — uruchom go ponownie.")
     return check("local_data", "Dane lokalne", "ok",
                  f"Tylko świece Yahoo: {len(yahoo)} par, {fmt(n)} świec; do liczenia {len(srcs)} par (źródło: Yahoo).")
+
+
+def daily_candles(status: dict, d1: dict | None, now: int) -> dict:
+    """D-053: świece dzienne Yahoo — czy są dla 8 par, czy są świeże, czy Mac ma kopię zgodną z Firestore, poprawność.
+    Luki, płaskie świece i świece w weekend w starej historii Yahoo to informacja, nie problem (nic nie liczy na D1)."""
+    from .daily import D1_TZ, d1_flags, days_behind, expected_day
+
+    name = "Świece dzienne (D1)"
+    st = status.get("d1") or {}
+    remote, tz = st.get("pairs") or {}, st.get("tz") or D1_TZ
+    if not remote and not d1:
+        return check("daily", name, "warn", "W bazie nie ma jeszcze świec dziennych.",
+                     fix="W Apps Script wklej nowy Code.gs i uruchom raz backfillD1() (docs/SETUP.md, „Świece dzienne”).")
+    exp = expected_day(now, tz)
+    state, problems, detail = "ok", [], []
+    for p in PAIRS:
+        df = (d1 or {}).get(p)
+        f = d1_flags(df, tz)
+        r = remote.get(p) or {}
+        if not f["bars"]:
+            state = "bad"
+            problems.append(f"{label(p)}: brak świec D1 na Macu")
+            continue
+        behind = days_behind(f["last_day"], exp)
+        hard = f["ohlc"] + f["price"] + f["offgrid"] + f["dup_days"]
+        line = (f"{label(p)}: {f['first_day']} – {f['last_day']}, {fmt(f['bars'])} świec; brakujące dni robocze "
+                f"{fmt(f['missing'])}, płaskie {fmt(f['flat'])}, w weekend/święto {fmt(f['weekend'])}")
+        if hard:
+            state = "bad"
+            problems.append(f"{label(p)}: złe OHLC {f['ohlc']}, cena ≤ 0 {f['price']}, czas nie o północy {f['offgrid']}, "
+                            f"dwa wpisy na dzień {f['dup_days']}")
+        if behind > 1:   # jeden dzień zwłoki: Yahoo publikuje świecę dnia po północy, Apps Script ponawia
+            state = max(state, "warn", key=RANK.get)
+            problems.append(f"{label(p)}: ostatnia świeca {f['last_day']}, oczekiwana {exp}")
+        if r and int(r.get("lastTs") or 0) > int(df["ts"].max()):
+            state = max(state, "warn", key=RANK.get)
+            problems.append(f"{label(p)}: na Macu starsza kopia niż w Firestore")
+        if r.get("flags"):
+            detail.append(f"{label(p)} — flagi Apps Script: {', '.join(map(str, r['flags'][-3:]))}")
+        detail.append(line)
+    if state == "ok":
+        n = sum(len(v) for v in (d1 or {}).values() if v is not None)
+        first = min(d1_flags(v, tz)["first_day"] for v in d1.values() if v is not None and len(v))
+        return check("daily", name, "ok", f"8 par, {fmt(n)} świec dziennych od {first}; ostatni oczekiwany dzień {exp} jest.",
+                     detail)
+    return check("daily", name, state, problems[0] + (f" (i {len(problems) - 1} więcej)" if len(problems) > 1 else "") + ".",
+                 problems + detail,
+                 "Zwłoka: Apps Script ponawia co 15 min, ia5 start kopiuje co godzinę. Błędne świece zostają w surowej "
+                 "kopii z flagą (D5) — nic na nich nie liczymy (D-053).")
 
 
 def mac_copy(status: dict, yahoo: dict) -> dict:
@@ -401,6 +452,11 @@ def facts(status: dict, yahoo: dict, cov: dict | None, docs: list[dict] | None, 
         done = sum(1 for d in docs if d.get("status") == "policzona")
         frozen_n = sum(1 for d in docs if d.get("frozenAt"))
         out.append(f"Strategie: {len(docs)} w bazie, {done} policzonych, {frozen_n} zamrożonych (forward test).")
+    d1s = status.get("d1") or {}
+    if d1s.get("pairs"):
+        first = min((v.get("firstDay") or "9999") for v in d1s["pairs"].values())
+        out.append(f"Świece dzienne (D1) Yahoo: {fmt(d1s.get('totalBars') or sum(v.get('count', 0) for v in d1s['pairs'].values()))} "
+                   f"w Firestore, {len(d1s['pairs'])} par, od {first} — przechowywane, liczenie nadal tylko na H1 (D-053).")
     if status.get("dataSha"):
         out.append(f"Gałąź data: commit {status['dataSha'][:7]}.")
     return out
@@ -417,6 +473,7 @@ def run(
     now: int | None = None,
     ready: dict | None = None,
     code: dict | None = None,
+    d1: dict | None = None,
 ) -> dict:
     now = now or int(time.time())
     checks = [
@@ -431,6 +488,8 @@ def run(
         publishing(status, publish_error),
         strategies(docs, beat_state, now),
     ]
+    if d1 is not None:
+        checks.append(daily_candles(status, d1, now))
     if code is not None:
         checks.append(code_version(code))
     if home is not None:

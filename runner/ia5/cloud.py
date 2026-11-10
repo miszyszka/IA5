@@ -2,7 +2,8 @@
 
 Budżet (Z4): heartbeat co 30 s ≈ 2 880 zapisów/dobę, gdy program działa; kopia świec Yahoo: ok. 200 odczytów
 za pierwszym razem, potem 16 (poprzedni i bieżący miesiąc × 8 par) co godzinę ≈ 400 odczytów/dobę;
-przegląd zdrowia: 1 odczyt meta/status + lista strategii (kilka–kilkanaście) co godzinę.
+przegląd zdrowia: 1 odczyt meta/status + lista strategii (kilka–kilkanaście) co godzinę;
+świece dzienne (D-053): ok. 200 odczytów za pierwszym razem, potem ok. 16 raz na dobę (gdy przybył nowy dzień).
 """
 from __future__ import annotations
 
@@ -98,6 +99,58 @@ def sync_yahoo(folder, log=print) -> dict[str, pd.DataFrame]:
         last = f", ostatnia {datetime.fromtimestamp(int(df.ts.iloc[-1]), timezone.utc):%Y-%m-%d %H:%M} UTC" if len(df) else ""
         log(f"  Yahoo {pair}: {len(df):,} świec{last}")
     return out
+
+
+def yahoo_d1_docs(pair: str, years: list[str] | None):
+    col = db().collection("candles_d1")
+    if years is None:
+        return [s.to_dict() for s in col.where("pair", "==", pair).stream()]
+    snaps = [col.document(f"{pair}_{y}").get() for y in years]
+    return [s.to_dict() for s in snaps if s.exists]
+
+
+def sync_yahoo_d1(folder, status: dict | None = None, log=print) -> dict[str, pd.DataFrame]:
+    """D-053: kopia świec dziennych Yahoo z Firestore (`candles_d1/{PARA}_{RRRR}`) do folder/{PARA}.parquet.
+
+    Budżet (Z4): pierwszy raz pełny odczyt (ok. 20–30 dokumentów na parę ≈ 200 odczytów), potem para jest pomijana,
+    gdy jej ostatnia świeca i liczba świec w kopii = `meta/status.d1.pairs` (0 odczytów — zwykle 23 z 24 godzin);
+    inaczej lata od ostatniej świecy kopii (zwykle 1–2 dokumenty na parę ≈ 16 odczytów raz na dobę). Gdy po
+    doczytaniu liczba świec nie zgadza się ze statusem (np. ponowny backfill w Apps Script), pełny odczyt pary.
+    """
+    from . import daily
+
+    folder.mkdir(parents=True, exist_ok=True)
+    remote = ((status or {}).get("d1") or {}).get("pairs") or {}
+    tz = ((status or {}).get("d1") or {}).get("tz") or daily.D1_TZ
+    now = int(datetime.now(timezone.utc).timestamp())
+    out = {}
+    for pair in PAIRS:
+        path = folder / f"{pair}.parquet"
+        old = pd.read_parquet(path) if path.exists() else None
+        if old is not None and old.empty:
+            old = None
+        r = remote.get(pair) or {}
+        if old is not None and r and int(r.get("lastTs") or 0) == int(old["ts"].max()) and int(r.get("count") or 0) == len(old):
+            out[pair] = old
+            continue
+        years = None if old is None else daily.years_to_read(int(old["ts"].max()), now, tz)
+        df = daily.merge(old, _bars_to_df(yahoo_d1_docs(pair, years)), years, tz)
+        if years is not None and r.get("count") and int(r["count"]) != len(df):
+            df = daily.merge(None, _bars_to_df(yahoo_d1_docs(pair, None)), None, tz)
+        if df.empty and old is None:
+            continue
+        tmp = path.with_suffix(".tmp")
+        df.to_parquet(tmp, index=False)
+        tmp.replace(path)
+        out[pair] = df
+        if len(df):
+            first, last = daily.day_of([df.ts.iloc[0], df.ts.iloc[-1]], tz)
+            log(f"  Yahoo D1 {pair}: {len(df):,} świec, {first} – {last}")
+    return out
+
+
+def load_yahoo_d1(folder) -> dict[str, pd.DataFrame]:
+    return {p: pd.read_parquet(folder / f"{p}.parquet") for p in PAIRS if (folder / f"{p}.parquet").exists()}
 
 
 def load_yahoo(folder) -> dict[str, pd.DataFrame]:

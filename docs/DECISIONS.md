@@ -5,6 +5,16 @@ Najnowsze na górze.
 
 ---
 
+### D-053 · 2026-11-10 · Świece dzienne D1 z Yahoo, cała dostępna historia
+- **Decyzja (Michał):** „przebuduj system tak, żeby do wszystkich moich par walutowych dodał także świece dzienne tak daleko, jak sięga Yahoo”. Zmienia D7: źródło nadal tylko Yahoo, ale dwie serie — H1 (730 dni) i D1 (cała historia, dla par FX od ok. 2003). Nowa zasada D7a.
+- **Przepływ:** Apps Script `backfillD1()` raz (`interval=1d`, `period1=0`), potem `tick()` po północy w Londynie dopisuje zamknięty dzień (ostatnie 4 dni nadpisywane, zapis tylko przy nowym dniu albo korekcie) → Firestore `candles_d1/{PARA}_{RRRR}` + `meta/status.d1` → Mac `data/yahoo_d1/` → gałąź `data` `candles_d1/{PARA}.parquet` + manifest → kontrola „Świece dzienne (D1)” w przeglądzie zdrowia.
+- **Znacznik:** czas otwarcia = północ dnia w strefie Yahoo (`meta.exchangeTimezoneName`, dla par FX `Europe/London`), zgodnie z D1. Dzień zamknięty, gdy w tej strefie zaczął się następny (+ 60 s, jak D2). Wpis Yahoo nie o północy = flaga i pominięcie (jak D-042), nie cicha naprawa.
+- **Zakres:** D1 jest przechowywana, sprawdzana i publikowana. Silnik, skaner, FOREST i inwestorzy liczą nadal tylko na H1 — kontrakt strategii bez zmian. Udostępnienie D1 strategiom (np. jako tło trendu z długą historią) to osobna decyzja: wymaga zasad look-ahead (dzień d widoczny dopiero po jego zamknięciu) i rozstrzygnięcia, że granica dnia Yahoo (północ w Londynie) nie pokrywa się z dniem z `resample` na H1.
+- **Powód:** dłuższa historia do hipotez i filtrów dziennych; SMA200 na D1 zbudowana z H1 zjada ~40% próby H1 (STRATEGIE.md, „Krótka historia”).
+- **Zużycie Firestore (Z4):** Apps Script: backfill ok. 200 zapisów raz, potem ok. 9 zapisów na dobę, 0 odczytów. Mac: pierwsza kopia ok. 200 odczytów, potem ok. 16 odczytów raz na dobę (para pomijana, gdy kopia = `meta/status.d1`). Dashboard: 0 nowych odczytów.
+- **Odrzucone:** świece D1 składane z H1 (tylko 730 dni — nie o to chodziło); osobny dokument na miesiąc (12 razy więcej zapisów przy backfillu, bez korzyści); pobieranie D1 bezpośrednio przez Maca z Yahoo (łamie przepływ z D7: Apps Script → Firestore → Mac); interwał 1wk/1mo (nikt o to nie prosił).
+- **Ryzyko:** stara historia Yahoo FX ma luki, płaskie świece i błędne skoki — kontrola je pokazuje, nic na nich jeszcze nie liczymy. Granica dnia Yahoo wynika z jego strefy, a nie z zamknięcia sesji FX w Nowym Jorku (22:00 UTC).
+
 ### D-052 · 2026-11-03 · Inwestorzy i maile w GitHub Actions
 - **Decyzja:** po komplecie świec Apps Script wywołuje `repository_dispatch`; workflow `alerts.yml` uruchamia `ia5 live`. Historia świec z gałęzi `data`, najnowsze miesiące z Firestore; ten sam kod strategii i silnik. Wysyłka SMTP z sekretu. Dziennik maili na gałęzi `data`. Mac przejmuje pracę tylko, gdy ostatni przebieg Actions ma ponad 2 h. Zapasowy cron co godzinę obsługuje nowych i usuwanych inwestorów.
 - **Powód:** maile bez Maca, jak najszybciej po świecy. Strategie to dowolny Python, więc Apps Script nie może ich liczyć.

@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.43 · 2026-11-03 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku; `ia5 search` (D-044); zakładka Inwestorzy (D-045); eksperyment FOREST (D-048, v2: D-049) — `docs/STATUS.md`
+Wersja 0.44 · 2026-11-10 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku; `ia5 search` (D-044); zakładka Inwestorzy (D-045); eksperyment FOREST (D-048, v2: D-049); świece dzienne D1 (D-053) — `docs/STATUS.md`
 
 ---
 
@@ -27,7 +27,8 @@ Zakładka **FOREST** (D-048, v2: D-049): demokratyczny eksperyment — do 1000 r
 - **D4.** Dane surowe są niezmienne. Czyszczenie (weekendowe świece, odrzucone błędy) to osobna, jawna i wersjonowana warstwa.
 - **D5.** Każda świeca przechodzi kontrolę jakości (kalendarz sesji bez weekendów i świąt 24/25.12 i 31.12/1.01 — D-028): `high ≥ max(open, close)`, `low ≤ min(open, close)`, ceny > 0, `ts % 3600 == 0`, brak luk w sesji (tydzień FX: niedziela ~21/22:00 → piątek ~21/22:00 UTC, zależnie od czasu letniego w USA), test krzyżowy par (EUR/JPY ≈ EUR/USD × USD/JPY; EUR/GBP ≈ EUR/USD ÷ GBP/USD). Naruszenie = flaga w statusie, **nigdy cicha naprawa**.
 - **D6.** Każdy wynik backtestu zapisuje hash danych, hash kodu strategii i `ENGINE_VERSION`. Wynik bez tych trzech pól nie istnieje.
-- **D7.** **Jedno źródło cen: świece H1 Yahoo** (Apps Script → Firestore → kopia na Macu) — do backtestów, forward testów, skanera i monitoringu (D-039). Innych źródeł nie używamy ani nie doklejamy; dane z `research/` służą tylko do szukania hipotez, nigdy do liczenia wyników. Historia zaczyna się ok. 730 dni wstecz (tyle udostępnia Yahoo) i rośnie z każdą godziną. **Lokalnie na Macu tylko świece Yahoo** (`data/yahoo/` — 8 par) i dane do liczenia zbudowane z nich (`data/h1_ready/`); wszystko inne w `~/.ia5/data` `ia5 start` usuwa przy każdym starcie i synchronizacji, a silnik odmawia liczenia na danych, których opis nie mówi „yahoo” (D-041).
+- **D7.** **Jedno źródło cen: Yahoo** (Apps Script → Firestore → kopia na Macu) — do backtestów, forward testów, skanera i monitoringu (D-039). Innych źródeł nie używamy ani nie doklejamy; dane z `research/` służą tylko do szukania hipotez, nigdy do liczenia wyników. Dwie serie: **świece H1** — historia ok. 730 dni wstecz (tyle udostępnia Yahoo), rośnie z każdą godziną; **świece dzienne D1** (D-053) — cała historia, jaką Yahoo ma (dla par FX od ok. 2003), rośnie o każdy dzień. Silnik, skaner, las i inwestorzy liczą **tylko na H1**; D1 jest przechowywana, sprawdzana i publikowana — użycie w liczeniu wymaga osobnej decyzji. **Lokalnie na Macu tylko świece Yahoo** (`data/yahoo/` H1 i `data/yahoo_d1/` D1 — po 8 par) i dane do liczenia zbudowane z H1 (`data/h1_ready/`); wszystko inne w `~/.ia5/data` `ia5 start` usuwa przy każdym starcie i synchronizacji, a silnik odmawia liczenia na danych, których opis nie mówi „yahoo” (D-041).
+- **D7a.** Świeca D1 (D-053): znacznik = czas otwarcia = **północ dnia w strefie Yahoo** (dla par FX `Europe/London`: zimą 00:00 UTC, latem 23:00 UTC dnia poprzedniego). Zapisujemy tylko dni zamknięte (w tej strefie zaczął się już następny dzień, + 60 s). Wpis nie o północy, zły OHLC, cena ≤ 0 = flaga, nigdy cicha naprawa (D5). Oczekiwane dni: poniedziałek–piątek bez 25.12 i 1.01; luki, płaskie świece i świece weekendowe w starej historii Yahoo są tylko pokazywane.
 - **D8.** Backtest liczy na kopii świec Yahoo po **warstwie czyszczenia** (`ia5/clean.py`, dane w `data/h1_ready/`, wersja w raporcie): świeca łamiąca D5 jest odrzucana; świeca poza sesją jest odrzucana, gdy to sobota/święto albo świeca płaska (Yahoo powtarza wtedy starą cenę); brak **≤ 3 godzin** przy weekendzie/święcie to **granica tygodnia** (Yahoo zaczyna i kończy tydzień inaczej niż kalendarz) — nic; inny brak ≤ 3 h → uzupełniony liniowo od zamknięcia przed nim do otwarcia po nim, znacznik `filled`; brak > 3 h → **przerwa w danych** (`gap_before`), także gdy brakuje we wszystkich parach naraz. Liczymy wszystkie pary z `COMPUTE_PAIRS` (8); para z mniej niż ~4 tygodniami świec jest pomijana. Surowa kopia (`data/yahoo/`) zostaje nietknięta; liczby odrzuconych, uzupełnionych i przerw są w raporcie.
 
 ### Backtest (model wykonania)
@@ -56,7 +57,7 @@ Zakładka **FOREST** (D-048, v2: D-049): demokratyczny eksperyment — do 1000 r
 - **S3.** Żadnych sekretów w repo. Klucz service account leży w `~/.ia5/`, `.gitignore` od pierwszego commita. Konfiguracja webowa Firebase jest publiczna z natury — chronią ją reguły Firestore i ograniczenie klucza API do domeny strony.
 
 ### Budżet zasobów (darmowy plan Firebase: 50 000 odczytów i 20 000 zapisów dziennie)
-- **Z1.** Świece w Firestore grupowane: **1 dokument = 1 para × 1 miesiąc**. Nigdy 1 świeca = 1 dokument (sam backfill ~100 tys. świec zjadłby 5 dni limitu zapisów).
+- **Z1.** Świece w Firestore grupowane: **1 dokument = 1 para × 1 miesiąc**. Nigdy 1 świeca = 1 dokument (sam backfill ~100 tys. świec zjadłby 5 dni limitu zapisów); świece D1: **1 dokument = 1 para × 1 rok** (D-053).
 - **Z2.** Dashboard nie czyta świec ani wyników z Firestore — czyta je z gałęzi `data` na GitHub. Z Firestore czyta tylko `meta/status`, `runner/heartbeat`, listę `strategies` i listę `investors` (D-045, zgoda Michała z 2026-11-03) (nasłuch `onSnapshot`, bez odpytywania w pętli).
 - **Z3.** Liczniki (np. liczba świec) są przechowywane w `meta/status`, nigdy liczone zapytaniem.
 - **Z4.** Każda nowa funkcja, która czyta lub zapisuje Firestore, ma w commicie oszacowanie dziennego zużycia.
@@ -125,7 +126,7 @@ flowchart LR
 
 | Miejsce | Rola | Pisze do | Czyta z |
 |---|---|---|---|
-| Google Apps Script (+ arkusz) | Pobiera świece, prowadzi log uruchomień | Firestore `candles/*`, `meta/status`; arkusz `log` | Yahoo |
+| Google Apps Script (+ arkusz) | Pobiera świece H1 i D1, prowadzi log uruchomień | Firestore `candles/*`, `candles_d1/*`, `meta/status`; arkusz `log` | Yahoo |
 | Firestore | Baza świec Yahoo (jedyne źródło cen), status, heartbeat, kolejka strategii | — | — |
 | Mac (`ia5`) | Kopia świec, kontrola jakości, czyszczenie, liczenie, publikacja | Firestore `runner/heartbeat`, `strategies/*`; GitHub gałąź `data` | Firestore |
 | GitHub | `main`: kod + strona (Pages). `data`: zimna kopia świec i wyniki | — | — |
@@ -135,6 +136,7 @@ flowchart LR
 
 1. **Apps Script — co minutę (D-033), nie co godzinę.** Najpierw sprawdza w Script Properties, czy oczekiwana nowa świeca jest już zapisana. Jeśli tak — kończy bez żadnego zapytania. Jeśli nie — pyta Yahoo o ostatnie dni (interwał 1h), zapisuje zamknięte świece (upsert), aktualizuje `meta/status`.
    *Dlaczego:* wyzwalacz godzinowy Apps Script odpala się w dowolnej minucie godziny, więc pomiar „ile sekund zajęło pobranie świecy" byłby szumem rzędu 0–60 min.
+   Ten sam wyzwalacz po północy w Londynie dopisuje zamkniętą świecę dzienną każdej pary (D-053); gdy jej brak — ponawia co 15 min, inaczej kończy bez zapytań.
 2. **Mac — jeden proces `ia5 start` (D-039).** Na starcie i co godzinę (5 min po pełnej godzinie): kopia świec Yahoo z Firestore → kontrola aktualności i jakości (D5, trójkąty) → dane do liczenia po warstwie czyszczenia (`data/h1_ready/`, D8) → mapa pokrycia → push świec i mapy na gałąź `data` (tylko gdy się zmieniły) i SHA w `meta/status.dataSha` → przegląd zdrowia. Między synchronizacjami nasłuchuje strategii do policzenia.
 3. **Dashboard.** Status z `meta/status` i `runner/heartbeat`. Świece i wyniki z gałęzi `data` przez `raw.githubusercontent.com/miszyszka/IA5/<SHA>/...` — adres z konkretnym SHA, więc bez problemu z cache.
 4. **Nowa strategia.** Dashboard zapisuje `strategies/{id}` ze statusem `do_policzenia` → Mac dostaje to przez nasłuch → `liczy_sie` + postęp → wyniki na gałąź `data` → `policzona` + SHA commita.
@@ -164,6 +166,7 @@ meta/status
   pairs:   { EURUSD: { lastTs, latencySec, count, flags[] }, ... }
   totalBars, latency24h[], dataSha
   health:  { at, state, summary, facts[], checks: [{ id, name, state, text, detail[], fix }] }   # przegląd zdrowia z Maca (D-023)
+  d1:      { tz, totalBars, lastRun: { mode, at, ok, error }, pairs: { EURUSD: { firstDay, lastTs, lastDay, count, flags[] } } }   # D-053
 
 runner/heartbeat
   lastSeen, state: idle|syncing|computing|offline,
@@ -172,6 +175,9 @@ runner/heartbeat
 strategies/{id}
   name, hypothesis, code, status, createdAt, createdBy,
   engineVersion, frozenAt?, result?: { sha, path, summary }, error?
+
+candles_d1/{PARA}_{RRRR}            # D-053: świece dzienne, 1 dokument = 1 para × 1 rok (rok wg dnia w strefie tz)
+  pair, year, tz: "Europe/London", bars: { "<ts północy>": [o, h, l, c], ... }, updatedAt
 
 investors/{id}                       # D-045: wirtualny inwestor (paper trading); ustawienia stałe — tylko usunięcie
   name, capital, pct, status: aktywny|do_usuniecia, createdAt (= start), createdBy,
@@ -182,11 +188,12 @@ investors/{id}                       # D-045: wirtualny inwestor (paper trading)
 - Zapis świec: REST `PATCH` z `updateMask` na pojedyncze klucze mapy `bars` → bez odczytu przed zapisem, idempotentnie.
 - Wyłączyć indeksowanie pola `bars` (wyjątek indeksu pojedynczego pola) — taniej i z dala od limitu 40 000 wpisów indeksu na dokument.
 - Rozmiar: ~744 świece × 4 liczby ≈ 30 KB na dokument (limit 1 MiB). Backfill: 8 par × ~25 miesięcy ≈ 200 zapisów.
+- D1 (D-053): ~260 świec na dokument roczny; backfill 8 par × ~23 lata ≈ 200 zapisów, potem ok. 9 zapisów na dobę.
 - Statusy strategii: `do_policzenia` → `liczy_sie` → `policzona` | `blad` ; opcjonalnie `zamrozona`.
 
 ### Reguły Firestore
 
-Aktualne reguły: [`firestore.rules`](firestore.rules) (wklejane w Firebase → Firestore → Rules, z `<OWNER_UID>` zamienionym na UID Michała). Zasada: `meta/*` i `runner/*` czyta każdy (pasek statusu), piszą tylko Apps Script i Mac; `candles/*` czyta właściciel; `strategies/*` czyta i zmienia wyłącznie właściciel, tworzyć można tylko ze statusem `do_policzenia` albo `do_usuniecia`, zmieniać tylko pola `name, hypothesis, code, status, frozenAt, frozenVariant`.
+Aktualne reguły: [`firestore.rules`](firestore.rules) (wklejane w Firebase → Firestore → Rules, z `<OWNER_UID>` zamienionym na UID Michała). Zasada: `meta/*` i `runner/*` czyta każdy (pasek statusu), piszą tylko Apps Script i Mac; `candles/*` i `candles_d1/*` czyta właściciel; `strategies/*` czyta i zmienia wyłącznie właściciel, tworzyć można tylko ze statusem `do_policzenia` albo `do_usuniecia`, zmieniać tylko pola `name, hypothesis, code, status, frozenAt, frozenVariant`.
 
 Apps Script i Mac działają na uprawnieniach administracyjnych (OAuth właściciela / service account) i reguł nie potrzebują.
 
@@ -195,6 +202,8 @@ Apps Script i Mac działają na uprawnieniach administracyjnych (OAuth właścic
 ```
 candles/{PARA}/{RRRR}.parquet        # H1 z Yahoo (surowa kopia): ts, open, high, low, close; zmienia się tylko bieżący rok
 candles/manifest.json                # hash, liczba świec, zakres per para
+candles_d1/{PARA}.parquet            # D-053: świece dzienne Yahoo, cała historia pary (ts = północ w strefie tz)
+candles_d1/manifest.json             # hash, liczba świec, pierwszy i ostatni dzień per para, tz
 coverage/coverage.json               # mapa pokrycia (D-022): para × miesiąc, luki jako zakresy, kalendarz dzień po dniu (D-040) — bez cen
 results/index.json                   # lista policzonych strategii (dashboard)
 results/{strategyId}/                # ostatni run strategii (poprzedni jest w historii gita)
@@ -225,6 +234,7 @@ forest/report.md                     # raport dla Claude
   config.json                              # {"owner_uid": "..."} — kto może zlecać liczenie (S1)
   source.json                              # {"source": "yahoo"} — znacznik po przejściu na jedno źródło (D-039)
   data/yahoo/{PARA}.parquet                # surowa kopia świec z Firestore — niezmieniana (D4); tylko 8 par z sekcji 2 (D-041)
+  data/yahoo_d1/{PARA}.parquet             # D-053: surowa kopia świec dziennych z Firestore — niezmieniana (D4); 8 par
   data/h1_ready/{PARA}.parquet + .json     # po warstwie czyszczenia (filled, gap_before) + opis — jedyne wejście silnika i skanera (D8)
   data-repo/                               # lokalny klon gałęzi data
   results/{id}/{run}/  scans/{run}/        # wyniki liczenia i skanów (to samo trafia na gałąź data)
@@ -243,6 +253,7 @@ forest/report.md                     # raport dla Claude
   - `backfill()` — jednorazowo, i gdy przegląd zdrowia pokaże przerwy w danych. Yahoo udostępnia świece 1h tylko z ostatnich **730 dni** — to cała dostępna historia; dalej rośnie o każdą nową godzinę (D7). Ponowny backfill uzupełnia dziury, jeśli Yahoo ma już te świece (upsert, ok. 200 zapisów). Zapis porcjami po miesiącu.
   - `tick()` — wyzwalacz **co 1 min** (D-033). Gdy wszystko jest — koniec bez zapytań. Tuż po pełnej godzinie czeka na zamknięcie świecy (D2) i ponawia brakujące pary co 15 s przez 10 min (najwyżej 100 s na uruchomienie); status zapisuje po każdej rundzie z nową świecą. Po wklejeniu nowej wersji uruchom raz `installTrigger()`.
   - Po komplecie świec `tick` uruchamia GitHub Actions (`dispatchLive_`, D-052; token w Script Properties `GITHUB_TOKEN`).
+  - `backfillD1()` (D-053) — ręcznie, raz: cała historia świec dziennych Yahoo (`interval=1d`, od 1970 — Yahoo zwraca od pierwszej notowanej daty) → `candles_d1/*` i `meta/status.d1`. Ponowne uruchomienie = upsert. Dopiero po nim `tick` dopisuje kolejne dni (ostatnie 4 dni nadpisywane — Yahoo je koryguje; zapis tylko, gdy przybył dzień albo korekta > 0,5 pipsa).
   - `healthcheck()` — ręczna diagnostyka.
   - `removeOffGrid()` — ręcznie: usuwa z `candles/*` wpisy z czasem nie na pełnej godzinie (notowania Yahoo, nie świece; D-042). `tick` takich wpisów już nie zapisuje.
 - Yahoo: nieoficjalny endpoint `v8/finance/chart`, `interval=1h`. Ponawianie z rosnącym odstępem, maks. 3 próby, nigdy pętla bez końca. Odpowiedź, która nie jest JSON-em → błąd w `meta/status`, nie awaria.
@@ -258,10 +269,10 @@ forest/report.md                     # raport dla Claude
 - Python 3.12, menedżer `uv`. Instalacja: `uv tool install -e runner` → w terminalu działa komenda `ia5`.
 - `ia5 start` — **jedyny proces** (D-039): najpierw weryfikuje aktualność danych, potem nasłuchuje strategii do policzenia.
   1. Pierwszy start po D-039: usuwa z `~/.ia5` dane Dukascopy i policzone na nich wyniki, z gałęzi `data` wyniki i skany policzone na Dukascopy (historia gita zostaje), a policzone strategie wysyła do ponownego liczenia na świecach Yahoo (zgoda Michała z 2026-10-31).
-  2. Stan bazy (`meta/status`), kopia świec Yahoo z Firestore (pierwszy raz pełna, potem miesiące od ostatniej świecy kopii — po przerwie Maca kopia nie ma dziur).
-  3. Sprzątanie: w `~/.ia5/data` zostaje tylko `yahoo/` (8 par) i `h1_ready/` (D-041). Kontrola aktualności (czy każda para ma ostatnią zamkniętą świecę sesji) i jakości (D5, trójkąty par).
+  2. Stan bazy (`meta/status`), kopia świec Yahoo z Firestore (pierwszy raz pełna, potem miesiące od ostatniej świecy kopii — po przerwie Maca kopia nie ma dziur). Kopia świec D1 (D-053): para doczytywana tylko, gdy `meta/status.d1` ma nowszą świecę lub inną liczbę świec niż kopia.
+  3. Sprzątanie: w `~/.ia5/data` zostaje tylko `yahoo/`, `yahoo_d1/` (po 8 par) i `h1_ready/` (D-041, D-053). Kontrola aktualności (czy każda para ma ostatnią zamkniętą świecę sesji) i jakości (D5, trójkąty par).
   4. Dane do liczenia (`data/h1_ready/`, warstwa czyszczenia D8) — przebudowa pary tylko, gdy zmieniły się jej świece.
-  5. Mapa pokrycia (D-022) i push na gałąź `data` świec oraz `coverage/coverage.json` (każde tylko, jeśli coś się zmieniło); przegląd zdrowia (D-023) → `meta/status.health`.
+  5. Mapa pokrycia (D-022) i push na gałąź `data` świec H1, świec D1 (`candles_d1/`) oraz `coverage/coverage.json` (każde tylko, jeśli coś się zmieniło); przegląd zdrowia (D-023) → `meta/status.health` (z kontrolą „Świece dzienne (D1)”).
   6. Heartbeat co 30 s do `runner/heartbeat`; `caffeinate -i`, żeby Mac nie usnął.
   7. Nasłuch `strategies` ze statusem `do_policzenia` / `do_usuniecia`; kolejka FIFO, jedna strategia na raz.
   8. Co godzinę (5 min po pełnej godzinie) kroki 2–5 od nowa; co 6 h ponowne liczenie zamrożonych strategii (forward test, W4).
@@ -346,7 +357,7 @@ Rozbicia: para, rok, kierunek, sesja (Azja 00–07, Europa 07–13, USA 13–21 
 | Wskaźniki | TA-Lib — zgodność do 1e-9 | CI, każdy push |
 | Silnik | Ręcznie policzone „złote" scenariusze na syntetycznych świecach; testy własności (`hypothesis`), np. netto = brutto − spread zawsze | CI |
 | Silnik vs inny silnik | `backtesting.py` na strategii referencyjnej (przecięcie SMA + wyjście po N świecach) — identyczna lista transakcji. Ręcznie: TradingView Strategy Tester | CI / raz na etap |
-| Dane | Przegląd zdrowia (D-023): wersja programu na Macu (D-046: liczy kodem z dysku i aktualnym z GitHub), świeżość Yahoo, kopia na Macu = Firestore, na Macu tylko dane Yahoo (D-041), trójkąty par godzina po godzinie na całej historii (przesunięcie czasu jednej pary daje ~11% godzin ponad próg), zamrożone notowania w sesji, kompletność i przerwy, poprawność świec | każda synchronizacja (co godzinę) |
+| Dane | Przegląd zdrowia (D-023): świece D1 (D-053: 8 par, świeżość, kopia = Firestore, OHLC, czas o północy), wersja programu na Macu (D-046: liczy kodem z dysku i aktualnym z GitHub), świeżość Yahoo, kopia na Macu = Firestore, na Macu tylko dane Yahoo (D-041), trójkąty par godzina po godzinie na całej historii (przesunięcie czasu jednej pary daje ~11% godzin ponad próg), zamrożone notowania w sesji, kompletność i przerwy, poprawność świec | każda synchronizacja (co godzinę) |
 | Look-ahead | Detektor: sygnały liczone na pełnych danych i na danych obciętych w losowych punktach muszą być identyczne do punktu cięcia | przed każdym liczeniem |
 | Przeuczenie | OOS 25% (W1), walk-forward (okna roczne), Deflated Sharpe Ratio, PBO metodą CSCV (16 bloków), bootstrap 95% CI expectancy | każde liczenie |
 | Przypadek | Benchmark losowych wejść, ≥ 1000 losowań → percentyl (W3) | każde liczenie |
@@ -440,6 +451,7 @@ IA5/
 │  ├─ pyproject.toml
 │  └─ ia5/  cli.py  config.py  session.py  store.py
 │           quality.py  clean.py  ready.py  coverage.py  health.py  cloud.py  publish.py   # dane (E2)
+           daily.py                                                      # świece dzienne D1: kalendarz, kontrola (D-053)
 │           indicators.py  engine.py  sandbox.py  backtest.py  report.py # silnik (E3)
 │           validate.py  portfolio.py  check.py                           # walidacja, kapitał, kontrola (E5)
 │           scan.py                                                       # skaner hipotez (D-037)
@@ -483,7 +495,7 @@ Każdy etap: testy zielone → push → `STATUS.md` zaktualizowany → działa n
 | O1 | Waluta konta | **USD** |
 | O2 | Wielkość pozycji przy kilku pozycjach naraz | **Zależy od strategii** (`SIZING`); domyślnie zawsze **5, 10, 15, 20, 30%** kapitału jako depozyt (B4, 8.5) |
 | O3 | Repo publiczne → wyniki i kod strategii widzi każdy | **Publiczne są OK** |
-| O4 | Źródło danych | **Tylko świece H1 Yahoo** (D-039, 2026-10-31; wcześniejsza decyzja o Dukascopy wycofana — dane uznane za niewiarygodne) |
+| O4 | Źródło danych | **Tylko Yahoo**: świece H1 (D-039, 2026-10-31; wcześniejsza decyzja o Dukascopy wycofana — dane uznane za niewiarygodne) i świece dzienne D1 z całą historią (D-053, 2026-11-10) |
 
 Otwarte:
 

@@ -61,3 +61,11 @@ ia5 start
 2. GitHub → Settings → Developer settings → Fine-grained tokens: token tylko dla repo IA5, uprawnienie Contents: Read and write.
 3. Apps Script → Project Settings → Script Properties: `GITHUB_TOKEN` = ten token. Wklej nowy `Code.gs`.
 4. Sprawdź: repo → Actions → „Inwestorzy i maile” → Run workflow.
+
+## Świece dzienne D1 (D-053)
+
+1. Apps Script: wklej nowy `apps_script/Code.gs` (Ctrl+A, wklej, zapisz).
+2. Wybierz funkcję `backfillD1` → Uruchom (raz; ok. 1–2 min). W arkuszu `log` pojawi się po wierszu „D1 backfill” na parę, z pierwszym i ostatnim dniem.
+3. Uruchom raz `installTrigger()` (jak po każdej nowej wersji).
+4. Wklej aktualne `firestore.rules` (Firebase → Firestore → Rules → Publish) — dochodzi kolekcja `candles_d1`.
+5. Na Macu: `git pull`, `uv tool install -e runner --force`, restart `ia5 start`. Pierwsza synchronizacja skopiuje D1 (ok. 200 odczytów) i opublikuje `candles_d1/` na gałęzi `data`. W Stats → Stan systemu pojawi się kontrola „Świece dzienne (D1)”.

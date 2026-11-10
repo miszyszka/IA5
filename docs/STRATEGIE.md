@@ -1,6 +1,6 @@
 # STRATEGIE — jak pisać kod strategii dla IA5
 
-Wersja 0.39 · 2026-11-03 (dodane: strategie z `ia5 search`, sekcja 9)
+Wersja 0.40 · 2026-11-10 (dodane: świece dzienne D1 w bazie, jeszcze nie w `signals` — D-053)
 
 > Ten plik jest **regułą dla Claude**. Gdy Michał mówi „zrób mi strategię …”, Claude postępuje dokładnie według sekcji 1 i zwraca kod, który bez zmian wkleja się do okna „Nowa strategia” w dashboardzie i który program `ia5` na Macu zrozumie.
 > Kontrakt jest egzekwowany w kodzie: `runner/ia5/sandbox.py` (wykonanie), `runner/ia5/check.py` (kontrola), `web/js/metrics.js` → `checkStrategyCode` (kontrola w przeglądarce).
@@ -68,6 +68,8 @@ def signals(df, p, ind):       # WYMAGANE — dokładnie ta nazwa i te trzy argu
 Silnik dodatkowo: pomija sygnały, gdy w danej parze jest już otwarta pozycja tego wariantu (B8), pomija wejścia w okresie rozgrzewki ATR, odrzuca strategię z look-ahead (B2).
 
 **Krótka historia (D-039).** Dane to świece Yahoo od ok. 2024-10 (~12 tys. świec na parę, rośnie z każdą godziną). Wskaźnik z długą rozgrzewką zjada dużą część próby: SMA200 na D1 to ~40% historii, a OOS (ostatnie 25%) to tylko ~6 miesięcy. Preferuj okresy liczone w godzinach i dniach, nie w miesiącach; mało wariantów (`PARAMS` ≤ ~12), bo każdy kolejny przy tak krótkiej próbie mocniej podnosi poprzeczkę DSR. TP i SL w tej samej świecy zawsze liczone jako SL (B5) — bardzo ciasne TP/SL w ATR częściej dają `ambiguous`.
+
+**Świece dzienne Yahoo (D-053).** W bazie jest też pełna historia świec D1 Yahoo (od ok. 2003), ale `signals` jej **nie dostaje** — `df` to nadal tylko H1. Do czasu osobnej decyzji filtry dzienne buduj z H1 (`resample`, wzorzec w sekcji 4) i pamiętaj o krótkiej historii.
 
 ---
 

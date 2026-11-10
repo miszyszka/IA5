@@ -63,11 +63,12 @@ def migrate_legacy(log=print) -> bool:
 
 def enforce_local_data(log=print) -> list[str]:
     """D-041 (Michał): lokalnie mają być tylko pary z Yahoo i nic innego. W ~/.ia5/data zostaje wyłącznie
-    data/yahoo/{PARA}.parquet (8 par z config) i data/h1_ready/ (budowane z nich); wszystko inne jest usuwane
+    data/yahoo/{PARA}.parquet (8 par z config), data/yahoo_d1/{PARA}.parquet (świece dzienne Yahoo, D-053)
+    i data/h1_ready/ (budowane z H1); wszystko inne jest usuwane
     przy każdym starcie i każdej synchronizacji. Zwraca listę usuniętych ścieżek."""
     import shutil
 
-    from .store import DATA_ALLOWED, YAHOO
+    from .store import DATA_ALLOWED, YAHOO, YAHOO_D1
 
     removed = []
     if DATA.exists():
@@ -75,9 +76,11 @@ def enforce_local_data(log=print) -> list[str]:
             if f.name not in DATA_ALLOWED:
                 shutil.rmtree(f) if f.is_dir() else f.unlink()
                 removed.append(str(f))
-    if YAHOO.exists():
-        allowed = {f"{p}.parquet" for p in PAIRS}
-        for f in YAHOO.iterdir():
+    allowed = {f"{p}.parquet" for p in PAIRS}
+    for folder in (YAHOO, YAHOO_D1):   # D-053: obok H1 także świece dzienne Yahoo, tylko 8 par
+        if not folder.exists():
+            continue
+        for f in folder.iterdir():
             if f.name not in allowed:
                 shutil.rmtree(f) if f.is_dir() else f.unlink()
                 removed.append(str(f))
@@ -116,6 +119,7 @@ def do_prepare(progress=None) -> dict:
     except Exception as e:  # noqa: BLE001 — bez sieci liczymy na kopii lokalnej; przegląd zdrowia to pokaże
         log(f"  Nie udało się pobrać świec z Firestore ({e}) — używam kopii lokalnej.")
         yahoo = cloud.load_yahoo(YAHOO)
+    d1, d1_tz = sync_d1(cloud, st)
 
     if progress:
         progress("Kontrola danych", 40)
@@ -149,12 +153,39 @@ def do_prepare(progress=None) -> dict:
 
         sha = publish.publish_candles(yahoo, source="yahoo", log=lambda m: log(m))
         sha = publish.publish_coverage(cov, log=lambda m: log(m)) or sha
+        if d1:
+            sha = publish.publish_candles_d1(d1, d1_tz, log=lambda m: log(m)) or sha
         if sha:
             cloud.set_data_sha(sha)
     except Exception as e:  # noqa: BLE001 — brak publikacji nie zatrzymuje programu; zgłasza go przegląd zdrowia
         publish_error = str(e)[:300]
         log(f"  publikacja nie powiodła się: {publish_error}")
-    return {"yahoo": yahoo, "cov": cov, "ready": rdy, "publish_error": publish_error}
+    return {"yahoo": yahoo, "cov": cov, "ready": rdy, "publish_error": publish_error, "d1": d1}
+
+
+def sync_d1(cloud, st: dict) -> tuple[dict, str]:
+    """D-053: kopia świec dziennych Yahoo z Firestore + kontrola (D5). Błąd nie zatrzymuje synchronizacji H1."""
+    from . import daily, quality
+    from .store import YAHOO_D1
+
+    tz = (st.get("d1") or {}).get("tz") or daily.D1_TZ
+    log("Kopia świec dziennych (D1) Yahoo…")
+    try:
+        d1 = cloud.sync_yahoo_d1(YAHOO_D1, st, log=lambda m: log(m))
+    except Exception as e:  # noqa: BLE001
+        log(f"  Nie udało się pobrać świec D1 z Firestore ({e}) — używam kopii lokalnej.")
+        d1 = cloud.load_yahoo_d1(YAHOO_D1)
+    if not d1:
+        log("  W bazie nie ma jeszcze świec D1 — uruchom raz backfillD1() w Apps Script (docs/SETUP.md).")
+        return d1, tz
+    for pair, df in d1.items():
+        f = daily.d1_flags(df, tz)
+        if f["ohlc"] or f["price"] or f["offgrid"] or f["dup_days"]:
+            log(f"  D1 {pair}: złe OHLC {f['ohlc']} · cena ≤ 0 {f['price']} · czas nie o północy {f['offgrid']} · "
+                f"dwa wpisy na dzień {f['dup_days']}")
+    for k, v in quality.cross_check(d1).items():
+        log(f"  D1 trójkąt {k}: mediana {v['median']:.2f} pips, p99 {v['p99']:.2f} pips ({v['n']:,} dni)")
+    return d1, tz
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]   # folder repozytorium IA5, z którego działa program
@@ -192,7 +223,8 @@ def do_health(ctx: dict, beat_state: str | None = None, write: bool = True) -> d
     except Exception:  # noqa: BLE001
         docs = None
     h = health.run(cloud.read_status(), ctx["yahoo"], ctx["cov"], docs=docs, beat_state=beat_state,
-                   publish_error=ctx.get("publish_error"), home=HOME, ready=ctx.get("ready"), code=code_info())
+                   publish_error=ctx.get("publish_error"), home=HOME, ready=ctx.get("ready"), code=code_info(),
+                   d1=ctx.get("d1"))
     if write:
         cloud.write_health(h)
     bad = [c for c in h["checks"] if c["state"] != "ok"]
@@ -585,13 +617,14 @@ def handle_delete(sid: str) -> None:
 def cmd_health(_args) -> int:
     """Opisowy przegląd zdrowia na kopii lokalnej (bez synchronizacji świec); wynik też na dashboard (Stats)."""
     from . import cloud, coverage, health, ready
-    from .store import READY, YAHOO
+    from .store import READY, YAHOO, YAHOO_D1
 
     yahoo = cloud.load_yahoo(YAHOO)
     if not yahoo:
         print("Na Macu nie ma jeszcze świec — uruchom ia5 start.")
         return 1
-    ctx = {"yahoo": yahoo, "cov": coverage.build(yahoo), "ready": ready.build(yahoo, READY, log=log)}
+    ctx = {"yahoo": yahoo, "cov": coverage.build(yahoo), "ready": ready.build(yahoo, READY, log=log),
+           "d1": cloud.load_yahoo_d1(YAHOO_D1)}
     h = do_health(ctx)
     print(health.report(h))
     return 0 if h["state"] != "bad" else 1

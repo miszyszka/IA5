@@ -103,6 +103,45 @@ def publish_candles(h1: dict[str, pd.DataFrame], source: str, log=print) -> str 
     return sha
 
 
+def publish_candles_d1(d1: dict[str, pd.DataFrame], tz: str, log=print) -> str | None:
+    """D-053: candles_d1/{PARA}.parquet (cała historia pary w jednym pliku, ok. 6 tys. świec) + candles_d1/manifest.json.
+    Plik pary zapisywany tylko, gdy się zmienił (zwykle raz na dobę). Zwraca SHA lub None."""
+    from .daily import day_of
+
+    ensure_repo()
+    mpath = DATA_REPO / "candles_d1" / "manifest.json"
+    manifest = json.loads(mpath.read_text()) if mpath.exists() else {"files": {}}
+    changed = 0
+    for pair, df in d1.items():
+        if df is None or df.empty:
+            continue
+        rel = f"candles_d1/{pair}.parquet"
+        part = df[["ts", "open", "high", "low", "close"]].reset_index(drop=True)
+        h = frame_hash(part)
+        if manifest["files"].get(rel, {}).get("hash") == h:
+            continue
+        path = DATA_REPO / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        part.to_parquet(path, index=False)
+        first, last = day_of([part.ts.iloc[0], part.ts.iloc[-1]], tz)
+        manifest["files"][rel] = {"hash": h, "bars": len(part), "from": int(part.ts.iloc[0]), "to": int(part.ts.iloc[-1]),
+                                  "first_day": str(first), "last_day": str(last)}
+        changed += 1
+    if not changed:
+        log("  świece D1 na gałęzi data: bez zmian")
+        return None
+    manifest.update({"source": "yahoo", "interval": "1d", "tz": tz,
+                     "ts": "czas otwarcia = północ dnia w strefie tz (D1, D-053)"})
+    mpath.parent.mkdir(parents=True, exist_ok=True)
+    mpath.write_text(json.dumps(manifest, indent=1, sort_keys=True))
+    _git("add", "-A")
+    _git("commit", "-q", "-m", f"dane: świece D1 ({changed} par)")
+    _push()
+    sha = _git("rev-parse", "HEAD")
+    log(f"  świece D1: {changed} par, {sha[:7]}")
+    return sha
+
+
 def publish_coverage(cov: dict, log=print) -> str | None:
     """coverage/coverage.json na gałęzi data (D-022): same liczniki i zakresy luk, bez cen.
     Push tylko, gdy treść (bez znacznika czasu) się zmieniła. Zwraca SHA lub None."""
