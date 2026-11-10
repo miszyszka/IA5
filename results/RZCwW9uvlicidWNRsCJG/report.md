@@ -1,16 +1,16 @@
 # Raport strategii: RSI jedna para
 
-Run `20261105-205721` · silnik 0.9.0 · kod `261e758df7f609bd` · dane `b1d6df1e00064526`
+Run `20261110-164131` · silnik 0.9.0 · kod `261e758df7f609bd` · dane `7025157b616c8c9b`
 
 ## Werdykt: 🟡 ŻÓŁTY — zaliczone 3 z 4 testów
 
 | test | wynik | wartość |
 |---|---|---|
-| expectancy netto OOS > 0 | ✔ | 4.05 |
+| expectancy netto OOS > 0 | ✔ | 3.73 |
 | percentyl benchmarku ≥ 95 | ✘ | 93.10 |
 | PBO < 0,3 | nie dotyczy | — |
 | DSR ≥ 0,95 | ✔ | 0.99 |
-| dodatni przy spreadzie ×1,5 | ✔ | 3.19 |
+| dodatni przy spreadzie ×1,5 | ✔ | 3.43 |
 
 ## Hipoteza
 
@@ -23,9 +23,9 @@ OOS nie jest czysty (wariant i ranking z danych, na których oglądano wersję 2
 
 ## Dane i model wykonania
 
-- Pary: AUDUSD, EURGBP, EURJPY, EURUSD, GBPUSD, USDCAD, USDCHF, USDJPY; świece H1 od 2024-10-28 do 2026-11-05; źródło: yahoo.
+- Pary: AUDUSD, EURGBP, EURJPY, EURUSD, GBPUSD, USDCAD, USDCHF, USDJPY; świece H1 od 2024-10-28 do 2026-11-10; źródło: yahoo.
 
-- In-sample do 2026-05-05, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS.
+- In-sample do 2026-05-08, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS.
 
 - Wejście na open świecy po sygnale, o dowolnej godzinie (strategia wyłączyła okno handlu, HOURS = False, D-034); wyjście na dowolnej świecy, także po nocy i weekendzie (D-032). TP i SL w tej samej świecy: przyjęty SL (pesymistycznie — świece H1 nie mówią, co padło pierwsze; transakcja z flagą `ambiguous`, B5).
 
@@ -47,7 +47,7 @@ OOS nie jest czysty (wariant i ranking z danych, na których oglądano wersję 2
 
 | # | wyjście | parametry | IS trans. | IS śr. R | IS śr. pips | IS win % | OOS trans. | OOS śr. R | OOS śr. pips |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.15, szok=0 | 250 | 0.33 | 4.00 | 71.2 | 104 | 0.27 | 4.05 |
+| 1 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.15, szok=0 | 256 | 0.35 | 4.47 | 71.9 | 101 | 0.24 | 3.73 |
 
 ## Najlepszy wariant IS: TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 (ema=200, nachylenie=0.15, szok=0)
 
@@ -57,7 +57,7 @@ OOS nie jest czysty (wariant i ranking z danych, na których oglądano wersję 2
 |---|---|---|---|---|
 | AUDUSD | 34 | 7.6 | 257.5 | 94.1 |
 | EURGBP | 37 | 1.2 | 45.7 | 62.2 |
-| EURJPY | 56 | 1.5 | 81.8 | 60.7 |
+| EURJPY | 59 | 3.1 | 180.0 | 62.7 |
 | EURUSD | 34 | 9.1 | 310.5 | 76.5 |
 | GBPUSD | 50 | 1.8 | 90.0 | 74.0 |
 | USDCAD | 32 | -4.2 | -135.9 | 53.1 |
@@ -70,38 +70,38 @@ OOS nie jest czysty (wariant i ranking z danych, na których oglądano wersję 2
 |---|---|---|---|---|
 | 2024 | 41 | 6.4 | 262.0 | 75.6 |
 | 2025 | 165 | 4.6 | 760.5 | 69.7 |
-| 2026 | 148 | 2.7 | 399.1 | 70.9 |
+| 2026 | 151 | 3.3 | 497.3 | 71.5 |
 
 ### IS i OOS
 
 | próba | transakcje | śr. pips | suma pips | win % |
 |---|---|---|---|---|
-| IS | 250 | 4.0 | 1 000.4 | 71.2 |
-| OOS | 104 | 4.0 | 421.2 | 70.2 |
+| IS | 256 | 4.5 | 1 143.5 | 71.9 |
+| OOS | 101 | 3.7 | 376.3 | 69.3 |
 
 ### Kapitał
 
 | depozyt | kapitał końcowy | zwrot % | CAGR % | max obsunięcie % | Sharpe | pominięte (depozyt) |
 |---|---|---|---|---|---|---|
-| 5.0% | 15 363 | 53.6 | 24.3 | -6.8 | 1.52 | 0 |
-| 10.0% | 22 497 | 125.0 | 50.9 | -13.5 | 1.49 | 3 |
-| 15.0% | 25 571 | 155.7 | 61.0 | -19.8 | 1.31 | 32 |
-| 20.0% | 24 097 | 141.0 | 56.2 | -22.2 | 1.11 | 70 |
-| 30.0% | 18 697 | 87.0 | 37.4 | -30.2 | 0.75 | 124 |
+| 5.0% | 15 547 | 55.5 | 24.7 | -6.8 | 1.55 | 0 |
+| 10.0% | 23 036 | 130.4 | 51.7 | -13.5 | 1.52 | 3 |
+| 15.0% | 26 488 | 164.9 | 62.7 | -19.8 | 1.34 | 32 |
+| 20.0% | 25 250 | 152.5 | 58.8 | -22.2 | 1.15 | 70 |
+| 30.0% | 19 503 | 95.0 | 39.6 | -30.2 | 0.78 | 125 |
 
 ## Walidacja
 
-- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 4.02 pips/transakcję, percentyl **93.1** (losowe: 5%=-6.57, mediana=-0.72, 95%=4.52).
+- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 4.26 pips/transakcję, percentyl **93.1** (losowe: 5%=-5.96, mediana=-0.81, 95%=4.66).
 
-- **Deflated Sharpe Ratio**: 0.987 (Sharpe na transakcję 0.175, próg przy 1 próbach 0.000).
+- **Deflated Sharpe Ratio**: 0.992 (Sharpe na transakcję 0.190, próg przy 1 próbach 0.000).
 
 - **PBO** (CSCV, — bloków, 1 wariantów): — — szansa, że najlepszy wariant IS wypada poniżej mediany poza próbą.
 
-- **Walk-forward** (okna kotwiczone, wybór najlepszego wariantu przed każdym oknem): 200 transakcji, śr. 2.84 pips, 0.26 R.
+- **Walk-forward** (okna kotwiczone, wybór najlepszego wariantu przed każdym oknem): 203 transakcji, śr. 3.28 pips, 0.27 R.
 
-- **Bootstrap 95%** średnich pipsów: całość [0.31; 7.41], OOS [-1.15; 8.65].
+- **Bootstrap 95%** średnich pipsów: całość [0.58; 7.87], OOS [-1.61; 8.68].
 
-- **Spread**: ×1 4.02, ×1,5 3.19, ×2 2.37 pips/transakcję.
+- **Spread**: ×1 4.26, ×1,5 3.43, ×2 2.60 pips/transakcję.
 
 - TP i SL w tej samej świecy bez rozstrzygnięcia: 0.00% transakcji.
 
