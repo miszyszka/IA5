@@ -1,6 +1,6 @@
 # Raport strategii: Powrót
 
-Run `20261110-165551` · silnik 0.9.0 · kod `12864a1b4312df32` · dane `7025157b616c8c9b`
+Run `20261110-230550` · silnik 0.9.0 · kod `12864a1b4312df32` · dane `85f209dd920e19eb`
 
 ## Werdykt: 🟡 ŻÓŁTY — zaliczone 4 z 5 testów
 
@@ -42,14 +42,14 @@ na razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach 
 
 - **Przetestowane warianty: 5** (1 wejścia × 5 wyjść).
 
-- Pominięte sygnały, średnio na wariant: 32 (limit otwartych pozycji w parze), 2.0 (brak danych do wyjścia); 0 wejść w rozgrzewce ATR, 0 sygnałów poza oknem 07:00–17:00 czasu polskiego (B11), anulowane transakcje, średnio na wariant: 6.0 (przerwa w dostępie do danych), 0.0 (sygnał, wejście lub wyjście na świecy uzupełnionej) — D-032.
+- Pominięte sygnały, średnio na wariant: 32 (limit otwartych pozycji w parze), 2.8 (brak danych do wyjścia); 0 wejść w rozgrzewce ATR, 0 sygnałów poza oknem 07:00–17:00 czasu polskiego (B11), anulowane transakcje, średnio na wariant: 6.0 (przerwa w dostępie do danych), 0.0 (sygnał, wejście lub wyjście na świecy uzupełnionej) — D-032.
 
 ## Top 10 wariantów (ranking po IS, min. 30 transakcji IS)
 
 | # | wyjście | parametry | IS trans. | IS śr. R | IS śr. pips | IS win % | OOS trans. | OOS śr. R | OOS śr. pips |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | ATR14 TP 1.5× SL 0× max 60 | — | 205 | 0.53 | 10.76 | 83.4 | 72 | 0.45 | 9.98 |
-| 2 | ATR14 TP 1× SL 0× max 60 | — | 211 | 0.46 | 9.11 | 91.5 | 75 | 0.46 | 8.74 |
+| 2 | ATR14 TP 1× SL 0× max 60 | — | 211 | 0.46 | 9.11 | 91.5 | 76 | 0.47 | 8.85 |
 | 3 | ATR14 TP 2× SL 0× max 60 | — | 195 | 0.09 | 4.82 | 71.8 | 70 | 0.37 | 10.06 |
 | 4 | ATR14 TP 3× SL 0× max 60 | — | 188 | -0.24 | -1.60 | 54.8 | 67 | 0.40 | 12.27 |
 | 5 | po 60 świecach | — | 177 | -0.27 | -3.18 | 45.2 | 60 | 0.11 | 8.12 |
@@ -96,11 +96,11 @@ na razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach 
 
 ## Walidacja
 
-- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 10.56 pips/transakcję, percentyl **100.0** (losowe: 5%=-7.14, mediana=-1.96, 95%=2.72).
+- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 10.56 pips/transakcję, percentyl **100.0** (losowe: 5%=-7.11, mediana=-1.97, 95%=2.99).
 
 - **Deflated Sharpe Ratio**: 0.651 (Sharpe na transakcję 0.218, próg przy 5 próbach 0.177).
 
-- **PBO** (CSCV, 16 bloków, 5 wariantów): 0.141 — szansa, że najlepszy wariant IS wypada poniżej mediany poza próbą.
+- **PBO** (CSCV, 16 bloków, 5 wariantów): 0.140 — szansa, że najlepszy wariant IS wypada poniżej mediany poza próbą.
 
 - **Walk-forward** (okna kotwiczone, wybór najlepszego wariantu przed każdym oknem): 166 transakcji, śr. 8.85 pips, 0.49 R.
 
