@@ -1,10 +1,10 @@
 {
  "id": "4tnm7GF0IMeRNDuIabi7",
  "name": "RSI 2",
- "run_id": "20261105-205706",
+ "run_id": "20261110-164114",
  "engine_version": "0.9.0",
  "code_hash": "05a4838aae5707ab",
- "data_hash": "b1d6df1e00064526",
+ "data_hash": "7025157b616c8c9b",
  "data_source": "yahoo",
  "candles": "pełne",
  "pairs": [
@@ -61,7 +61,7 @@
  ],
  "n_variants": 24,
  "n_exits": 3,
- "oos_cutoff": 1777947300,
+ "oos_cutoff": 1778260500,
  "sizing": [
   5.0,
   10.0,
@@ -74,7 +74,7 @@
  "pair_rank": null,
  "hours": "bez okna",
  "data_from": 1730073600,
- "data_to": 1793905200,
+ "data_to": 1794322800,
  "data_clean": {
   "AUDUSD": {
    "version": "5",
@@ -83,7 +83,7 @@
    "gaps": 3,
    "gap_hours": 99,
    "rejected": 0,
-   "closed_hours": 146
+   "closed_hours": 148
   },
   "EURGBP": {
    "version": "5",
@@ -92,7 +92,7 @@
    "gaps": 3,
    "gap_hours": 98,
    "rejected": 0,
-   "closed_hours": 146
+   "closed_hours": 148
   },
   "EURJPY": {
    "version": "5",
@@ -101,7 +101,7 @@
    "gaps": 3,
    "gap_hours": 98,
    "rejected": 0,
-   "closed_hours": 146
+   "closed_hours": 148
   },
   "EURUSD": {
    "version": "5",
@@ -110,7 +110,7 @@
    "gaps": 3,
    "gap_hours": 98,
    "rejected": 0,
-   "closed_hours": 146
+   "closed_hours": 148
   },
   "GBPUSD": {
    "version": "5",
@@ -119,7 +119,7 @@
    "gaps": 3,
    "gap_hours": 98,
    "rejected": 0,
-   "closed_hours": 146
+   "closed_hours": 148
   },
   "USDCAD": {
    "version": "5",
@@ -128,7 +128,7 @@
    "gaps": 3,
    "gap_hours": 99,
    "rejected": 0,
-   "closed_hours": 146
+   "closed_hours": 148
   },
   "USDCHF": {
    "version": "5",
@@ -137,7 +137,7 @@
    "gaps": 4,
    "gap_hours": 98,
    "rejected": 0,
-   "closed_hours": 146
+   "closed_hours": 148
   },
   "USDJPY": {
    "version": "5",
@@ -146,7 +146,7 @@
    "gaps": 3,
    "gap_hours": 99,
    "rejected": 0,
-   "closed_hours": 146
+   "closed_hours": 148
   }
  },
  "skipped": {
@@ -158,8 +158,8 @@
   "swieca_uzupelniona": 0
  },
  "hypothesis": "Jak w wersji 1: w wyraźnym trendzie H1 gwałtowny ruch przeciw trendowi, w którym RSI14 przebija 70\n(trend spadkowy) albo 30 (trend wzrostowy), to chwilowa przesada, po której cena cofa się o ok. 1,5 ATR.\nWersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób łącznie 1 + 24):\n1) Największe straty wersji 1 to nie przesady, tylko SZOKI informacyjne (np. 1.08.2025 13:00 UTC, dane z rynku pracy\n   USA): jedna świeca o zakresie kilku ATR to nowa cena, a nie przesada — filtr „szok” pomija taki epizod.\n2) Seria RSI zamyka stratę dopiero po 6 godzinach; w tym czasie cena potrafiła odejść o 100+ pipsów — stop cenowy\n   2 / 3 × ATR ucina ten ogon (wariant bez stopu zostaje do porównania).\n3) Więcej wejść: łagodniejszy próg „wyraźnego trendu” (0,15 ATR) i krótsza średnia (EMA100).",
- "trades_rows": 8631,
- "created": 1793912226,
- "seconds": 28.6,
+ "trades_rows": 8673,
+ "created": 1794328874,
+ "seconds": 28.4,
  "verdict": "yellow"
 }

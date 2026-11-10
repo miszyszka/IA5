@@ -1,16 +1,16 @@
 # Raport strategii: RSI 2
 
-Run `20261105-205706` · silnik 0.9.0 · kod `05a4838aae5707ab` · dane `b1d6df1e00064526`
+Run `20261110-164114` · silnik 0.9.0 · kod `05a4838aae5707ab` · dane `7025157b616c8c9b`
 
 ## Werdykt: 🟡 ŻÓŁTY — zaliczone 4 z 5 testów
 
 | test | wynik | wartość |
 |---|---|---|
-| expectancy netto OOS > 0 | ✔ | 6.78 |
-| percentyl benchmarku ≥ 95 | ✔ | 99.80 |
+| expectancy netto OOS > 0 | ✔ | 6.25 |
+| percentyl benchmarku ≥ 95 | ✔ | 100.00 |
 | PBO < 0,3 | ✔ | 0.03 |
-| DSR ≥ 0,95 | ✘ | 0.59 |
-| dodatni przy spreadzie ×1,5 | ✔ | 5.00 |
+| DSR ≥ 0,95 | ✘ | 0.70 |
+| dodatni przy spreadzie ×1,5 | ✔ | 5.41 |
 
 ## Hipoteza
 
@@ -25,9 +25,9 @@ Wersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób 
 
 ## Dane i model wykonania
 
-- Pary: AUDUSD, EURGBP, EURJPY, EURUSD, GBPUSD, USDCAD, USDCHF, USDJPY; świece H1 od 2024-10-28 do 2026-11-05; źródło: yahoo.
+- Pary: AUDUSD, EURGBP, EURJPY, EURUSD, GBPUSD, USDCAD, USDCHF, USDJPY; świece H1 od 2024-10-28 do 2026-11-10; źródło: yahoo.
 
-- In-sample do 2026-05-05, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS.
+- In-sample do 2026-05-08, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS.
 
 - Wejście na open świecy po sygnale, o dowolnej godzinie (strategia wyłączyła okno handlu, HOURS = False, D-034); wyjście na dowolnej świecy, także po nocy i weekendzie (D-032). TP i SL w tej samej świecy: przyjęty SL (pesymistycznie — świece H1 nie mówią, co padło pierwsze; transakcja z flagą `ambiguous`, B5).
 
@@ -49,70 +49,70 @@ Wersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób 
 
 | # | wyjście | parametry | IS trans. | IS śr. R | IS śr. pips | IS win % | OOS trans. | OOS śr. R | OOS śr. pips |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.15, szok=0 | 435 | 0.36 | 5.45 | 70.3 | 164 | 0.46 | 6.78 |
-| 2 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.15, szok=3.0 | 352 | 0.36 | 5.54 | 71.0 | 139 | 0.52 | 7.64 |
-| 3 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.25, szok=0 | 250 | 0.29 | 5.44 | 69.2 | 108 | 0.54 | 9.72 |
-| 4 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.25, szok=3.0 | 207 | 0.26 | 4.52 | 68.6 | 97 | 0.44 | 8.22 |
-| 5 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.25, szok=0 | 194 | 0.25 | 4.11 | 67.0 | 72 | 0.70 | 9.33 |
-| 6 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.15, szok=0 | 273 | 0.23 | 3.51 | 68.5 | 102 | 0.38 | 5.11 |
-| 7 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.15, szok=3.0 | 201 | 0.19 | 3.18 | 67.7 | 73 | 0.41 | 5.36 |
-| 8 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.25, szok=3.0 | 139 | 0.16 | 3.82 | 64.7 | 55 | 0.61 | 7.55 |
-| 9 | TP 1.5×ATR14, SL 2×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.15, szok=0 | 274 | 0.02 | 0.59 | 57.7 | 102 | 0.05 | 0.62 |
-| 10 | TP 1.5×ATR14, SL 2×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.15, szok=0 | 445 | 0.02 | 0.53 | 57.5 | 165 | 0.15 | 4.08 |
+| 1 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.15, szok=3.0 | 364 | 0.39 | 6.22 | 72.0 | 134 | 0.44 | 6.25 |
+| 2 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.15, szok=0 | 447 | 0.39 | 6.00 | 71.1 | 159 | 0.39 | 5.58 |
+| 3 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.25, szok=0 | 262 | 0.34 | 6.38 | 70.6 | 96 | 0.43 | 7.68 |
+| 4 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.25, szok=3.0 | 219 | 0.32 | 5.70 | 70.3 | 85 | 0.31 | 5.71 |
+| 5 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.25, szok=0 | 202 | 0.30 | 4.98 | 68.3 | 64 | 0.61 | 7.23 |
+| 6 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.15, szok=0 | 281 | 0.27 | 4.15 | 69.4 | 94 | 0.29 | 3.32 |
+| 7 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.15, szok=3.0 | 209 | 0.23 | 4.06 | 68.9 | 65 | 0.29 | 2.80 |
+| 8 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.25, szok=3.0 | 147 | 0.23 | 5.03 | 66.7 | 47 | 0.47 | 4.39 |
+| 9 | TP 1.5×ATR14, SL 2×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.15, szok=0 | 282 | 0.03 | 1.04 | 58.5 | 94 | 0.01 | -0.73 |
+| 10 | TP 1.5×ATR14, SL 2×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.15, szok=0 | 457 | 0.03 | 1.03 | 58.4 | 160 | 0.09 | 1.71 |
 
-## Najlepszy wariant IS: TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 (ema=200, nachylenie=0.15, szok=0)
+## Najlepszy wariant IS: TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 (ema=200, nachylenie=0.15, szok=3.0)
 
 ### Według pary
 
 | para | transakcje | śr. pips | suma pips | win % |
 |---|---|---|---|---|
-| AUDUSD | 57 | 9.5 | 541.2 | 96.5 |
-| EURGBP | 70 | 0.2 | 16.7 | 57.1 |
-| EURJPY | 81 | 8.0 | 644.3 | 69.1 |
-| EURUSD | 76 | 7.3 | 553.5 | 76.3 |
-| GBPUSD | 75 | 5.8 | 432.7 | 78.7 |
-| USDCAD | 68 | 0.4 | 29.4 | 54.4 |
-| USDCHF | 60 | 12.8 | 765.2 | 86.7 |
-| USDJPY | 112 | 4.5 | 500.1 | 63.4 |
+| AUDUSD | 52 | 9.4 | 486.3 | 96.2 |
+| EURGBP | 58 | 0.0 | 0.1 | 56.9 |
+| EURJPY | 63 | 12.4 | 781.1 | 74.6 |
+| EURUSD | 63 | 8.5 | 534.0 | 79.4 |
+| GBPUSD | 63 | 6.4 | 404.5 | 79.4 |
+| USDCAD | 61 | 1.5 | 93.7 | 54.1 |
+| USDCHF | 53 | 11.9 | 629.9 | 84.9 |
+| USDJPY | 85 | 2.0 | 169.9 | 61.2 |
 
 ### Według roku
 
 | rok | transakcje | śr. pips | suma pips | win % |
 |---|---|---|---|---|
-| 2024 | 61 | 2.3 | 138.6 | 65.6 |
-| 2025 | 309 | 5.9 | 1 835.6 | 69.3 |
-| 2026 | 229 | 6.6 | 1 508.8 | 76.0 |
+| 2024 | 55 | -1.7 | -92.3 | 61.8 |
+| 2025 | 240 | 6.0 | 1 449.7 | 69.6 |
+| 2026 | 203 | 8.6 | 1 742.2 | 78.3 |
 
 ### IS i OOS
 
 | próba | transakcje | śr. pips | suma pips | win % |
 |---|---|---|---|---|
-| IS | 435 | 5.5 | 2 370.9 | 70.3 |
-| OOS | 164 | 6.8 | 1 112.2 | 74.4 |
+| IS | 364 | 6.2 | 2 262.4 | 72.0 |
+| OOS | 134 | 6.2 | 837.2 | 73.1 |
 
 ### Kapitał
 
 | depozyt | kapitał końcowy | zwrot % | CAGR % | max obsunięcie % | Sharpe | pominięte (depozyt) |
 |---|---|---|---|---|---|---|
-| 5.0% | 22 604 | 126.0 | 51.2 | -10.0 | 1.95 | 5 |
-| 10.0% | 35 471 | 254.7 | 90.1 | -16.6 | 1.87 | 68 |
-| 15.0% | 31 241 | 212.4 | 78.2 | -23.8 | 1.44 | 167 |
-| 20.0% | 26 441 | 164.4 | 63.8 | -28.9 | 1.13 | 239 |
-| 30.0% | 17 288 | 72.9 | 32.0 | -37.3 | 0.67 | 339 |
+| 5.0% | 19 208 | 92.1 | 38.5 | -10.3 | 1.83 | 0 |
+| 10.0% | 30 282 | 202.8 | 73.9 | -19.4 | 1.88 | 37 |
+| 15.0% | 35 113 | 251.1 | 87.3 | -24.4 | 1.69 | 112 |
+| 20.0% | 38 160 | 281.6 | 95.2 | -26.3 | 1.62 | 169 |
+| 30.0% | 26 593 | 165.9 | 63.0 | -35.5 | 1.08 | 258 |
 
 ## Walidacja
 
-- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 5.81 pips/transakcję, percentyl **99.8** (losowe: 5%=-5.01, mediana=-0.84, 95%=3.07).
+- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 6.22 pips/transakcję, percentyl **100.0** (losowe: 5%=-5.77, mediana=-1.01, 95%=3.13).
 
-- **Deflated Sharpe Ratio**: 0.588 (Sharpe na transakcję 0.208, próg przy 24 próbach 0.195).
+- **Deflated Sharpe Ratio**: 0.704 (Sharpe na transakcję 0.224, próg przy 24 próbach 0.188).
 
-- **PBO** (CSCV, 16 bloków, 24 wariantów): 0.026 — szansa, że najlepszy wariant IS wypada poniżej mediany poza próbą.
+- **PBO** (CSCV, 16 bloków, 24 wariantów): 0.031 — szansa, że najlepszy wariant IS wypada poniżej mediany poza próbą.
 
-- **Walk-forward** (okna kotwiczone, wybór najlepszego wariantu przed każdym oknem): 333 transakcji, śr. 7.58 pips, 0.52 R.
+- **Walk-forward** (okna kotwiczone, wybór najlepszego wariantu przed każdym oknem): 320 transakcji, śr. 7.73 pips, 0.53 R.
 
-- **Bootstrap 95%** średnich pipsów: całość [3.20; 8.38], OOS [3.14; 10.08].
+- **Bootstrap 95%** średnich pipsów: całość [3.33; 8.92], OOS [2.91; 9.56].
 
-- **Spread**: ×1 5.81, ×1,5 5.00, ×2 4.19 pips/transakcję.
+- **Spread**: ×1 6.22, ×1,5 5.41, ×2 4.59 pips/transakcję.
 
 - TP i SL w tej samej świecy bez rozstrzygnięcia: 0.00% transakcji.
 

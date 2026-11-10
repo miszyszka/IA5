@@ -1,34 +1,34 @@
 {
- "best_variant_id": 12,
+ "best_variant_id": 15,
  "best_exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
  "best_params": {
   "ema": 200,
   "nachylenie": 0.15,
-  "szok": 0
+  "szok": 3.0
  },
- "oos_trades": 164,
- "oos_mean_pips": 6.781951,
- "oos_mean_r": 0.458452,
- "is_mean_r": 0.359558,
+ "oos_trades": 134,
+ "oos_mean_pips": 6.24777,
+ "oos_mean_r": 0.438869,
+ "is_mean_r": 0.391127,
  "benchmark": {
   "sims": 1000,
-  "actual_mean_pips": 5.814842,
-  "percentile": 99.8,
-  "p5": -5.014202,
-  "p50": -0.835563,
-  "p95": 3.065104
+  "actual_mean_pips": 6.224066,
+  "percentile": 100.0,
+  "p5": -5.77444,
+  "p50": -1.010413,
+  "p95": 3.131989
  },
  "dsr": {
-  "dsr": 0.587713,
-  "sharpe": 0.207949,
-  "sharpe0": 0.194617,
+  "dsr": 0.703607,
+  "sharpe": 0.223748,
+  "sharpe0": 0.187514,
   "trials": 24,
-  "trades": 435,
-  "skew": -2.257302,
-  "kurtosis": 10.304417
+  "trades": 364,
+  "skew": -2.406254,
+  "kurtosis": 11.219026
  },
  "pbo": {
-  "pbo": 0.026496,
+  "pbo": 0.030536,
   "variants": 24,
   "combinations": 12870,
   "blocks": 16,
@@ -37,115 +37,115 @@
  "walk_forward": {
   "windows": [
    {
-    "from": 1755534240,
-    "to": 1768066560,
+    "from": 1755865440,
+    "to": 1768563360,
     "variant_id": 12,
-    "train_r": 0.222487,
-    "test_trades": 111,
-    "test_r": 0.65226,
-    "test_pips": 9.681149
+    "train_r": 0.208003,
+    "test_trades": 115,
+    "test_r": 0.754152,
+    "test_pips": 11.547793
    },
    {
-    "from": 1768066560,
-    "to": 1780598880,
+    "from": 1768563360,
+    "to": 1781261280,
     "variant_id": 12,
-    "train_r": 0.349025,
-    "test_trades": 90,
-    "test_r": 0.50593,
-    "test_pips": 8.450037
+    "train_r": 0.371138,
+    "test_trades": 103,
+    "test_r": 0.446548,
+    "test_pips": 5.75904
    },
    {
-    "from": 1780598880,
-    "to": 1793131201,
-    "variant_id": 12,
-    "train_r": 0.379264,
-    "test_trades": 132,
-    "test_r": 0.412712,
-    "test_pips": 5.224074
+    "from": 1781261280,
+    "to": 1793959201,
+    "variant_id": 15,
+    "train_r": 0.411069,
+    "test_trades": 102,
+    "test_r": 0.376424,
+    "test_pips": 5.405686
    }
   ],
-  "trades": 333,
-  "mean_r": 0.517755,
-  "mean_pips": 7.581648
+  "trades": 320,
+  "mean_r": 0.534742,
+  "mean_pips": 7.726742
  },
  "bootstrap": {
   "all": {
-   "low": 3.199907,
-   "high": 8.375917,
-   "n": 599
+   "low": 3.329591,
+   "high": 8.923413,
+   "n": 498
   },
   "oos": {
-   "low": 3.139187,
-   "high": 10.076469,
-   "n": 164
+   "low": 2.906829,
+   "high": 9.5584,
+   "n": 134
   }
  },
  "spread": {
-  "x1": 5.814842,
-  "x1_5": 5.002071,
-  "x2": 4.189299
+  "x1": 6.224066,
+  "x1_5": 5.408605,
+  "x2": 4.593143
  },
  "ambiguous_pct": 0.0,
  "equity": {
   "5.0": {
-   "final": 22604.250159,
-   "return_pct": 126.042502,
-   "cagr_pct": 51.243838,
-   "max_dd_pct": -10.02362,
-   "calmar": 5.112308,
-   "sharpe": 1.950516,
-   "sortino": 1.171126,
-   "longest_underwater_days": 83.416667,
-   "taken": 594,
-   "skipped_margin": 5
+   "final": 19207.636835,
+   "return_pct": 92.076368,
+   "cagr_pct": 38.545236,
+   "max_dd_pct": -10.280611,
+   "calmar": 3.749314,
+   "sharpe": 1.830081,
+   "sortino": 0.943326,
+   "longest_underwater_days": 132.291667,
+   "taken": 498,
+   "skipped_margin": 0
   },
   "10.0": {
-   "final": 35471.460687,
-   "return_pct": 254.714607,
-   "cagr_pct": 90.085536,
-   "max_dd_pct": -16.598404,
-   "calmar": 5.427361,
-   "sharpe": 1.871456,
-   "sortino": 1.094159,
-   "longest_underwater_days": 105.041667,
-   "taken": 531,
-   "skipped_margin": 68
+   "final": 30282.071475,
+   "return_pct": 202.820715,
+   "cagr_pct": 73.918599,
+   "max_dd_pct": -19.375113,
+   "calmar": 3.815131,
+   "sharpe": 1.883498,
+   "sortino": 0.971672,
+   "longest_underwater_days": 159.083333,
+   "taken": 461,
+   "skipped_margin": 37
   },
   "15.0": {
-   "final": 31241.408289,
-   "return_pct": 212.414083,
-   "cagr_pct": 78.226678,
-   "max_dd_pct": -23.827976,
-   "calmar": 3.282976,
-   "sharpe": 1.436419,
-   "sortino": 0.829573,
-   "longest_underwater_days": 140.875,
-   "taken": 432,
-   "skipped_margin": 167
+   "final": 35113.407245,
+   "return_pct": 251.134072,
+   "cagr_pct": 87.265061,
+   "max_dd_pct": -24.351776,
+   "calmar": 3.583519,
+   "sharpe": 1.687564,
+   "sortino": 0.897292,
+   "longest_underwater_days": 159.791667,
+   "taken": 386,
+   "skipped_margin": 112
   },
   "20.0": {
-   "final": 26440.681071,
-   "return_pct": 164.406811,
-   "cagr_pct": 63.762851,
-   "max_dd_pct": -28.873558,
-   "calmar": 2.208348,
-   "sharpe": 1.132492,
-   "sortino": 0.60881,
-   "longest_underwater_days": 180.708333,
-   "taken": 360,
-   "skipped_margin": 239
+   "final": 38159.699332,
+   "return_pct": 281.596993,
+   "cagr_pct": 95.210967,
+   "max_dd_pct": -26.333578,
+   "calmar": 3.615573,
+   "sharpe": 1.615769,
+   "sortino": 0.806378,
+   "longest_underwater_days": 159.791667,
+   "taken": 329,
+   "skipped_margin": 169
   },
   "30.0": {
-   "final": 17288.442241,
-   "return_pct": 72.884422,
-   "cagr_pct": 32.01144,
-   "max_dd_pct": -37.318797,
-   "calmar": 0.857783,
-   "sharpe": 0.671744,
-   "sortino": 0.317768,
-   "longest_underwater_days": 235.833333,
-   "taken": 260,
-   "skipped_margin": 339
+   "final": 26593.250028,
+   "return_pct": 165.9325,
+   "cagr_pct": 62.992596,
+   "max_dd_pct": -35.462637,
+   "calmar": 1.776309,
+   "sharpe": 1.076943,
+   "sortino": 0.45913,
+   "longest_underwater_days": 212.416667,
+   "taken": 240,
+   "skipped_margin": 258
   }
  },
  "verdict": {
@@ -155,27 +155,27 @@
    {
     "test": "expectancy netto OOS > 0",
     "ok": true,
-    "value": 6.781951
+    "value": 6.24777
    },
    {
     "test": "percentyl benchmarku ≥ 95",
     "ok": true,
-    "value": 99.8
+    "value": 100.0
    },
    {
     "test": "PBO < 0,3",
     "ok": true,
-    "value": 0.026496
+    "value": 0.030536
    },
    {
     "test": "DSR ≥ 0,95",
     "ok": false,
-    "value": 0.587713
+    "value": 0.703607
    },
    {
     "test": "dodatni przy spreadzie ×1,5",
     "ok": true,
-    "value": 5.002071
+    "value": 5.408605
    }
   ]
  }
