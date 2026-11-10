@@ -1,16 +1,16 @@
 # Raport strategii: Powrót v2 jedna para
 
-Run `20261105-205712` · silnik 0.9.0 · kod `192c321e916e8334` · dane `b1d6df1e00064526`
+Run `20261110-164121` · silnik 0.9.0 · kod `192c321e916e8334` · dane `7025157b616c8c9b`
 
 ## Werdykt: 🟡 ŻÓŁTY — zaliczone 3 z 4 testów
 
 | test | wynik | wartość |
 |---|---|---|
-| expectancy netto OOS > 0 | ✔ | 3.06 |
-| percentyl benchmarku ≥ 95 | ✔ | 96.90 |
+| expectancy netto OOS > 0 | ✔ | 2.46 |
+| percentyl benchmarku ≥ 95 | ✔ | 96.00 |
 | PBO < 0,3 | nie dotyczy | — |
-| DSR ≥ 0,95 | ✘ | 0.81 |
-| dodatni przy spreadzie ×1,5 | ✔ | 4.41 |
+| DSR ≥ 0,95 | ✘ | 0.83 |
+| dodatni przy spreadzie ×1,5 | ✔ | 4.49 |
 
 ## Hipoteza
 
@@ -21,9 +21,9 @@ sygnał na tej samej świecy, wygrywa para z najwyższym średnim zyskiem w IS (
 
 ## Dane i model wykonania
 
-- Pary: AUDUSD, EURGBP, EURJPY, EURUSD, GBPUSD, USDCAD, USDCHF, USDJPY; świece H1 od 2024-10-28 do 2026-11-05; źródło: yahoo.
+- Pary: AUDUSD, EURGBP, EURJPY, EURUSD, GBPUSD, USDCAD, USDCHF, USDJPY; świece H1 od 2024-10-28 do 2026-11-10; źródło: yahoo.
 
-- In-sample do 2026-05-05, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS.
+- In-sample do 2026-05-08, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS.
 
 - Wejście na open świecy po sygnale, o dowolnej godzinie (strategia wyłączyła okno handlu, HOURS = False, D-034); wyjście na dowolnej świecy, także po nocy i weekendzie (D-032). TP i SL w tej samej świecy: przyjęty SL (pesymistycznie — świece H1 nie mówią, co padło pierwsze; transakcja z flagą `ambiguous`, B5).
 
@@ -39,13 +39,13 @@ sygnał na tej samej świecy, wygrywa para z najwyższym średnim zyskiem w IS (
 
 - **Przetestowane warianty: 1** (1 wejścia × 1 wyjść).
 
-- Pominięte sygnały, średnio na wariant: 13 (limit otwartych pozycji w parze), 0.0 (brak danych do wyjścia); 0 wejść w rozgrzewce ATR, 0 sygnałów poza oknem 07:00–17:00 czasu polskiego (B11), anulowane transakcje, średnio na wariant: 6.0 (przerwa w dostępie do danych), 0.0 (sygnał, wejście lub wyjście na świecy uzupełnionej) — D-032.
+- Pominięte sygnały, średnio na wariant: 13 (limit otwartych pozycji w parze), 2.0 (brak danych do wyjścia); 0 wejść w rozgrzewce ATR, 0 sygnałów poza oknem 07:00–17:00 czasu polskiego (B11), anulowane transakcje, średnio na wariant: 6.0 (przerwa w dostępie do danych), 0.0 (sygnał, wejście lub wyjście na świecy uzupełnionej) — D-032.
 
 ## Top 10 wariantów (ranking po IS, min. 30 transakcji IS)
 
 | # | wyjście | parametry | IS trans. | IS śr. R | IS śr. pips | IS win % | OOS trans. | OOS śr. R | OOS śr. pips |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | ATR14 TP 1.5× SL 0× max 60 | — | 110 | 0.29 | 5.99 | 80.0 | 42 | -0.01 | 3.06 |
+| 1 | ATR14 TP 1.5× SL 0× max 60 | — | 112 | 0.31 | 6.29 | 80.4 | 41 | -0.05 | 2.46 |
 
 ## Najlepszy wariant IS: ATR14 TP 1.5× SL 0× max 60 (—)
 
@@ -59,7 +59,7 @@ sygnał na tej samej świecy, wygrywa para z najwyższym średnim zyskiem w IS (
 | EURUSD | 26 | 2.2 | 57.1 | 76.9 |
 | GBPUSD | 36 | 9.7 | 347.6 | 80.6 |
 | USDCAD | 7 | 24.8 | 173.8 | 100.0 |
-| USDCHF | 17 | -3.4 | -58.1 | 70.6 |
+| USDCHF | 18 | -2.3 | -41.3 | 72.2 |
 | USDJPY | 18 | 22.7 | 409.3 | 88.9 |
 
 ### Według roku
@@ -68,38 +68,38 @@ sygnał na tej samej świecy, wygrywa para z najwyższym średnim zyskiem w IS (
 |---|---|---|---|---|
 | 2024 | 12 | 8.0 | 96.3 | 75.0 |
 | 2025 | 80 | 4.8 | 386.4 | 80.0 |
-| 2026 | 60 | 5.1 | 305.2 | 76.7 |
+| 2026 | 61 | 5.3 | 322.1 | 77.0 |
 
 ### IS i OOS
 
 | próba | transakcje | śr. pips | suma pips | win % |
 |---|---|---|---|---|
-| IS | 110 | 6.0 | 659.4 | 80.0 |
-| OOS | 42 | 3.1 | 128.5 | 73.8 |
+| IS | 112 | 6.3 | 703.9 | 80.4 |
+| OOS | 41 | 2.5 | 100.8 | 73.2 |
 
 ### Kapitał
 
 | depozyt | kapitał końcowy | zwrot % | CAGR % | max obsunięcie % | Sharpe | pominięte (depozyt) |
 |---|---|---|---|---|---|---|
-| 5.0% | 10 873 | 8.7 | 4.3 | -6.3 | 0.66 | 0 |
-| 10.0% | 11 758 | 17.6 | 8.4 | -12.5 | 0.66 | 0 |
-| 15.0% | 12 643 | 26.4 | 12.4 | -18.4 | 0.65 | 0 |
-| 20.0% | 13 516 | 35.2 | 16.2 | -24.2 | 0.65 | 0 |
-| 30.0% | 15 160 | 51.6 | 23.1 | -35.2 | 0.65 | 0 |
+| 5.0% | 10 906 | 9.1 | 4.4 | -6.3 | 0.68 | 0 |
+| 10.0% | 11 830 | 18.3 | 8.7 | -12.5 | 0.68 | 0 |
+| 15.0% | 12 760 | 27.6 | 12.8 | -18.4 | 0.68 | 0 |
+| 20.0% | 13 682 | 36.8 | 16.8 | -24.2 | 0.68 | 0 |
+| 30.0% | 15 439 | 54.4 | 24.0 | -35.2 | 0.68 | 0 |
 
 ## Walidacja
 
-- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 5.18 pips/transakcję, percentyl **96.9** (losowe: 5%=-8.98, mediana=-1.83, 95%=4.74).
+- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 5.26 pips/transakcję, percentyl **96.0** (losowe: 5%=-9.07, mediana=-1.98, 95%=4.64).
 
-- **Deflated Sharpe Ratio**: 0.815 (Sharpe na transakcję 0.105, próg przy 1 próbach 0.000).
+- **Deflated Sharpe Ratio**: 0.830 (Sharpe na transakcję 0.113, próg przy 1 próbach 0.000).
 
 - **PBO** (CSCV, — bloków, 1 wariantów): — — szansa, że najlepszy wariant IS wypada poniżej mediany poza próbą.
 
-- **Walk-forward** (okna kotwiczone, wybór najlepszego wariantu przed każdym oknem): 93 transakcji, śr. 4.05 pips, 0.19 R.
+- **Walk-forward** (okna kotwiczone, wybór najlepszego wariantu przed każdym oknem): 92 transakcji, śr. 3.58 pips, 0.18 R.
 
-- **Bootstrap 95%** średnich pipsów: całość [-2.63; 12.07], OOS [-7.32; 12.40].
+- **Bootstrap 95%** średnich pipsów: całość [-2.46; 11.88], OOS [-8.86; 12.42].
 
-- **Spread**: ×1 5.18, ×1,5 4.41, ×2 3.64 pips/transakcję.
+- **Spread**: ×1 5.26, ×1,5 4.49, ×2 3.71 pips/transakcję.
 
 - TP i SL w tej samej świecy bez rozstrzygnięcia: 0.00% transakcji.
 
