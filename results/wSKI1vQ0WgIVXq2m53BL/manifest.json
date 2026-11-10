@@ -1,10 +1,10 @@
 {
  "id": "wSKI1vQ0WgIVXq2m53BL",
  "name": "Powrót",
- "run_id": "20261103-135112",
- "engine_version": "0.8.0",
+ "run_id": "20261110-165551",
+ "engine_version": "0.9.0",
  "code_hash": "12864a1b4312df32",
- "data_hash": "2e94d23547d8dd53",
+ "data_hash": "7025157b616c8c9b",
  "data_source": "yahoo",
  "candles": "pełne",
  "pairs": [
@@ -22,7 +22,7 @@
  ],
  "n_variants": 5,
  "n_exits": 5,
- "oos_cutoff": 1777798800,
+ "oos_cutoff": 1778260500,
  "sizing": [
   5.0,
   10.0,
@@ -31,9 +31,11 @@
   30.0
  ],
  "pyramid": 1,
+ "max_pairs": null,
+ "pair_rank": null,
  "hours": "bez okna",
  "data_from": 1730073600,
- "data_to": 1793707200,
+ "data_to": 1794322800,
  "data_clean": {
   "AUDUSD": {
    "version": "5",
@@ -42,7 +44,7 @@
    "gaps": 3,
    "gap_hours": 99,
    "rejected": 0,
-   "closed_hours": 146
+   "closed_hours": 148
   },
   "EURGBP": {
    "version": "5",
@@ -51,7 +53,7 @@
    "gaps": 3,
    "gap_hours": 98,
    "rejected": 0,
-   "closed_hours": 146
+   "closed_hours": 148
   },
   "EURJPY": {
    "version": "5",
@@ -60,7 +62,7 @@
    "gaps": 3,
    "gap_hours": 98,
    "rejected": 0,
-   "closed_hours": 146
+   "closed_hours": 148
   },
   "EURUSD": {
    "version": "5",
@@ -69,7 +71,7 @@
    "gaps": 3,
    "gap_hours": 98,
    "rejected": 0,
-   "closed_hours": 146
+   "closed_hours": 148
   },
   "GBPUSD": {
    "version": "5",
@@ -78,7 +80,7 @@
    "gaps": 3,
    "gap_hours": 98,
    "rejected": 0,
-   "closed_hours": 146
+   "closed_hours": 148
   },
   "USDCAD": {
    "version": "5",
@@ -87,7 +89,7 @@
    "gaps": 3,
    "gap_hours": 99,
    "rejected": 0,
-   "closed_hours": 146
+   "closed_hours": 148
   },
   "USDCHF": {
    "version": "5",
@@ -96,7 +98,7 @@
    "gaps": 4,
    "gap_hours": 98,
    "rejected": 0,
-   "closed_hours": 146
+   "closed_hours": 148
   },
   "USDJPY": {
    "version": "5",
@@ -105,20 +107,20 @@
    "gaps": 3,
    "gap_hours": 99,
    "rejected": 0,
-   "closed_hours": 146
+   "closed_hours": 148
   }
  },
  "skipped": {
   "B8": 160,
-  "brak_danych": 1,
+  "brak_danych": 10,
   "rozgrzewka": 0,
   "poza_godzinami": 0,
   "luka_danych": 30,
   "swieca_uzupelniona": 0
  },
  "hypothesis": "FX-POWRÓT v2 (pomysł z 20.10.2026, reguły z IA4 sekcja 7b). Po gwałtownym impulsie w górę (zamknięcie ≥ 2 × ATR100\nwyżej niż poprzednie) kurs często cofa się w stronę ceny sprzed impulsu. Pierwsza czerwona świeca w ciągu 3 świec\npo impulsie pokazuje, że kupujący się wyczerpali — short z celem w połowie drogi od szczytu do bazy, bez stopu,\nlimit 60 świec.\nRóżnice wobec oryginału (ograniczenia IA5): 8 par zamiast 10; warunek „open wejścia ≥ baza + 0,5 ATR” sprawdzany na\nzamknięciu świecy sygnału (open następnej nie jest znany w chwili sygnału); TP jako poziom ceny P − ½(P − B) silnik\nna razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach ATR14 (patrz EXITS).",
- "trades_rows": 1314,
- "created": 1793713872,
+ "trades_rows": 1320,
+ "created": 1794329751,
  "seconds": 3.2,
  "verdict": "yellow"
 }
