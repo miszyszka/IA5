@@ -1,15 +1,15 @@
 # Raport strategii: RSI 2
 
-Run `20261110-165544` · silnik 0.9.0 · kod `05a4838aae5707ab` · dane `7025157b616c8c9b`
+Run `20261110-230544` · silnik 0.9.0 · kod `05a4838aae5707ab` · dane `85f209dd920e19eb`
 
 ## Werdykt: 🟡 ŻÓŁTY — zaliczone 4 z 5 testów
 
 | test | wynik | wartość |
 |---|---|---|
-| expectancy netto OOS > 0 | ✔ | 6.25 |
+| expectancy netto OOS > 0 | ✔ | 6.14 |
 | percentyl benchmarku ≥ 95 | ✔ | 100.00 |
 | PBO < 0,3 | ✔ | 0.03 |
-| DSR ≥ 0,95 | ✘ | 0.70 |
+| DSR ≥ 0,95 | ✘ | 0.71 |
 | dodatni przy spreadzie ×1,5 | ✔ | 5.41 |
 
 ## Hipoteza
@@ -43,14 +43,14 @@ Wersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób 
 
 - **Przetestowane warianty: 24** (8 wejścia × 3 wyjść).
 
-- Pominięte sygnały, średnio na wariant: 1 (limit otwartych pozycji w parze), 0.0 (brak danych do wyjścia); 0 wejść w rozgrzewce ATR, 0 sygnałów poza oknem 07:00–17:00 czasu polskiego (B11), anulowane transakcje, średnio na wariant: 0.5 (przerwa w dostępie do danych), 0.0 (sygnał, wejście lub wyjście na świecy uzupełnionej) — D-032.
+- Pominięte sygnały, średnio na wariant: 1 (limit otwartych pozycji w parze), 0.5 (brak danych do wyjścia); 0 wejść w rozgrzewce ATR, 0 sygnałów poza oknem 07:00–17:00 czasu polskiego (B11), anulowane transakcje, średnio na wariant: 0.5 (przerwa w dostępie do danych), 0.0 (sygnał, wejście lub wyjście na świecy uzupełnionej) — D-032.
 
 ## Top 10 wariantów (ranking po IS, min. 30 transakcji IS)
 
 | # | wyjście | parametry | IS trans. | IS śr. R | IS śr. pips | IS win % | OOS trans. | OOS śr. R | OOS śr. pips |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.15, szok=3.0 | 364 | 0.39 | 6.22 | 72.0 | 134 | 0.44 | 6.25 |
-| 2 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.15, szok=0 | 447 | 0.39 | 6.00 | 71.1 | 159 | 0.39 | 5.58 |
+| 1 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.15, szok=3.0 | 365 | 0.39 | 6.25 | 72.1 | 133 | 0.43 | 6.14 |
+| 2 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.15, szok=0 | 448 | 0.39 | 6.03 | 71.2 | 158 | 0.38 | 5.49 |
 | 3 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.25, szok=0 | 262 | 0.34 | 6.38 | 70.6 | 96 | 0.43 | 7.68 |
 | 4 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.25, szok=3.0 | 219 | 0.32 | 5.70 | 70.3 | 85 | 0.31 | 5.71 |
 | 5 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.25, szok=0 | 202 | 0.30 | 4.98 | 68.3 | 64 | 0.61 | 7.23 |
@@ -58,7 +58,7 @@ Wersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób 
 | 7 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.15, szok=3.0 | 209 | 0.23 | 4.06 | 68.9 | 65 | 0.29 | 2.80 |
 | 8 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.25, szok=3.0 | 147 | 0.23 | 5.03 | 66.7 | 47 | 0.47 | 4.39 |
 | 9 | TP 1.5×ATR14, SL 2×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.15, szok=0 | 282 | 0.03 | 1.04 | 58.5 | 94 | 0.01 | -0.73 |
-| 10 | TP 1.5×ATR14, SL 2×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.15, szok=0 | 457 | 0.03 | 1.03 | 58.4 | 160 | 0.09 | 1.71 |
+| 10 | TP 1.5×ATR14, SL 2×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.15, szok=0 | 458 | 0.03 | 0.95 | 58.3 | 159 | 0.10 | 1.92 |
 
 ## Najlepszy wariant IS: TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 (ema=200, nachylenie=0.15, szok=3.0)
 
@@ -87,8 +87,8 @@ Wersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób 
 
 | próba | transakcje | śr. pips | suma pips | win % |
 |---|---|---|---|---|
-| IS | 364 | 6.2 | 2 262.4 | 72.0 |
-| OOS | 134 | 6.2 | 837.2 | 73.1 |
+| IS | 365 | 6.3 | 2 282.6 | 72.1 |
+| OOS | 133 | 6.1 | 817.0 | 72.9 |
 
 ### Kapitał
 
@@ -102,15 +102,15 @@ Wersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób 
 
 ## Walidacja
 
-- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 6.22 pips/transakcję, percentyl **100.0** (losowe: 5%=-5.77, mediana=-1.01, 95%=3.13).
+- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 6.22 pips/transakcję, percentyl **100.0** (losowe: 5%=-5.74, mediana=-0.92, 95%=3.31).
 
-- **Deflated Sharpe Ratio**: 0.704 (Sharpe na transakcję 0.224, próg przy 24 próbach 0.188).
+- **Deflated Sharpe Ratio**: 0.708 (Sharpe na transakcję 0.225, próg przy 24 próbach 0.188).
 
 - **PBO** (CSCV, 16 bloków, 24 wariantów): 0.031 — szansa, że najlepszy wariant IS wypada poniżej mediany poza próbą.
 
 - **Walk-forward** (okna kotwiczone, wybór najlepszego wariantu przed każdym oknem): 320 transakcji, śr. 7.73 pips, 0.53 R.
 
-- **Bootstrap 95%** średnich pipsów: całość [3.33; 8.92], OOS [2.91; 9.56].
+- **Bootstrap 95%** średnich pipsów: całość [3.33; 8.92], OOS [2.70; 9.46].
 
 - **Spread**: ×1 6.22, ×1,5 5.41, ×2 4.59 pips/transakcję.
 
