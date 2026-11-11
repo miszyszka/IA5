@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.49 · 2026-11-11 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku; `ia5 search` (D-044); zakładka Inwestorzy (D-045); eksperyment FOREST (D-048, v2: D-049); świece dzienne D1 (D-053); silnik 0.10.0: noce, obsunięcie z MAE, uczciwy forward, wyjście „level” (D-054–D-057); silnik 0.11.0: strategie na D1 i tło D1 dla H1 (D-058); przegląd D1 bez fałszywego alarmu o OHLC Yahoo (D-059); samonaprawa danych i prosty „Stan systemu”, silnik 0.12.0 (D-060); silnik 0.13.0: wyjście bez limitu czasu — wyjątek od B7 (D-061) — `docs/STATUS.md`
+Wersja 0.50 · 2026-11-11 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku; `ia5 search` (D-044); zakładka Inwestorzy (D-045); eksperyment FOREST (D-048, v2: D-049); świece dzienne D1 (D-053); silnik 0.10.0: noce, obsunięcie z MAE, uczciwy forward, wyjście „level” (D-054–D-057); silnik 0.11.0: strategie na D1 i tło D1 dla H1 (D-058); przegląd D1 bez fałszywego alarmu o OHLC Yahoo (D-059); samonaprawa danych i prosty „Stan systemu”, silnik 0.12.0 (D-060); silnik 0.13.0: wyjście bez limitu czasu — wyjątek od B7 (D-061); czas trwania transakcji i status „otwarta/zamknięta” w raporcie i tabeli transakcji (D-062) — `docs/STATUS.md`
 
 ---
 
@@ -410,13 +410,13 @@ Duże okno: nazwa, hipoteza, kod (pole tekstowe z czcionką o stałej szerokośc
 - **Heatmapa TP × SL** (rodzina ATR) i krzywa expectancy względem N (rodzina czasowa).
 - **Kapitał od początku** dla wybranego wariantu: granica IS/OOS, data zamrożenia, obsunięcie pod spodem, pasmo benchmarku losowego (mediana i 5–95%).
 - **Wykres świecowy ze wszystkimi transakcjami:** markery wejścia i wyjścia, linie TP/SL, kolor wg wyniku, przełączanie par; klik w tabeli transakcji → skok na wykresie.
-- **Tabela transakcji** z filtrami i eksportem CSV.
+- **Tabela transakcji** z filtrami i eksportem CSV; kolumny **dni** (czas trwania, dni kalendarzowe) i **status** (zamknięta / OTWARTA — nie zamknęła się do końca danych) — D-062.
 - **Rozbicia:** para, rok, sesja, dzień tygodnia.
 - **Walidacja:** DSR, PBO, percentyl benchmarku, przedział bootstrap, test spreadu, noce i koszt nocy (D-054), % `ambiguous`; dla zamrożonej — tabela forward testu (D-056).
 - Przyciski: **Kopiuj raport dla Claude**, **Pobierz report.md**, **Zamroź strategię**, **Policz ponownie**.
 
 ### 10.6 Raport dla Claude (`report.md`)
-Stała struktura: hipoteza → kod → dane (zakres, pary, koszty, model wykonania) → liczba wariantów → top 10 wariantów IS z ich wynikami OOS → stabilność (sąsiedzi najlepszego wariantu na siatce) → walidacja → rozbicia → najgorsze obsunięcia → znane ograniczenia (źródło danych, brak swapów, pesymizm w niejednoznacznej świecy) → pytania do recenzenta.
+Stała struktura: hipoteza → kod → dane (zakres, pary, koszty, model wykonania) → liczba wariantów → top 10 wariantów IS z ich wynikami OOS → stabilność (sąsiedzi najlepszego wariantu na siatce) → walidacja → rozbicia → **czas trwania transakcji i pozycje otwarte** (D-062: ile dni trwała każda transakcja, czy jest zamknięta czy OTWARTA na koniec danych, statystyki obu grup) → najgorsze obsunięcia → znane ograniczenia (źródło danych, brak swapów, pesymizm w niejednoznacznej świecy) → pytania do recenzenta.
 Liczby w tabelach markdown, bez obrazków — tak, żeby model mógł je czytać.
 
 ### 10.7 Technologia

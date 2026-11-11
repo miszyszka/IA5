@@ -114,6 +114,7 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
             f"## Najlepszy wariant IS: {v['best_exit']} ({_params(v['best_params'])})",
             "### Według pary", _table(tabs[0]), "### Według roku", _table(tabs[1]), "### IS i OOS", _table(tabs[2]),
             "### Kapitał", _table(eq),
+            _duration_section(bt),
             "## Walidacja",
             f"- **Benchmark losowych wejść** ({b.get('sims', 0)} losowań, te same pary, kierunki i wyjście): "
             f"wynik {_f(b.get('actual_mean_pips'))} pips/transakcję, percentyl **{_f(b.get('percentile'), 1)}** "
@@ -154,6 +155,63 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
         "4. Co w kodzie wejścia może być dopasowane do historii?",
     ]
     (out / "report.md").write_text("\n\n".join(p for p in parts if p) + "\n", encoding="utf-8")
+
+
+DURATION_ROWS = 400      # tyle transakcji najwyżej w tabeli raportu (pełna lista: trades.parquet, dashboard)
+
+
+def _days(entry_ts, exit_ts) -> pd.Series:
+    """Czas trwania w dniach kalendarzowych (od otwarcia świecy wejścia do czasu wyjścia); dla otwartej — do ostatniego close."""
+    return ((pd.Series(exit_ts, dtype="float64") - pd.Series(entry_ts, dtype="float64")) / 86400.0).round(1)
+
+
+def _duration_section(bt: pd.DataFrame) -> str:
+    """Ile dni trwała każda transakcja i czy jest zamknięta na koniec danych (D-062). `otwarta` = nie zamknęła się do końca danych."""
+    if bt is None or bt.empty or not {"entry_ts", "exit_ts", "reason"} <= set(bt.columns):
+        return ""
+    t = bt.sort_values(["entry_ts", "pair"], kind="stable").reset_index(drop=True)
+    t["dni"] = _days(t["entry_ts"], t["exit_ts"]).to_numpy()
+    is_open = t["reason"] == "otwarta"
+    t["status"] = np.where(is_open, "OTWARTA", "zamknięta")
+    n_open, n_closed = int(is_open.sum()), int((~is_open).sum())
+
+    def row(label, part):
+        if part.empty:
+            return {"grupa": label, "transakcje": 0, "min": "—", "mediana": "—", "średnia": "—", "p90": "—", "max": "—",
+                    "śr. pips netto": "—", "suma pips netto": "—"}
+        d = part["dni"]
+        return {"grupa": label, "transakcje": len(part), "min": _f(d.min(), 0), "mediana": _f(d.median(), 0), "średnia": _f(d.mean(), 0),
+                "p90": _f(d.quantile(0.9), 0), "max": _f(d.max(), 0), "śr. pips netto": _f(part["pips_net"].mean(), 1),
+                "suma pips netto": _f(part["pips_net"].sum(), 0)}
+
+    summary = pd.DataFrame([row("zamknięte", t[~is_open]), row("OTWARTE na koniec danych", t[is_open]), row("wszystkie", t)])
+    last_end = _d(t["exit_ts"].max())
+    parts = [
+        "### Czas trwania transakcji i pozycje otwarte (D-062)",
+        f"Dni = dni kalendarzowe od wejścia (open świecy) do wyjścia. Pozycja **OTWARTA** nie zamknęła się do końca danych "
+        f"({last_end}): jej „wyjście” to wycena po ostatnim close, a dni liczą się do tej daty. "
+        f"Zamknięte: **{n_closed}**, otwarte: **{n_open}** (razem {len(t)}).",
+        _table(summary),
+    ]
+    if n_open:
+        parts.append(f"Pozycje otwarte mają w tabeli poniżej status OTWARTA; ich wynik jest niezrealizowany "
+                     f"(suma {_f(t.loc[is_open, 'pips_net'].sum(), 0)} pips netto).")
+    shown = t
+    note = ""
+    if len(t) > DURATION_ROWS:
+        keep = t[is_open]
+        rest = t[~is_open].sort_values("dni", ascending=False, kind="stable").head(max(0, DURATION_ROWS - len(keep)))
+        shown = pd.concat([keep, rest]).sort_values(["entry_ts", "pair"], kind="stable")
+        note = (f"Tabela pokazuje wszystkie otwarte i najdłuższe zamknięte ({len(shown)} z {len(t)}); pełna lista: trades.parquet "
+                "i tabela transakcji w dashboardzie (kolumny „dni” i „status”).")
+    tab = pd.DataFrame({
+        "para": shown["pair"], "kier.": np.where(shown["dir"] > 0, "long", "short"),
+        "wejście": shown["entry_ts"].map(_d), "wyjście / stan na": shown["exit_ts"].map(_d),
+        "dni": shown["dni"].map(lambda x: _f(x, 0)), "dni handlu": shown["bars"].map(lambda x: _f(x, 0)) if "bars" in shown else "—",
+        "status": shown["status"], "powód": shown["reason"], "pips netto": shown["pips_net"].map(lambda x: _f(x, 1)),
+    })
+    parts += [_table(tab)] + ([note] if note else [])
+    return "\n\n".join(parts)
 
 
 def _open_line(trades: pd.DataFrame) -> str:

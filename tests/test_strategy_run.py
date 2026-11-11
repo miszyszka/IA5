@@ -242,4 +242,36 @@ def test_exit_without_time_limit_keeps_open_positions_in_results_d060(h1_dir, tm
     assert all(r.exit_ts == last_close[r.pair] for r in op.itertuples())              # wycena na zamknięciu ostatniej świecy
     v = json.loads((out / "validation.json").read_text())
     assert v["best_exit"].startswith("poziomy TP/SL") and "bez limitu" in v["best_exit"]
-    assert "Pozycje otwarte (D-061" in (out / "report.md").read_text()
+    rep = (out / "report.md").read_text()
+    assert "Pozycje otwarte (D-061" in rep
+    # D-062: raport mówi, ile dni trwała każda transakcja i czy jest zamknięta na koniec danych
+    assert "### Czas trwania transakcji i pozycje otwarte (D-062)" in rep
+    assert "OTWARTA" in rep and "zamknięta" in rep and "| dni |" in rep
+    n_open = int((t["reason"] == "otwarta").sum())
+    assert f"otwarte: **{n_open}**" in rep and f"Zamknięte: **{len(t) - n_open}**" in rep
+
+
+def test_duration_section_d062():
+    """Czas trwania = dni kalendarzowe wyjście − wejście; otwarta = reason „otwarta”; długa lista jest skracana, otwarte zostają."""
+    from ia5.report import DURATION_ROWS, _duration_section
+
+    day = 86400
+    t = pd.DataFrame({
+        "pair": ["EURUSD", "EURUSD", "USDJPY"], "dir": [1, 1, 1], "entry_ts": [0, 10 * day, 20 * day],
+        "exit_ts": [30 * day, 40 * day, 100 * day], "reason": ["TP", "TP", "otwarta"], "bars": [21, 21, 57],
+        "pips_net": [100.0, 50.0, -200.0],
+    })
+    s = _duration_section(t)
+    assert "Zamknięte: **2**, otwarte: **1**" in s
+    assert "| EURUSD | long | 1970-01-01 | 1970-01-31 | 30 | 21 | zamknięta | TP | 100.0 |" in s
+    assert "| USDJPY | long | 1970-01-21 | 1970-04-11 | 80 | 57 | OTWARTA | otwarta | -200.0 |" in s
+    assert "wszystkie | 3 |" in s and "OTWARTE na koniec danych | 1 | 80 | 80 |" in s
+    n = DURATION_ROWS + 50
+    big = pd.DataFrame({
+        "pair": "EURUSD", "dir": 1, "entry_ts": np.arange(n) * day, "exit_ts": np.arange(n) * day + 5 * day,
+        "reason": "TP", "bars": 4, "pips_net": 1.0,
+    })
+    big.loc[3, "reason"] = "otwarta"
+    sb = _duration_section(big)
+    assert "OTWARTA" in sb and f"({DURATION_ROWS} z {n})" in sb
+    assert _duration_section(pd.DataFrame()) == ""

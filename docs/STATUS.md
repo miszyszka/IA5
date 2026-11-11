@@ -2,6 +2,17 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-11 (noc) — czas trwania transakcji i status otwarta/zamknięta (D-062), CLAUDE.md 0.50
+
+**Zrobione (na prośbę Michała)**
+- Raport: sekcja „Czas trwania transakcji i pozycje otwarte (D-062)” — ile dni trwała każda transakcja, czy jest zamknięta czy OTWARTA na koniec danych, statystyki obu grup. Dashboard: kolumny „dni” i „status” w tabeli transakcji i w CSV. Silnik bez zmian (0.13.0).
+- Strategia „powrót do 5% od średniej z 3 lat” w wersji tylko long (plik w rozmowie, bez zmian w repo).
+- Testy: `test_duration_section_d062` + asercje w teście przebiegu końcowego D1.
+
+**Następne / do uwagi Michała**
+1. Na Macu: `git pull && uv tool install -e runner --force`, restart `ia5 start`; wkleić strategię long-only i policzyć ponownie.
+2. Przy ocenie patrzeć na liczbę i wynik pozycji OTWARTYCH (bez stopu trwają latami) — to największe ryzyko tej strategii.
+
 ## 2026-11-11 (wieczór) — wyjście bez limitu czasu (D-061), silnik 0.13.0
 
 **Zrobione (na prośbę Michała: pozycje strategii „powrót do 3-letniej średniej” mają się zamykać tylko na średniej, nigdy czasem)**

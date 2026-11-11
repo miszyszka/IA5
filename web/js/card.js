@@ -343,13 +343,19 @@ function renderBreakdowns(t) {
     table('Według kierunku i próby', breakdown(t, (x) => `${x.dir > 0 ? 'long' : 'short'} · ${x.sample}`)));
 }
 
+/** Czas trwania w dniach kalendarzowych (otwarta pozycja: do ostatniego close). */
+const tradeDays = (t) => (t.exit_ts - t.entry_ts) / 86400;
+const tradeStatus = (t) => (t.reason === 'otwarta' ? 'OTWARTA' : 'zamknięta');
+
 const TR_COLS = [
   ['pair', 'para', (t) => PAIRS[t.pair]?.label || t.pair], ['dir', 'kier.', (t) => (t.dir > 0 ? 'long' : 'short')],
   ['entry_ts', 'wejście UTC', (t) => dateUTC(t.entry_ts, true)], ['entry_px', 'cena', (t) => t.entry_px.toFixed(t.entry_px > 20 ? 3 : 5)],
   ['exit_ts', 'wyjście UTC', (t) => dateUTC(t.exit_ts, true)], ['exit_px', 'cena', (t) => t.exit_px.toFixed(t.exit_px > 20 ? 3 : 5)],
   ['reason', 'powód', (t) => t.reason], ['weight', 'waga', (t) => num(t.weight ?? 1, 2)], ['pips_net', 'pips netto', (t) => `<span class="${cls(t.pips_net)}">${signed(t.pips_net, 1)}</span>`],
   ['r_net', 'R', (t) => `<span class="${cls(t.r_net)}">${signed(t.r_net)}</span>`], ['mae', 'MAE', (t) => num(t.mae, 1)], ['mfe', 'MFE', (t) => num(t.mfe, 1)],
-  ['bars', 'świece', (t) => t.bars], ['sample', 'próba', (t) => t.sample], ['ambiguous', '', (t) => (t.ambiguous ? '<span title="TP i SL w tej samej świecy — przyjęty SL">⚑</span>' : '')],
+  ['bars', 'świece', (t) => t.bars], ['days', 'dni', (t) => num(tradeDays(t), 0)],
+  ['status', 'status', (t) => (t.reason === 'otwarta' ? '<span class="chip warn" title="Nie zamknęła się do końca danych — wycena po ostatnim close">OTWARTA</span>' : 'zamknięta')],
+  ['sample', 'próba', (t) => t.sample], ['ambiguous', '', (t) => (t.ambiguous ? '<span title="TP i SL w tej samej świecy — przyjęty SL">⚑</span>' : '')],
 ];
 
 function renderTrades(t) {
@@ -361,7 +367,7 @@ function renderTrades(t) {
     <tbody>${rows.map((x, i) => `<tr data-i="${S.page * PAGE + i}">${TR_COLS.map(([, , f]) => `<td>${f(x)}</td>`).join('')}</tr>`).join('')}</tbody>`;
   $$('tbody tr', tbl).forEach((tr) => tr.addEventListener('click', () => focusTrade(t[+tr.dataset.i])));
   $('#tr-tools').replaceChildren(h('span', { class: 'hint' }, `${num(t.length, 0)} transakcji · kliknij, żeby zobaczyć na wykresie`),
-    h('button', { class: 'btn small', onclick: () => download(`${S.id}-wariant-${S.selected}.csv`, toCSV(t, TR_COLS.map(([k]) => k).filter((k) => k !== 'ambiguous').concat('ambiguous')), 'text/csv') }, 'CSV'));
+    h('button', { class: 'btn small', onclick: () => download(`${S.id}-wariant-${S.selected}.csv`, toCSV(t.map((x) => ({ ...x, days: Math.round(tradeDays(x)), status: tradeStatus(x) })), TR_COLS.map(([k]) => k).filter((k) => k !== 'ambiguous').concat('ambiguous')), 'text/csv') }, 'CSV'));
   const pg = (p, l) => h('button', { class: `btn ghost small ${p === S.page ? 'on' : ''}`, disabled: p < 0 || p >= pages, onclick: () => { S.page = p; renderTrades(t); } }, l);
   $('#tr-pager').replaceChildren(pg(S.page - 1, '←'), h('span', { class: 'hint' }, `strona ${S.page + 1} z ${pages}`), pg(S.page + 1, '→'));
 }

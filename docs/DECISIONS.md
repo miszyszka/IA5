@@ -5,6 +5,12 @@ Najnowsze na górze.
 
 ---
 
+### D-062 · 2026-11-11 · Czas trwania transakcji i status „zamknięta / otwarta” w raporcie i dashboardzie
+- **Decyzja (Michał: „zrób też w raporcie jakieś info ile dni każda transakcja trwała i czy jest zamknięta na koniec”):** `report.md` ma sekcję „Czas trwania transakcji i pozycje otwarte (D-062)” dla najlepszego wariantu: liczba zamkniętych i otwartych, statystyki dni (min, mediana, średnia, p90, max) i wyniku w pipsach osobno dla zamkniętych, otwartych i wszystkich oraz tabela transakcji (para, kierunek, wejście, wyjście albo „stan na”, dni kalendarzowe, dni handlu, status, powód, pips netto; przy > 400 transakcji: wszystkie otwarte + najdłuższe zamknięte). Tabela transakcji w dashboardzie ma kolumny „dni” i „status”, eksport CSV je zawiera.
+- **Definicje:** dni = (czas wyjścia − otwarcie świecy wejścia) / 86400, dni kalendarzowe; status OTWARTA = powód „otwarta” (D-061), czyli niezamknięta do końca danych, wyjście = wycena po ostatnim close. Dni liczone w przeglądarce i w raporcie z `entry_ts`/`exit_ts` — bez nowej kolumny w `trades.parquet`.
+- **Zakres:** tylko prezentacja — silnik bez zmian (`ENGINE_VERSION` 0.13.0), wyniki liczb bez zmian.
+- **Odrzucone:** kolumna `days` w `trades.parquet` (zmiana schematu pliku czytanego zakresami HTTP, a da się ją wyliczyć z dwóch istniejących kolumn); sekcja dla wszystkich wariantów (raport ma być czytelny — pełne dane są w parquet).
+
 ### D-061 · 2026-11-11 · Wyjście bez limitu czasu (`level`, `cap = 0`) — wyjątek od B7
 - **Decyzja (Michał: „Robi się powód wyjścia – czas. On ma tych transakcji nie zamykać nigdy”):** po wyjaśnieniu, że B7 wymusza limit czasu (strategia „powrót do 3-letniej średniej ±5%” miała cap 480 dni), Michał wyraźnie zażądał pozycji bez limitu czasu. Silnik 0.12.0: `Exit("level", cap=0)` — pozycja trwa do TP z `levels()` (bez SL). Dostępne tylko dla rodzaju `level` i tylko gdy strategia je jawnie zadeklaruje; domyślne siatki i wszystkie inne wyjścia nadal mają limit (B7 bez zmian poza tym wyjątkiem). B10: `ENGINE_VERSION` 0.13.0 — wyniki starsze oznaczone jako nieaktualne.
 - **Pozycja niezamknięta na końcu danych:** powód „otwarta”, wyjście = zamknięcie ostatniej świecy (MAE/MFE, noce liczone do niej), wynik niezrealizowany **wchodzi do wszystkich statystyk** (IS/OOS, DSR, benchmark, kapitał, obsunięcie z MAE); raport ma osobną linię z liczbą i średnim wynikiem takich pozycji. Zajmuje miejsce w limicie B8/`PYRAMID` do końca danych. Przy kolejnym przeliczeniu (nowe świece, forward test co 6 h) ta sama pozycja może się zamknąć na TP.
