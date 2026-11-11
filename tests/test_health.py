@@ -44,7 +44,7 @@ def test_clean_data_is_all_ok():
     ids = "yahoo_fresh apps_script yahoo_flags mac_copy bars_valid triangles frozen publish strategies".split()
     for cid in ids:
         assert s[cid] == "ok", (cid, [c for c in h["checks"] if c["id"] == cid])
-    assert "Jedyne źródło cen" in " ".join(h["facts"]) and "Do liczenia: 1 par" in " ".join(h["facts"])
+    assert "8 par" in h["facts"][0] and "ostatnia świeca" in h["facts"][0] and "D-0" not in " ".join(h["facts"])   # D-060: krótko
     assert "Dukascopy" not in health.report(h) and "Stan systemu IA5" in health.report(h)
 
 
@@ -80,8 +80,9 @@ def test_stale_yahoo_broken_bar_failed_publish_stuck_strategy():
     h = health.run(status(int(ts[-60])), yahoo, None, docs=docs, beat_state="idle",
                    publish_error="git push: denied", now=now)
     s = states(h)
-    assert s["yahoo_fresh"] == "bad" and s["bars_valid"] == "bad" and s["publish"] == "bad" and s["strategies"] == "warn"
-    assert h["state"] == "bad" and h["summary"].startswith("5 problemów")  # + brak mapy pokrycia
+    # D-060: pojedyncza zła świeca Yahoo jest zastąpiona średnią — to nie problem; problemy to tylko rzeczy do zrobienia
+    assert s["yahoo_fresh"] == "bad" and s["bars_valid"] == "ok" and s["publish"] == "bad" and s["strategies"] == "warn"
+    assert h["state"] == "bad" and h["summary"].startswith("Do zrobienia:")
 
 
 def test_code_version_check():
@@ -102,3 +103,18 @@ def test_code_info_reads_this_repo():
 
     info = cli.code_info(fetch=False)
     assert info is None or (len(info["head"]) == 40 and info["behind"] is None)
+
+
+def test_flags_are_verified_against_data_and_never_warn_d060():
+    """D-060: zgłoszenia Apps Script sprawdzane na kopii — naprawione u źródła i obsłużone średnią to nie problem."""
+    yahoo, ts = clean()
+    t_have, t_gone = int(ts[100]), int(ts[-1]) + 5 * H
+    st = {"pairs": {"EURUSD": {"flags": [f"luka@{t_have}", f"revised@{t_have}", f"luka@{t_gone}", f"ohlc@{t_have}"]}},
+          "cross": {"flags": ["EURJPY≠EURUSD×USDJPY"]}}
+    c = health.yahoo_flags(st, yahoo)
+    assert c["state"] == "ok" and "2 już naprawionych" in c["text"] and "3 uzupełnionych" in c["text"]
+    assert health.yahoo_flags({"pairs": {}}, yahoo)["state"] == "ok"
+    many = {p: df.copy() for p, df in yahoo.items()}
+    for df in many.values():
+        df.loc[: len(df) // 50, "high"] = 0.5                     # 2% złych świec we wszystkich parach → to już nie przypadek
+    assert health.bars_valid(many)["state"] == "warn"

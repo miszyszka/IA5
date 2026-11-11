@@ -33,15 +33,16 @@ def test_single_missing_bar_is_filled_and_marked():
                                   raw.drop(index=10).reset_index(drop=True), check_dtype=False)  # dane surowe bez zmian
 
 
-def test_three_hours_filled_four_is_a_data_gap():
+def test_every_gap_is_filled_longer_than_three_hours_also_cancels_trades_d060():
     raw = walk(40)
     df3, i3 = clean_h1(raw.drop(index=[10, 11, 12]))
     assert i3["filled"] == FILL_MAX == 3
     f = df3[df3.filled]
     assert f.close.iloc[-1] == pytest.approx(raw.open[13]) and f.open.iloc[0] == pytest.approx(raw.close[9])
     df4, i4 = clean_h1(raw.drop(index=[20, 21, 22, 23]))
-    assert i4["filled"] == 0 and i4["gaps"] == [[int(raw.ts[20]), int(raw.ts[23]) + H, 4]]
-    assert df4.loc[df4.ts == raw.ts[24], "gap_before"].item() == 4
+    assert i4["filled"] == 4 and i4["gaps"] == [[int(raw.ts[20]), int(raw.ts[23]) + H, 4]]   # D-060: uzupełnione…
+    assert df4.loc[df4.ts == raw.ts[24], "gap_before"].item() == 4                            # …i nadal przerwa (B12)
+    assert len(df4) == len(raw) and df4.ts.diff().iloc[1:].eq(H).all()                       # seria bez dziur
 
 
 def test_week_boundary_gap_is_not_a_barrier_but_long_one_is():
@@ -54,7 +55,7 @@ def test_week_boundary_gap_is_not_a_barrier_but_long_one_is():
     for ts, gap in ((late2, 0), (late6, 6)):
         c = 1.1 + np.arange(len(fri) + len(ts)) * 1e-5
         df, info = clean_h1(pd.DataFrame({"ts": fri + ts, "open": c, "high": c + 2e-4, "low": c - 2e-4, "close": c}))
-        assert int(df.gap_before.sum()) == gap and info["filled"] == 0
+        assert int(df.gap_before.sum()) == gap and info["filled"] == gap   # D-060: przerwa uzupełniona, granica tygodnia nie
         assert info["closed_hours"] == (2 if gap == 0 else 0)
 
 
@@ -89,16 +90,17 @@ def test_weekend_and_holiday_are_not_gaps():
 
 
 def test_engine_cancels_trades_on_data_gap_and_filled_entry():
-    raw = walk(60).drop(index=[20] + list(range(40, 45)))   # 1 świeca (uzupełniona) i 5 godzin (przerwa w danych)
+    raw = walk(60).drop(index=[20] + list(range(40, 45)))   # 1 świeca i 5 godzin (przerwa w danych) — obie uzupełnione (D-060)
     df, info = clean_h1(raw)
-    assert info["filled"] == 1 and len(info["gaps"]) == 1
+    assert info["filled"] == 6 and len(info["gaps"]) == 1
     idx = {int(t): i for i, t in enumerate(df.ts)}
     sig = np.zeros(len(df), np.int8)
     for h in (19, 25, 37):   # wejście na uzupełnionej świecy; czysta transakcja; transakcja przez przerwę
         sig[idx[T0 + h * H]] = 1
     res = run({"EURUSD": df}, {(0, "EURUSD"): sig}, [{}], exits=[Exit("time", n=4, cap=4)], hours=False)
     out = res["outcomes"]
-    assert res["skipped"]["luka_danych"] == 1 and res["skipped"]["swieca_uzupelniona"] == 1
+    # wejście na uzupełnionej i transakcja wychodząca na uzupełnionej świecy w przerwie — obie anulowane
+    assert res["skipped"]["luka_danych"] + res["skipped"]["swieca_uzupelniona"] == 2
     assert len(out) == 1
     assert res["entries"].set_index("entry_id").loc[out.entry_id.iloc[0]].entry_ts == T0 + 26 * H
 

@@ -69,3 +69,9 @@ ia5 start
 3. Uruchom raz `installTrigger()` (jak po każdej nowej wersji).
 4. Wklej aktualne `firestore.rules` (Firebase → Firestore → Rules → Publish) — dochodzi kolekcja `candles_d1`.
 5. Na Macu: `git pull`, `uv tool install -e runner --force`, restart `ia5 start`. Pierwsza synchronizacja skopiuje D1 (ok. 200 odczytów) i opublikuje `candles_d1/` na gałęzi `data`. W Stats → Stan systemu pojawi się kontrola „Świece dzienne (D1)”.
+
+## Samonaprawa danych (D-060)
+
+1. Apps Script: wklej nowy `apps_script/Code.gs` (Ctrl+A, wklej, zapisz). Wyzwalacz zostaje ten sam — nic więcej nie trzeba.
+2. Opcjonalnie od razu: wybierz funkcję `repair` i **Uruchom** — pobierze ponownie ostatnie 30 dni i wyczyści stare zgłoszenia. Bez tego zrobi to sam w ciągu 6 h.
+3. Na Macu: `cd ~/IA5 && git pull`, `uv tool install -e runner --force`, restart `ia5 start`.

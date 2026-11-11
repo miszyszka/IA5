@@ -14,6 +14,18 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 2. Przegląd H1 zgłasza dziury z maja/lipca 2026 — w Apps Script uruchom `backfill()` (uzupełni, jeśli Yahoo ma te świece).
 3. Wynik strategii na D1 oceniaj od kosztu nocy (D-054) i obsunięcia z MAE (D-055).
 
+## 2026-11-11 — samonaprawa danych, „Stan systemu” na zielono (D-060)
+
+**Zrobione (Michał: „niech się flagi i błędy same naprawiają, jak nie ma danych — niech uśrednia, uprość opis”)**
+- Apps Script: samonaprawa co 6 h — ponowne pobranie 30 dni i nadpisanie świec; flagi liczone od nowa; korekty Yahoo nie są już flagą. Ręcznie `repair()`. Sprawdzone w Node na symulowanym Yahoo (`tests/test_apps_script.py`).
+- Mac: flagi weryfikowane na kopii (naprawione/obsłużone = zielono); każda luka H1 uzupełniana średnią (`CLEAN_VERSION` 6); długie luki nadal anulują transakcje przez nie — wyniki strategii zostają uczciwe.
+- Stats: „✓ Wszystko działa” / „Do zrobienia”, reszta w „Szczegółach”; mapa i kalendarz bez bursztynu — uzupełnione = zielone z obwódką. Sprawdzone w headless Chromium.
+- `ENGINE_VERSION` 0.12.0, CLAUDE.md 0.48. Testy zielone.
+
+**Następne (Michał)** — `docs/SETUP.md`, „Samonaprawa danych”: wkleić `Code.gs` (opcjonalnie uruchomić `repair`), `git pull` + `uv tool install -e runner --force` + restart `ia5 start`, potem „Policz ponownie” strategie (silnik 0.12.0).
+
+**Znane problemy:** kodu Apps Script nie da się uruchomić z tej sesji na prawdziwym Yahoo — tylko symulacja. Dziury starsze niż 30 dni naprawi jednorazowy `backfill()`, jeśli Yahoo je ma; jeśli nie — zostają uzupełnione średnią (zielone).
+
 ## 2026-11-11 — przegląd całości; silnik 0.10.0–0.11.0: uczciwszy pomiar i świece dzienne w liczeniu (D-054–D-058)
 
 **Zrobione (na prośbę Michała: „przejrzyj cały projekt, napraw to, co warto, skup się na zyskownych strategiach”)**

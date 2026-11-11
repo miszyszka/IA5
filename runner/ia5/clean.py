@@ -16,11 +16,11 @@ Zasady (D-039):
     albo święta (godzina tuż przed nią albo tuż po niej jest poza sesją) to granica tygodnia — Yahoo zaczyna i kończy
     tydzień o godzinę–dwie inaczej niż kalendarz (czas letni w USA). Jak weekend: ani uzupełnienie, ani bariera,
     następna świeca jest kolejną.
-  * Każda inna seria ≤ FILL_MAX godzin → uzupełniona: ceny liniowo od zamknięcia ostatniej świecy przed nią
-    do otwarcia pierwszej po niej (high/low = max/min z nich), filled = True.
-  * Dłuższa seria = przerwa w dostępie do danych (także gdy brakuje jej we wszystkich parach naraz — rynek FX w tygodniu
-    nie zamyka się na kilka godzin, to przerwa Yahoo): pierwsza świeca po niej dostaje gap_before = liczba brakujących
-    godzin; silnik anuluje każdą transakcję, która na nią nachodzi (B12, engine.data_cancel).
+  * Każda inna seria → uzupełniona (D-060): ceny liniowo od zamknięcia ostatniej świecy przed nią do otwarcia pierwszej
+    po niej (high/low = max/min z nich), filled = True — dane do liczenia nie mają dziur.
+  * Seria dłuższa niż FILL_MAX godzin to dodatkowo przerwa w dostępie do danych (także gdy brakuje jej we wszystkich parach
+    naraz — to przerwa Yahoo): pierwsza prawdziwa świeca po niej dostaje gap_before = liczba brakujących godzin; silnik
+    anuluje każdą transakcję, która na nią nachodzi (B12, engine.data_cancel) — na wymyślonych cenach nie liczymy zysku.
   * Świeca uzupełniona zna otwarcie następnej świecy (przyszłość), więc silnik anuluje też transakcje, których świeca
     sygnału, wejścia albo wyjścia jest uzupełniona. Strategie widzą tylko OHLC (bez tych kolumn).
 Kopia surowa (data/yahoo) zostaje nietknięta.
@@ -32,7 +32,7 @@ import pandas as pd
 
 from .coverage import BOUNDARY_H, closed_mask, expected_mask
 
-CLEAN_VERSION = "5"
+CLEAN_VERSION = "6"   # 6 (D-060): uzupełniane są wszystkie luki, długie dalej anulują transakcje
 FILL_MAX = 3   # D8: uzupełniamy najwyżej 3 kolejne brakujące godziny jednej pary
 H = 3600
 COLS = ["ts", "open", "high", "low", "close"]
@@ -93,14 +93,16 @@ def clean_h1(raw: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
         if boundary and n <= BOUNDARY_H:  # granica weekendu / święta — jak weekend
             info["closed_runs"] += 1
             info["closed_hours"] += n
-        elif n <= FILL_MAX:
-            p0, p1 = c[prev_i], o[next_i]
-            for k in range(n):
-                op = p0 + (p1 - p0) * k / n
-                cl = p0 + (p1 - p0) * (k + 1) / n
-                new_rows.append({"ts": int(run[k]), "open": op, "high": max(op, cl), "low": min(op, cl), "close": cl})
-            info["fill_runs"] += 1
-        else:  # przerwa w dostępie do danych tej pary — bariera dla transakcji (B12)
+            continue
+        # D-060 (Michał: „jak nie ma danych — niech uśrednia”): każda luka uzupełniona liniowo od zamknięcia przed nią
+        # do otwarcia po niej, znacznik filled — seria świec jest ciągła, wskaźniki strategii nie mają skoków
+        p0, p1 = c[prev_i], o[next_i]
+        for k in range(n):
+            op = p0 + (p1 - p0) * k / n
+            cl = p0 + (p1 - p0) * (k + 1) / n
+            new_rows.append({"ts": int(run[k]), "open": op, "high": max(op, cl), "low": min(op, cl), "close": cl})
+        info["fill_runs"] += 1
+        if n > FILL_MAX:  # dłuższa luka: ceny są wymyślone — transakcja przez nią byłaby fikcją, więc nadal ją anulujemy (B12)
             gap_before[next_i] = n
             info["gaps"].append([int(run[0]), int(run[-1]) + H, n])
             info["gap_hours"] += n

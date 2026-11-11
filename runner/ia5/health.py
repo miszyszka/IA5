@@ -120,20 +120,30 @@ def apps_script(status: dict, now: int) -> dict:
     )
 
 
-def yahoo_flags(status: dict) -> dict:
+def yahoo_flags(status: dict, yahoo: dict | None = None) -> dict:
+    """D-060: zgłoszenia Apps Script sprawdzane na kopii świec — co już naprawione albo obsłużone, nie jest problemem.
+    luka@ts: świeca jest już w kopii (Yahoo ją dosłał, samonaprawa ją zapisała) albo Mac ją uzupełnia; revised/ts: korekta
+    zapisana / notowanie niezapisane; ohlc/cena: warstwa czyszczenia odrzuca świecę i uzupełnia; trójkąt: kontrola spójności."""
     items = [(p, f) for p, v in (status.get("pairs") or {}).items() for f in (v.get("flags") or [])]
     items += [("trójkąt", f) for f in ((status.get("cross") or {}).get("flags") or [])]
+    name = "Jakość danych Yahoo"
     if not items:
-        return check("yahoo_flags", "Jakość świec Yahoo", "ok", "Ostatnie pobrania przeszły kontrolę świec (OHLC, czas, luki, korekty).")
-    return check(
-        "yahoo_flags",
-        "Flagi jakości Yahoo",
-        "warn",
-        f"{len(items)} flag z ostatnich pobrań Yahoo.",
-        [f"{p}: {f}" for p, f in items],
-        "Świece z błędem warstwa czyszczenia odrzuca, luki ≤ 3 h uzupełnia, dłuższe anulują transakcje (D8, B12) — "
-        "szczegóły w Stats → mapa pokrycia.",
-    )
+        return check("yahoo_flags", name, "ok", "Ostatnie pobrania bez zastrzeżeń.")
+    fixed = handled = 0
+    detail = []
+    for p, f in items:
+        kind, _, ts = str(f).partition("@")
+        df = (yahoo or {}).get(p)
+        present = ts.isdigit() and df is not None and len(df) and bool((df["ts"].to_numpy() == int(ts)).any())
+        if kind in ("revised", "ts") or (kind == "luka" and present):
+            fixed += 1
+        else:
+            handled += 1
+            what = {"luka": "brak świecy — uzupełniona średnią", "ohlc": "zła świeca — zastąpiona średnią",
+                    "cena<=0": "zła cena — zastąpiona średnią"}.get(kind, "sprawdzane w kontroli spójności par")
+            detail.append(f"{label(p) if p in PAIRS else p} {utc(int(ts)) if ts.isdigit() else str(f)}: {what}")
+    parts = ([f"{fixed} już naprawionych u źródła"] if fixed else []) + ([f"{handled} uzupełnionych automatycznie"] if handled else [])
+    return check("yahoo_flags", name, "ok", f"Zgłoszenia Yahoo obsłużone: {', '.join(parts)}.", detail[:20])
 
 
 def local_data(home: Path, yahoo: dict) -> dict:
@@ -322,46 +332,45 @@ def frozen(h1: dict) -> dict:
 
 
 def bars_valid(h1: dict) -> dict:
-    bad = []
+    """D-060: świece łamiące D5 warstwa czyszczenia odrzuca i uzupełnia średnią — to nie awaria, dopóki jest ich mało."""
+    bad, n_bad, n_all = [], 0, 0
     for p, df in h1.items():
         if df is None or df.empty:
             continue
         f = bar_flags(df)
-        if f["ohlc"] or f["price"] or f["ts"]:
-            bad.append(f"{label(p)}: OHLC {f['ohlc']}, cena ≤ 0 {f['price']}, czas poza pełną godziną {f['ts']}")
-    if bad:
-        return check(
-            "bars_valid",
-            "Poprawność świec",
-            "bad",
-            "Są świece łamiące podstawowe reguły (D5).",
-            bad,
-            "Warstwa czyszczenia odrzuca te świece przed liczeniem (D8); jeśli jest ich dużo — Yahoo podaje błędne ceny.",
-        )
-    return check("bars_valid", "Poprawność świec", "ok", "Każda świeca: high ≥ max(open, close), low ≤ min, ceny > 0, pełne godziny.")
+        k = f["ohlc"] + f["price"] + f["ts"]
+        n_bad += k
+        n_all += len(df)
+        if k:
+            bad.append(f"{label(p)}: {k} {pl(k, 'świeca', 'świece', 'świec')}")
+    if not n_bad:
+        return check("bars_valid", "Poprawność świec", "ok", "Wszystkie świece poprawne.")
+    share = n_bad / max(n_all, 1)
+    if share >= 0.01:
+        return check("bars_valid", "Poprawność świec", "warn",
+                     f"{fmt(n_bad)} błędnych świec Yahoo ({fmt(100 * share, 1)}%) — za dużo, żeby to był przypadek.", bad,
+                     "Sprawdź w arkuszu „log” Apps Script, od kiedy; zwykle mija samo po samonaprawie (co 6 h).")
+    return check("bars_valid", "Poprawność świec", "ok",
+                 f"{fmt(n_bad)} {pl(n_bad, 'błędna świeca', 'błędne świece', 'błędnych świec')} Yahoo zastąpione średnią.", bad)
 
 
 def coverage_check(cov: dict | None, now: int | None = None) -> dict:
-    """Dziury w świecach Yahoo. Przerwy > 3 h anulują transakcje (B12) — stare są już znane, więc tylko je wypisujemy;
-    uwaga, gdy przerwa jest świeża (ostatnie 7 dni), bo wtedy da się ją jeszcze uzupełnić."""
-    now = now or int(time.time())
+    """D-060: każda dziura jest uzupełniona średnią w danych do liczenia, a samonaprawa Apps Script co 6 h dociąga z Yahoo
+    to, co tam się pojawiło. Ostrzeżenie tylko wtedy, gdy mapy pokrycia jeszcze nie ma."""
     src = (cov or {}).get("sources", {}).get("yahoo")
     if not src:
         return check("coverage", "Kompletność historii", "warn", "Mapy pokrycia jeszcze nie ma.", fix="Pojawi się po ia5 start.")
     months = [m for d in src["pairs"].values() for m in d["m"] if m[0] != NONE]
     holes = sum(m[3] or 0 for m in months)
-    exp = sum(m[1] or 0 for m in months)
     long_ = sorted(((p, g) for p, d in src["pairs"].items() for g in d["gaps"] if g[3] == "p" and g[2] > 3), key=lambda x: -x[1][0])
-    share = fmt(100 * holes / exp, 3) if exp else "0"
-    text = (f"Dziury {fmt(holes)} h ({share}% godzin sesji); przerw w danych (> 3 h, transakcje na nich anulowane): {len(long_)}.")
-    detail = [f"{label(p)}: {utc(g[0])} → {utc(g[1])} ({g[2]} h{', wszystkie pary' if len(g) > 4 and g[4] >= len(src['pairs']) else ''})"
-              for p, g in long_]
-    fix = ("Uruchom backfill() w Apps Script — pobierze 730 dni Yahoo od nowa i uzupełni dziury, jeśli Yahoo ma już te świece "
-           "(ok. 200 zapisów Firestore).")
-    fresh = [x for x in long_ if x[1][1] > now - 7 * 86400]
-    if fresh:
-        return check("coverage", "Kompletność historii", "warn", f"Świeża przerwa w danych ({len(fresh)}). " + text, detail, fix)
-    return check("coverage", "Kompletność historii", "ok", text, detail, fix if long_ else None)
+    if not holes:
+        return check("coverage", "Kompletność historii", "ok", "Historia bez dziur.")
+    detail = [f"{label(p)}: {utc(g[0])} → {utc(g[1])} ({g[2]} h)" for p, g in long_[:20]]
+    return check("coverage", "Kompletność historii", "ok",
+                 f"Komplet: {fmt(holes)} brakujących godzin Yahoo uzupełnionych średnią"
+                 + (f" (z tego {len(long_)} {pl(len(long_), 'dłuższa przerwa', 'dłuższe przerwy', 'dłuższych przerw')}"
+                    " — backtest nie liczy transakcji przez nie)." if long_ else "."),
+                 detail)
 
 
 def publishing(status: dict, publish_error: str | None) -> dict:
@@ -448,37 +457,27 @@ def disk(path: Path) -> dict:
 
 
 def facts(status: dict, yahoo: dict, cov: dict | None, docs: list[dict] | None, ready: dict | None = None) -> list[str]:
+    """D-060: krótko — trzy zdania, bez numerów decyzji."""
     out = []
-    yb = status.get("totalBars") or sum(len(d) for d in yahoo.values() if d is not None)
-    yfirst = min((int(d["ts"].min()) for d in yahoo.values() if d is not None and len(d)), default=None)
     ylast = max((v.get("lastTs", 0) for v in (status.get("pairs") or {}).values()), default=0)
-    out.append(
-        f"Dane: świece H1 Yahoo — {fmt(yb)} w Firestore, {len(status.get('pairs') or {})} par"
-        + (f", od {utc(yfirst)[:10]}" if yfirst else "")
-        + (f", ostatnia {utc(ylast)}" if ylast else "")
-        + ". Jedyne źródło cen (D-039); historia rośnie o każdą nową godzinę."
-    )
-    usable = {p: r for p, r in (ready or {}).items() if r.get("bars")}
-    if ready is not None:
-        tot = lambda k: fmt(sum(r.get(k, 0) for r in usable.values()))  # noqa: E731
-        skipped = [label(p) for p, r in ready.items() if not r.get("bars")]
-        out.append(
-            f"Do liczenia: {len(usable)} par, {tot('bars')} świec; odrzucone (D5) {tot('rejected')}, uzupełnione {tot('filled')} "
-            f"(luki ≤ 3 h), przerwy w danych {tot('gaps_n')} ({tot('gap_hours')} h) — transakcje na nich są anulowane."
-            + (f" Pominięte (za mało świec): {', '.join(skipped)}." if skipped else "")
-        )
+    yfirst = min((int(d["ts"].min()) for d in yahoo.values() if d is not None and len(d)), default=None)
+    d1first = min(((v.get("firstDay") or "9999") for v in ((status.get("d1") or {}).get("pairs") or {}).values()), default=None)
+    line = f"{len(status.get('pairs') or {})} par"
+    if yfirst:
+        line += f" · godzinowe od {utc(yfirst)[:10]}"
+    if d1first and d1first != "9999":
+        line += f" · dzienne od {d1first}"
+    if ylast:
+        line += f" · ostatnia świeca {utc(ylast)}"
+    out.append(line)
+    if ready:
+        filled = sum(r.get("filled", 0) for r in ready.values() if r.get("bars"))
+        rejected = sum(r.get("rejected", 0) for r in ready.values() if r.get("bars"))
+        if filled or rejected:
+            out.append(f"Naprawione automatycznie: {fmt(filled)} brakujących lub błędnych świec uzupełnionych średnią.")
     if docs is not None:
-        done = sum(1 for d in docs if d.get("status") == "policzona")
         frozen_n = sum(1 for d in docs if d.get("frozenAt"))
-        out.append(f"Strategie: {len(docs)} w bazie, {done} policzonych, {frozen_n} zamrożonych (forward test).")
-    d1s = status.get("d1") or {}
-    if d1s.get("pairs"):
-        first = min((v.get("firstDay") or "9999") for v in d1s["pairs"].values())
-        out.append(f"Świece dzienne (D1) Yahoo: {fmt(d1s.get('totalBars') or sum(v.get('count', 0) for v in d1s['pairs'].values()))} "
-                   f"w Firestore, {len(d1s['pairs'])} par, od {first} — strategie na D1 (TIMEFRAME) liczą na nich po warstwie czyszczenia "
-                   "(data/d1_ready, D-058); skaner, ia5 search i las nadal tylko na H1.")
-    if status.get("dataSha"):
-        out.append(f"Gałąź data: commit {status['dataSha'][:7]}.")
+        out.append(f"Strategie: {len(docs)}" + (f", w tym {frozen_n} w forward teście" if frozen_n else "") + ".")
     return out
 
 
@@ -499,7 +498,7 @@ def run(
     checks = [
         yahoo_fresh(status, now),
         apps_script(status, now),
-        yahoo_flags(status),
+        yahoo_flags(status, yahoo),
         mac_copy(status, yahoo),
         coverage_check(cov, now),
         bars_valid(yahoo),
@@ -518,10 +517,10 @@ def run(
     worst = max((c["state"] for c in checks), key=RANK.get)
     problems = [c for c in checks if c["state"] != "ok"]
     summary = (
-        "Wszystko w porządku — każda kontrola przeszła."
+        "Wszystko działa."
         if not problems
-        else f"{len(problems)} {pl(len(problems), 'problem', 'problemy', 'problemów')}: "
-        + "; ".join(f"{c['name']} — {c['text'].rstrip('.')}" for c in sorted(problems, key=lambda c: -RANK[c["state"]])[:3])
+        else "Do zrobienia: "
+        + "; ".join(f"{c['name']} — {c['text'].rstrip('.')}" for c in sorted(problems, key=lambda c: -RANK[c["state"]])[:3]) + "."
     )
     return {"at": now, "state": worst, "summary": summary, "facts": facts(status, yahoo, cov, docs, ready), "checks": checks}
 

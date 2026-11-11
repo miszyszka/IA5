@@ -28,7 +28,7 @@ function summary(s) {
   return h('section', { class: 'panel stats-sum' },
     item('Świece w bazie', num(s.totalBars || 0, 0), `Yahoo H1 w Firestore${run.finishedAt ? `<br>ostatnie pobranie ${local(run.finishedAt)}` : ''}${run.ok === false ? `<br><span class="neg">błąd: ${esc(run.error)}</span>` : ''}`),
     item('Latencja ostatniej świecy', last == null ? '—' : `${num(last, 0)} s`, `${med == null ? '' : `mediana 24 h ${num(med, 0)} s`}${spark(lat)}`),
-    item('Przegląd zdrowia', hv.problems ? `<span class="state-${hv.state}">${hv.problems} ${problemWord(hv.problems)}</span>` : '<span class="state-ok">OK</span>',
+    item('Stan systemu', hv.problems ? `<span class="state-${hv.state}">${hv.problems} ${problemWord(hv.problems)}</span>` : '<span class="state-ok">OK</span>',
       healthTile(hv)));
 }
 
@@ -39,38 +39,42 @@ function healthTile(hv) {
   const probs = sortChecks(hv.checks).filter((c) => c.state !== 'ok');
   const list = probs.map((c) => `<span class="ht-row"><i class="hk-mark ${c.state}">${MARK[c.state]}</i><b>${esc(c.name)}</b> ${esc(c.text)}</span>`).join('');
   const when = hv.at ? `${hv.checks.length} kontroli · ${local(hv.at)} · <a href="#/stats" onclick="document.querySelector('.panel.health')?.scrollIntoView({behavior:'smooth'});return false">szczegóły</a>` : '';
-  return probs.length ? `<span class="ht">${list}</span>${when}` : `wszystkie kontrole przeszły · ${when}`;
+  return probs.length ? `<span class="ht">${list}</span>${when}` : `wszystko działa · ${when}`;
 }
 
 function headline(hv) {
   if (!hv.at) return hv.summary;
-  if (!hv.problems) return 'Wszystko w porządku — każda kontrola przeszła.';
-  const n = (st) => hv.checks.filter((c) => c.state === st).length;
-  const parts = [n('bad') && `${n('bad')} ${n('bad') === 1 ? 'błąd' : n('bad') < 5 ? 'błędy' : 'błędów'}`,
-    n('warn') && `${n('warn')} ${n('warn') === 1 ? 'uwaga' : n('warn') < 5 ? 'uwagi' : 'uwag'}`].filter(Boolean);
-  const first = hv.checks.find((c) => c.state === hv.state).name;
-  return `${hv.problems} ${problemWord(hv.problems)}: ${parts.join(', ')} — ${first}${hv.problems > 1 ? ' i inne' : ''}, szczegóły poniżej.`;
+  if (!hv.problems) return 'Wszystko działa';
+  const c = sortChecks(hv.checks).find((x) => x.state !== 'ok');
+  return hv.problems === 1 ? `Do zrobienia: ${c.name}` : `Do zrobienia: ${hv.problems} rzeczy`;
 }
 
+/**
+ * D-060: prosto — nagłówek (zielone „Wszystko działa” albo „Do zrobienia”), pod nim tylko rzeczy do zrobienia z podpowiedzią,
+ * a pełna lista kontroli i krótki opis bazy schowane w „Szczegóły”. Co system naprawił sam, jest zielone.
+ */
 function healthPanel(s) {
   const hv = healthView(s.health, Date.now() / 1000, heartbeatState(store.state.beat).online);
   const MARK = { ok: '✓', warn: '!', bad: '✕' };
-  const rows = sortChecks(hv.checks).map((c) => {
-    const more = (c.detail || []).length || c.fix;
-    const head = [h('i', { class: `hk-mark ${c.state}`, 'aria-label': c.state }, MARK[c.state]), h('b', {}, c.name), h('span', {}, c.text)];
-    return more
-      ? h('li', { class: `hk ${c.state}` }, h('details', { open: c.state === 'bad' },
-        h('summary', {}, ...head),
-        (c.detail || []).length ? h('ul', { class: 'hk-detail' }, ...c.detail.map((d) => h('li', {}, d))) : '',
-        c.fix ? h('p', { class: 'hk-fix' }, 'Co zrobić: ', c.fix) : ''))
-      : h('li', { class: `hk ${c.state}` }, h('div', { class: 'hk-row' }, ...head));
-  });
+  const sorted = sortChecks(hv.checks);
+  const todo = sorted.filter((c) => c.state !== 'ok').map((c) => h('li', { class: `hk ${c.state}` },
+    h('div', { class: 'hk-row' }, h('i', { class: `hk-mark ${c.state}` }, MARK[c.state]), h('b', {}, c.name), h('span', {}, c.text)),
+    c.fix ? h('p', { class: 'hk-fix' }, 'Co zrobić: ', c.fix) : '',
+    (c.detail || []).length ? h('details', {}, h('summary', { class: 'hint' }, 'szczegóły'),
+      h('ul', { class: 'hk-detail' }, ...c.detail.map((d) => h('li', {}, d)))) : ''));
+  const all = sorted.map((c) => h('li', { class: `hk ${c.state}` },
+    (c.detail || []).length
+      ? h('details', {}, h('summary', {}, h('i', { class: `hk-mark ${c.state}` }, MARK[c.state]), h('b', {}, c.name), h('span', {}, c.text)),
+        h('ul', { class: 'hk-detail' }, ...c.detail.map((d) => h('li', {}, d))))
+      : h('div', { class: 'hk-row' }, h('i', { class: `hk-mark ${c.state}` }, MARK[c.state]), h('b', {}, c.name), h('span', {}, c.text))));
   return h('section', { class: 'panel health' },
     h('div', { class: 'phead' }, h('h3', {}, 'Stan systemu'),
-      h('span', { class: 'hint' }, hv.at ? `przegląd ${local(hv.at)} · co godzinę na Macu · ręcznie: ia5 health` : 'przegląd robi Mac co godzinę')),
-    h('p', { class: `hsum state-${hv.state}`, title: hv.summary }, headline(hv)),
-    hv.facts.length ? h('ul', { class: 'hfacts' }, ...hv.facts.map((f) => h('li', {}, f))) : '',
-    h('ul', { class: 'hklist' }, ...rows));
+      h('span', { class: 'hint' }, hv.at ? `sprawdzone ${local(hv.at)}` : 'sprawdza Mac co godzinę')),
+    h('p', { class: `hsum big state-${hv.state}`, title: hv.summary }, h('i', { class: `hk-mark ${hv.state}` }, MARK[hv.state]), ' ', headline(hv)),
+    todo.length ? h('ul', { class: 'hklist' }, ...todo) : '',
+    h('details', { class: 'hmore' }, h('summary', { class: 'hint' }, `Szczegóły · ${hv.checks.length} kontroli`),
+      hv.facts.length ? h('ul', { class: 'hfacts' }, ...hv.facts.map((f) => h('li', {}, f))) : '',
+      h('ul', { class: 'hklist' }, ...all)));
 }
 
 function pairsTable(s) {
@@ -89,8 +93,9 @@ function pairsTable(s) {
 // ---------- kalendarz danych dzień po dniu (całe historia, miesiąc po miesiącu) ----------
 
 let calPair = null, calSel = null; // calPair: null = wszystkie pary; calSel: ts wybranego dnia
-const CAL_LABEL = { ok: 'komplet', fill: 'pojedyncze braki ≤ 3 h (uzupełnione do liczenia)', gap: 'przerwa w danych > 3 h (transakcje anulowane)',
-  none: 'brak danych', off: 'bez sesji (weekend, święto)' };
+// D-060: braki uzupełnia średnia — dzień jest kompletny do liczenia; „uzupełnione” to informacja, nie problem
+const CAL_LABEL = { ok: 'komplet', fill: 'komplet (braki ≤ 3 h uzupełnione średnią)', gap: 'komplet (dłuższa przerwa uzupełniona średnią)',
+  none: 'przed początkiem historii', off: 'bez sesji (weekend, święto)' };
 const WDS = ['pn', 'wt', 'śr', 'cz', 'pt', 'sb', 'nd'];
 
 function renderCalendar() {
@@ -111,9 +116,8 @@ function renderCalendar() {
   const s = calendarSummary(months);
   const d = (ts) => new Date(ts * 1000).toISOString().slice(0, 10).split('-').reverse().join('.');
   const line = [`dane od <b>${d(s.from)}</b> do ${d(s.to)}`, `${num(s.session, 0)} dni sesji`, `komplet ${num(s.ok, 0)}`,
-    s.fill ? `<span class="warn">z uzupełnieniem ${num(s.fill, 0)}</span>` : '',
-    s.gap ? `<span class="neg">w przerwie ${num(s.gap, 0)}</span>` : 'bez przerw',
-    s.none ? `<span class="neg">bez danych ${num(s.none, 0)}</span>` : ''].filter(Boolean).join(' · ');
+    s.fill + s.gap ? `uzupełnione średnią ${num(s.fill + s.gap, 0)}` : '',
+    s.none ? `przed początkiem historii ${num(s.none, 0)}` : ''].filter(Boolean).join(' · ');
   const today = Math.floor(Date.now() / 1000 / 86400) * 86400;
   const grid = h('div', { class: 'cal' }, h('div'), ...Array.from({ length: 31 }, (_, i) => h('div', { class: 'cal-h' }, String(i + 1))));
   for (const m of months) {
@@ -145,8 +149,7 @@ function renderCalendar() {
   const legend = h('div', { class: 'covlegend' }, ...['ok', 'fill', 'gap', 'none', 'off'].map((k) =>
     h('span', {}, h('i', { class: `sw cal-${k}` }), CAL_LABEL[k])), h('span', {}, h('i', { class: 'sw cal-today' }), 'dziś'));
   panel.replaceChildren(head, h('p', { class: 'covsum', html: line }), h('div', { class: 'calwrap' }, grid), legend, detail,
-    h('p', { class: 'hint' }, 'Dni w UTC, od najnowszego miesiąca. Kolor dnia dla kilku par = najgorszy stan. Klik w dzień → lista luk co do godziny. ',
-      'Niedziela zimą jest „bez sesji”: Yahoo otwiera tydzień ok. 2 h później niż kalendarz, a granica tygodnia nie jest dziurą (D-039).'));
+    h('p', { class: 'hint' }, 'Dni w UTC, od najnowszego miesiąca. Kliknij dzień, żeby zobaczyć jego godziny.'));
 }
 
 
@@ -287,7 +290,7 @@ function renderCoverage() {
   const all = summarize(pairs.flatMap((p) => data.pairs[p].m));
   const line = [
     `od ${monthName(data.keys[0])} · ${num(all.pres, 0)} świec`,
-    `dziury ${hours(all.holes)} w ${num(all.holeMonths, 0)} mies.`,
+    all.holes ? `uzupełnione średnią ${hours(all.holes)}` : 'bez dziur',
     `granica tygodnia / bez ruchu ${hours(all.common)}`,
   ].join(' · ');
   const gen = cov?.generated ? h('span', { class: 'hint' }, `policzone ${local(cov.generated)}`) : '';
@@ -296,10 +299,10 @@ function renderCoverage() {
   const labelBlock = (bi) => [h('div', { style: { height: `${AXIS + (bi ? BAND_GAP : 0)}px` } }),
     ...pairs.map((p) => h('button', { class: `covpair ${sel?.pair === p && sel.i == null ? 'on' : ''}`, style: { height: `${ROW}px` },
       title: `Wszystkie dziury ${PAIRS[p].label}`, onclick: () => { sel = sel?.pair === p && sel.i == null ? null : { pair: p }; renderCoverage(); } }, PAIRS[p].label))];
-  const sums = h('div', { class: 'covsums' }, h('div', { class: 'hint', style: { height: `${AXIS}px` } }, 'pokrycie · dziury'),
+  const sums = h('div', { class: 'covsums' }, h('div', { class: 'hint', style: { height: `${AXIS}px` } }, 'pokrycie · uzupełnione'),
     ...pairs.map((p) => h('div', { class: 'mono', style: { height: `${ROW}px` } },
       per[p].pct == null ? '—' : `${num(per[p].pct * 100, per[p].pct > 0.999 && per[p].pct < 1 ? 2 : 1)}%`,
-      h('span', { class: 'dimmed' }, '\u00a0·\u00a0'), h('span', { class: per[p].holes ? 'warn' : 'dimmed' }, hours(per[p].holes)))));
+      h('span', { class: 'dimmed' }, '\u00a0·\u00a0'), h('span', { class: 'dimmed' }, hours(per[p].holes)))));
   const scroll = h('div', { class: 'covscroll', onclick: (e) => {
     const t = e.target.closest('rect');
     if (!t) return;
@@ -308,7 +311,7 @@ function renderCoverage() {
     renderCoverage();
   } });
   const legend = h('div', { class: 'covlegend' },
-    ...[['f-ok', 'bez dziur'], ['f-h1', 'dziury 1–5 h'], ['f-h2', '6–47 h'], ['f-h3', '≥ 48 h'], ['o-partial', 'bieżący miesiąc'], ['o-none', 'brak świec']]
+    ...[['f-ok', 'bez dziur'], ['f-h1', 'braki uzupełnione średnią'], ['o-partial', 'bieżący miesiąc'], ['o-none', 'brak świec']]
       .map(([k, l]) => h('span', {}, h('i', { class: `sw ${k}` }), l)));
   panel.replaceChildren(head, h('p', { class: 'covsum', html: line }),
     h('div', { class: 'covmap' }, labels, scroll, sums), legend,
@@ -387,7 +390,7 @@ function renderYahooAudit(panel, head) {
       ? h('span', { class: 'neg', title: 'czeka na świecę od pełnej godziny' }, '⏱ ', h('span', { 'data-since': since }, elapsed(since, now)))
       : h('span', { class: 'dimmed', title: 'ostatnia świeca zapisana tyle po zamknięciu godziny' }, ls != null ? `✓ ${num(ls, 0)} s` : '✓')));
   }
-  const legend = h('div', { class: 'covlegend' }, ...[['a-ok', 'jest'], ['a-late', 'spóźniona'], ['a-flag', 'z flagą'], ['a-wait', 'czeka (zegar od pełnej godziny)'],
+  const legend = h('div', { class: 'covlegend' }, ...[['a-ok', 'jest'], ['a-late', 'spóźniona'], ['a-flag', 'Yahoo poprawia (samonaprawa co 6 h)'], ['a-wait', 'czeka (zegar od pełnej godziny)'],
     ['a-now', 'godzina trwa'], ['a-allgap', 'brak we wszystkich parach'], ['a-closed', 'rynek zamknięty']].map(([k, l]) => h('span', {}, h('i', { class: `sw ${k}` }), l)));
 
   let detail;

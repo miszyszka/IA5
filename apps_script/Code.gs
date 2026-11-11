@@ -27,6 +27,8 @@ const LATE_S = 20 * 60;   // świeca zapisana później niż 20 min po zamknięc
 const RETRY_S = 15;       // D-033: ponowienie brakujących par co 15 s…
 const BURST_S = 10 * 60;  // …przez pierwsze 10 min po zamknięciu świecy…
 const RUN_MAX_S = 100;    // …i najwyżej tyle sekund jednego uruchomienia (wyzwalacz co 1 min, blokada nie dubluje)
+const REPAIR_EVERY_S = 6 * H;  // D-060: co 6 h samonaprawa — ponowne pobranie ostatnich REPAIR_DAYS dni i nadpisanie świec
+const REPAIR_DAYS = 30;        // dziury, które Yahoo uzupełnił później, i świece przez niego skorygowane trafiają do bazy
 
 const PAIRS = [
   { name: 'EURUSD', yahoo: 'EURUSD=X', pip: 0.0001 },
@@ -154,8 +156,13 @@ function run_(mode) {
   const exp = expectedTs(startedAt);
   let todo = PAIRS.filter(p => mode === 'backfill' ||
     !(state.pairs[p.name] && state.pairs[p.name].lastTs >= exp));
-  if (!todo.length && state.daily && state.recent) { // nic nowego — zero zapytań i zapisów
+  if (!todo.length && state.daily && state.recent) { // nic nowego — zero zapytań i zapisów…
     if (mode === 'tick') dispatchLive_(exp, true);
+    if (mode === 'tick' && repairDue_(startedAt)) { // …chyba że przyszła pora samonaprawy (D-060)
+      state.recent = shiftRecent_(state.recent, startedAt);
+      repairH1_(state, startedAt);
+      saveState_(state);
+    }
     return;
   }
   if (!state.daily || !state.recent) { // jednorazowo: dziennik i audyt z tego, co już jest w bazie
@@ -229,16 +236,10 @@ function fetchRound_(mode, todo, state, startedAt, round) {
       bars.forEach(b => barFlags(b).forEach(f => flags.push(f + '@' + b.ts)));
       (ps.last || []).forEach(old => {
         const nb = bars.find(b => b.ts === old.ts);
-        if (nb && Math.abs(nb.c - old.c) > 0.5 * p.pip) flags.push('revised@' + old.ts);
+        // D-060: korekta Yahoo jest od razu zapisana (upsert) — to informacja do logu, nie problem do naprawy
+        if (nb && Math.abs(nb.c - old.c) > 0.5 * p.pip) log_(mode, p.name, 0, null, 'korekta Yahoo (zapisana) @' + old.ts);
       });
-      for (let i = 1; i < bars.length; i++) {
-        const miss = [];
-        for (let t = bars[i - 1].ts + H; t < bars[i].ts; t += H) if (isExpectedBar(t)) miss.push(t);
-        // D-039: ≤ 3 h tuż przy weekendzie/święcie to granica tygodnia (Yahoo otwiera tydzień później niż kalendarz), nie luka
-        const boundary = miss.length && miss.length <= 3 &&
-          (!isExpectedBar(miss[0] - H) || !isExpectedBar(miss[miss.length - 1] + H));
-        if (miss.length && !boundary) flags.push('luka@' + miss[0]);
-      }
+      gapFlags_(bars).forEach(f => flags.push(f));
 
       writeBars_(p.name, bars);
       const writtenAt = nowSec();
@@ -280,6 +281,79 @@ function fetchRound_(mode, todo, state, startedAt, round) {
     }
   });
   return { updated: updated, errors: errors, runLatency: runLatency };
+}
+
+/** Luki w sesji między kolejnymi świecami: 'luka@ts' (D5). ≤ 3 h przy weekendzie/święcie to granica tygodnia (D-039). */
+function gapFlags_(bars) {
+  const out = [];
+  for (let i = 1; i < bars.length; i++) {
+    const miss = [];
+    for (let t = bars[i - 1].ts + H; t < bars[i].ts; t += H) if (isExpectedBar(t)) miss.push(t);
+    const boundary = miss.length && miss.length <= 3 &&
+      (!isExpectedBar(miss[0] - H) || !isExpectedBar(miss[miss.length - 1] + H));
+    if (miss.length && !boundary) out.push('luka@' + miss[0]);
+  }
+  return out;
+}
+
+function repairDue_(now) {
+  const last = Number(PropertiesService.getScriptProperties().getProperty('REPAIR_AT') || 0);
+  return now - last >= REPAIR_EVERY_S && now % H >= BURST_S;   // nie w pierwszych 10 min godziny (wtedy pracuje tick)
+}
+
+/**
+ * D-060: samonaprawa świec H1. Ponownie pobiera ostatnie REPAIR_DAYS dni każdej pary i nadpisuje wszystkie zamknięte świece
+ * (upsert, D3): luki, które Yahoo uzupełnił po fakcie, i świece, które skorygował, trafiają do bazy. Flagi pary są liczone
+ * od nowa z tego okna — zostaje tylko to, co w danych Yahoo wciąż jest złe (resztę obsługuje warstwa czyszczenia na Macu).
+ * Koszt (Z4): 8 zapytań Yahoo i ok. 16 zapisów (2 miesiące × 8 par) + 1 zapis statusu co 6 h ≈ 70 zapisów/dobę.
+ */
+function repairH1_(state, now) {
+  const updated = {}, errors = [];
+  PAIRS.forEach(p => {
+    try {
+      const got = fetchYahoo(p.yahoo, 'period1=' + (now - REPAIR_DAYS * 86400) + '&period2=' + now);
+      const bars = got.filter(b => b.ts % H === 0 && b.ts + H <= now - 60);
+      if (!bars.length) return;
+      writeBars_(p.name, bars);
+      const flags = [];
+      bars.forEach(b => barFlags(b).forEach(f => flags.push(f + '@' + b.ts)));
+      gapFlags_(bars).forEach(f => flags.push(f));
+      const ps = state.pairs[p.name] || { lastTs: 0, count: 0, last: [], latencySec: null };
+      const before = (ps.flags || []).length;
+      bars.forEach(b => setRecent_(state.recent, p.name, b.ts, barFlags(b).length ? 'f' : '1'));
+      ps.lastTs = Math.max(ps.lastTs || 0, bars[bars.length - 1].ts);
+      ps.flags = flags.slice(-20);
+      ps.repairedAt = nowSec();
+      state.pairs[p.name] = ps;
+      updated[p.name] = { lastTs: ps.lastTs, latencySec: ps.latencySec, count: ps.count, flags: ps.flags, savedAt: ps.savedAt || null,
+        repairedAt: ps.repairedAt };
+      log_('repair', p.name, bars.length, null, 'samonaprawa ' + REPAIR_DAYS + ' dni: flagi ' + before + ' → ' + ps.flags.length);
+    } catch (e) {
+      errors.push(p.name + ': ' + e.message);
+      log_('repair', p.name, 0, null, 'BŁĄD ' + e.message);
+    }
+  });
+  writeRound_('repair', state, now, { updated: updated, errors: errors, runLatency: null });
+  if (!errors.length) PropertiesService.getScriptProperties().setProperty('REPAIR_AT', String(now));
+}
+
+/** Audyt po samonaprawie: świeca jest → '1' (albo 'f', gdy Yahoo wciąż podaje ją błędnie); „spóźniona” zostaje (to historia). */
+function setRecent_(recent, pair, ts, ch) {
+  const i = Math.round((ts - recent.start) / H);
+  const str = recent.pairs[pair];
+  if (i < 0 || i >= RECENT_H || !str || str[i] === 'l') return;
+  recent.pairs[pair] = str.slice(0, i) + ch + str.slice(i + 1);
+}
+
+/** Ręcznie (D-060): samonaprawa od razu, bez czekania 6 h. */
+function repair() {
+  withLock_(() => {
+    const state = loadState_();
+    const now = nowSec();
+    state.recent = shiftRecent_(state.recent, now);
+    repairH1_(state, now);
+    saveState_(state);
+  });
 }
 
 function writeRound_(mode, state, startedAt, r) {
