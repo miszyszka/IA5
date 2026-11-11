@@ -1,13 +1,13 @@
 # Raport strategii: RSI 2
 
-Run `20261111-105038` · silnik 0.12.0 · kod `05a4838aae5707ab` · dane `db2f1a8ea4dc4ce5`
+Run `20261111-111152` · silnik 0.13.0 · kod `05a4838aae5707ab` · dane `dc646bc65b616338`
 
 ## Werdykt: 🟡 ŻÓŁTY — zaliczone 4 z 5 testów
 
 | test | wynik | wartość |
 |---|---|---|
 | expectancy netto OOS > 0 | ✔ | 4.03 |
-| percentyl benchmarku ≥ 95 | ✔ | 99.60 |
+| percentyl benchmarku ≥ 95 | ✔ | 99.90 |
 | PBO < 0,3 | ✔ | 0.15 |
 | DSR ≥ 0,95 | ✘ | 0.76 |
 | dodatni przy spreadzie ×1,5 | ✔ | 4.56 |
@@ -102,7 +102,7 @@ Wersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób 
 
 ## Walidacja
 
-- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 5.37 pips/transakcję, percentyl **99.6** (losowe: 5%=-4.90, mediana=-0.92, 95%=3.00).
+- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 5.37 pips/transakcję, percentyl **99.9** (losowe: 5%=-5.05, mediana=-0.79, 95%=3.11).
 
 - **Deflated Sharpe Ratio**: 0.756 (Sharpe na transakcję 0.227, próg przy 24 próbach 0.185).
 
