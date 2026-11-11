@@ -2,17 +2,17 @@
  "best_variant_id": 2,
  "best_exit": "ATR14 TP 1.5× SL 0× max 60",
  "best_params": {},
- "oos_trades": 72,
- "oos_mean_pips": 9.982671,
- "oos_mean_r": 0.449995,
+ "oos_trades": 73,
+ "oos_mean_pips": 8.430863,
+ "oos_mean_r": 0.373211,
  "is_mean_r": 0.526517,
  "benchmark": {
   "sims": 1000,
-  "actual_mean_pips": 10.557785,
+  "actual_mean_pips": 10.148227,
   "percentile": 100.0,
-  "p5": -7.105291,
-  "p50": -1.970608,
-  "p95": 2.992271
+  "p5": -7.38561,
+  "p50": -2.105849,
+  "p95": 2.434421
  },
  "dsr": {
   "dsr": 0.650618,
@@ -24,7 +24,7 @@
   "kurtosis": 30.497957
  },
  "pbo": {
-  "pbo": 0.140249,
+  "pbo": 0.132634,
   "variants": 5,
   "combinations": 12870,
   "blocks": 16,
@@ -55,92 +55,92 @@
     "to": 1794330001,
     "variant_id": 2,
     "train_r": 0.495796,
-    "test_trades": 63,
-    "test_r": 0.543418,
-    "test_pips": 11.82713
+    "test_trades": 64,
+    "test_r": 0.454376,
+    "test_pips": 10.02828
    }
   ],
-  "trades": 166,
-  "mean_r": 0.491806,
-  "mean_pips": 8.846696
+  "trades": 167,
+  "mean_r": 0.457991,
+  "mean_pips": 8.175163
  },
  "bootstrap": {
   "all": {
-   "low": 5.903159,
-   "high": 14.915222,
-   "n": 277
+   "low": 5.164752,
+   "high": 14.699658,
+   "n": 278
   },
   "oos": {
-   "low": 2.837117,
-   "high": 16.912771,
-   "n": 72
+   "low": 0.435919,
+   "high": 16.130421,
+   "n": 73
   }
  },
  "spread": {
-  "x1": 10.557784,
-  "x1_5": 9.786484,
-  "x2": 9.015185
+  "x1": 10.148226,
+  "x1_5": 9.376104,
+  "x2": 8.603982
  },
  "ambiguous_pct": 0.0,
  "equity": {
   "5.0": {
-   "final": 14203.687132,
-   "return_pct": 42.036871,
-   "cagr_pct": 18.954079,
+   "final": 14048.053124,
+   "return_pct": 40.480531,
+   "cagr_pct": 18.27064,
    "max_dd_pct": -6.596819,
-   "calmar": 2.873215,
-   "sharpe": 2.148087,
-   "sortino": 1.046024,
+   "calmar": 2.769614,
+   "sharpe": 2.063126,
+   "sortino": 1.01987,
    "longest_underwater_days": 100.416667,
-   "taken": 277,
+   "taken": 278,
    "skipped_margin": 0
   },
   "10.0": {
-   "final": 19980.592192,
-   "return_pct": 99.805922,
-   "cagr_pct": 40.82649,
+   "final": 19544.064278,
+   "return_pct": 95.440643,
+   "cagr_pct": 39.210438,
    "max_dd_pct": -13.111937,
-   "calmar": 3.113689,
-   "sharpe": 2.144472,
-   "sortino": 1.0429,
+   "calmar": 2.990438,
+   "sharpe": 2.059955,
+   "sortino": 1.01699,
    "longest_underwater_days": 100.708333,
-   "taken": 277,
+   "taken": 278,
    "skipped_margin": 0
   },
   "15.0": {
-   "final": 27825.158233,
-   "return_pct": 178.251582,
-   "cagr_pct": 65.891441,
+   "final": 26916.068217,
+   "return_pct": 169.160682,
+   "cagr_pct": 63.039718,
    "max_dd_pct": -19.537983,
-   "calmar": 3.372479,
-   "sharpe": 2.139956,
-   "sortino": 1.038884,
+   "calmar": 3.226521,
+   "sharpe": 2.05591,
+   "sortino": 1.013237,
    "longest_underwater_days": 100.791667,
-   "taken": 277,
+   "taken": 278,
    "skipped_margin": 0
   },
   "20.0": {
-   "final": 38340.830968,
-   "return_pct": 283.40831,
-   "cagr_pct": 94.395279,
+   "final": 36675.702063,
+   "return_pct": 266.757021,
+   "cagr_pct": 89.945615,
    "max_dd_pct": -25.867562,
-   "calmar": 3.649176,
-   "sharpe": 2.134416,
-   "sortino": 1.03384,
+   "calmar": 3.477159,
+   "sharpe": 2.050871,
+   "sortino": 1.008479,
    "longest_underwater_days": 103.708333,
-   "taken": 277,
+   "taken": 278,
    "skipped_margin": 0
   },
   "30.0": {
-   "final": 57971.671956,
-   "return_pct": 479.71672,
-   "cagr_pct": 138.503821,
+   "final": 54217.94964,
+   "return_pct": 442.179496,
+   "cagr_pct": 130.377876,
    "max_dd_pct": -38.32771,
-   "calmar": 3.613673,
-   "sharpe": 1.976758,
-   "sortino": 0.922098,
+   "calmar": 3.401661,
+   "sharpe": 1.892593,
+   "sortino": 0.897156,
    "longest_underwater_days": 104.708333,
-   "taken": 266,
+   "taken": 267,
    "skipped_margin": 11
   }
  },
@@ -151,7 +151,7 @@
    {
     "test": "expectancy netto OOS > 0",
     "ok": true,
-    "value": 9.982671
+    "value": 8.430863
    },
    {
     "test": "percentyl benchmarku ≥ 95",
@@ -161,7 +161,7 @@
    {
     "test": "PBO < 0,3",
     "ok": true,
-    "value": 0.140249
+    "value": 0.132634
    },
    {
     "test": "DSR ≥ 0,95",
@@ -171,7 +171,7 @@
    {
     "test": "dodatni przy spreadzie ×1,5",
     "ok": true,
-    "value": 9.786484
+    "value": 9.376104
    }
   ]
  }
