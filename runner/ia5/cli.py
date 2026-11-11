@@ -68,7 +68,9 @@ def enforce_local_data(log=print) -> list[str]:
     przy każdym starcie i każdej synchronizacji. Zwraca listę usuniętych ścieżek."""
     import shutil
 
-    from .store import DATA_ALLOWED, YAHOO, YAHOO_D1
+    from . import store
+    from .rev_config import CANDIDATES
+    from .store import DATA_ALLOWED
 
     removed = []
     if DATA.exists():
@@ -76,8 +78,10 @@ def enforce_local_data(log=print) -> list[str]:
             if f.name not in DATA_ALLOWED:
                 shutil.rmtree(f) if f.is_dir() else f.unlink()
                 removed.append(str(f))
-    allowed = {f"{p}.parquet" for p in PAIRS}
-    for folder in (YAHOO, YAHOO_D1):   # D-053: obok H1 także świece dzienne Yahoo, tylko 8 par
+    pairs = {f"{p}.parquet" for p in PAIRS}
+    pln = {f"{c}.parquet" for c in CANDIDATES}
+    # D-053: obok H1 także świece dzienne Yahoo, tylko 8 par; D-062: kursy PLN tylko kandydatów REV
+    for folder, allowed in ((store.YAHOO, pairs), (store.YAHOO_D1, pairs), (store.YAHOO_PLN, pln)):
         if not folder.exists():
             continue
         for f in folder.iterdir():
@@ -120,6 +124,7 @@ def do_prepare(progress=None) -> dict:
         log(f"  Nie udało się pobrać świec z Firestore ({e}) — używam kopii lokalnej.")
         yahoo = cloud.load_yahoo(YAHOO)
     d1, d1_tz = sync_d1(cloud, st)
+    pln, pln_tz = sync_pln(cloud, st)
 
     if progress:
         progress("Kontrola danych", 40)
@@ -146,6 +151,10 @@ def do_prepare(progress=None) -> dict:
         from .store import D1_READY
 
         ready.build_d1(d1, D1_READY, tz=d1_tz, log=log)
+    if pln:  # D-062: kursy PLN do liczenia REV (warstwa tylko zamknięć)
+        from .store import PLN_READY
+
+        ready.build_pln(pln, PLN_READY, tz=pln_tz, log=log)
     log("Mapa pokrycia…")
     cov = coverage.build(yahoo)
     if progress:
@@ -159,12 +168,14 @@ def do_prepare(progress=None) -> dict:
         sha = publish.publish_coverage(cov, log=lambda m: log(m)) or sha
         if d1:
             sha = publish.publish_candles_d1(d1, d1_tz, log=lambda m: log(m)) or sha
+        if pln:
+            sha = publish.publish_candles_pln(pln, pln_tz, log=lambda m: log(m)) or sha
         if sha:
             cloud.set_data_sha(sha)
     except Exception as e:  # noqa: BLE001 — brak publikacji nie zatrzymuje programu; zgłasza go przegląd zdrowia
         publish_error = str(e)[:300]
         log(f"  publikacja nie powiodła się: {publish_error}")
-    return {"yahoo": yahoo, "cov": cov, "ready": rdy, "publish_error": publish_error, "d1": d1}
+    return {"yahoo": yahoo, "cov": cov, "ready": rdy, "publish_error": publish_error, "d1": d1, "pln": pln}
 
 
 def sync_d1(cloud, st: dict) -> tuple[dict, str]:
@@ -190,6 +201,25 @@ def sync_d1(cloud, st: dict) -> tuple[dict, str]:
     for k, v in quality.cross_check(d1).items():
         log(f"  D1 trójkąt {k}: mediana {v['median']:.2f} pips, p99 {v['p99']:.2f} pips ({v['n']:,} dni)")
     return d1, tz
+
+
+def sync_pln(cloud, st: dict) -> tuple[dict, str]:
+    """D-062: kopia kursów złotówkowych D1 z Firestore (REV). Błąd nie zatrzymuje synchronizacji H1 i D1."""
+    from . import daily
+    from .store import YAHOO_PLN
+
+    tz = (st.get("pln") or {}).get("tz") or daily.D1_TZ
+    if not (st.get("pln") or {}).get("currencies"):
+        local = cloud.load_yahoo_pln(YAHOO_PLN)
+        if not local:
+            log("  W bazie nie ma jeszcze kursów PLN (REV) — uruchom raz backfillPLN() w Apps Script (docs/SETUP.md).")
+        return local, tz
+    log("Kopia kursów złotówkowych (REV) Yahoo…")
+    try:
+        return cloud.sync_yahoo_pln(YAHOO_PLN, st, log=lambda m: log(m)), tz
+    except Exception as e:  # noqa: BLE001
+        log(f"  Nie udało się pobrać kursów PLN z Firestore ({e}) — używam kopii lokalnej.")
+        return cloud.load_yahoo_pln(YAHOO_PLN), tz
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]   # folder repozytorium IA5, z którego działa program
@@ -562,11 +592,17 @@ def cmd_live(_args) -> None:
     import pandas as pd
 
     from . import cloud, publish, ready
-    from .store import D1_READY, DATA_REPO, READY, YAHOO, YAHOO_D1
+    from .rev_config import CANDIDATES
+    from .store import D1_READY, DATA_REPO, PLN_READY, READY, YAHOO, YAHOO_D1, YAHOO_PLN
 
     publish.ensure_repo()
     YAHOO.mkdir(parents=True, exist_ok=True)
     YAHOO_D1.mkdir(parents=True, exist_ok=True)
+    YAHOO_PLN.mkdir(parents=True, exist_ok=True)
+    for c in CANDIDATES:   # D-062: kursy PLN z gałęzi data (REV), najnowsze dni z Firestore
+        fp = DATA_REPO / "candles_pln" / f"{c}.parquet"
+        if fp.exists():
+            pd.read_parquet(fp).to_parquet(YAHOO_PLN / f"{c}.parquet", index=False)
     for pair in PAIRS:
         files = sorted((DATA_REPO / "candles" / pair).glob("*.parquet"))
         if files:
@@ -583,6 +619,9 @@ def cmd_live(_args) -> None:
     d1, d1_tz = sync_d1(cloud, st)
     if d1:
         ready.build_d1(d1, D1_READY, tz=d1_tz, log=log)
+    pln, pln_tz = sync_pln(cloud, st)
+    if pln:
+        ready.build_pln(pln, PLN_READY, tz=pln_tz, log=log)
     handle_investors(cloud.list_investors(), config().get("owner_uid"), {}, source="actions")
 
 

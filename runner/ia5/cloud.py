@@ -101,15 +101,16 @@ def sync_yahoo(folder, log=print) -> dict[str, pd.DataFrame]:
     return out
 
 
-def yahoo_d1_docs(pair: str, years: list[str] | None):
-    col = db().collection("candles_d1")
+def yahoo_d1_docs(pair: str, years: list[str] | None, collection: str = "candles_d1"):
+    col = db().collection(collection)
     if years is None:
         return [s.to_dict() for s in col.where("pair", "==", pair).stream()]
     snaps = [col.document(f"{pair}_{y}").get() for y in years]
     return [s.to_dict() for s in snaps if s.exists]
 
 
-def sync_yahoo_d1(folder, status: dict | None = None, log=print) -> dict[str, pd.DataFrame]:
+def sync_yahoo_d1(folder, status: dict | None = None, log=print, names=None, collection: str = "candles_d1",
+                  field: str = "d1", key: str = "pairs", label: str = "D1") -> dict[str, pd.DataFrame]:
     """D-053: kopia świec dziennych Yahoo z Firestore (`candles_d1/{PARA}_{RRRR}`) do folder/{PARA}.parquet.
 
     Budżet (Z4): pierwszy raz pełny odczyt (ok. 20–30 dokumentów na parę ≈ 200 odczytów), potem para jest pomijana,
@@ -120,11 +121,11 @@ def sync_yahoo_d1(folder, status: dict | None = None, log=print) -> dict[str, pd
     from . import daily
 
     folder.mkdir(parents=True, exist_ok=True)
-    remote = ((status or {}).get("d1") or {}).get("pairs") or {}
-    tz = ((status or {}).get("d1") or {}).get("tz") or daily.D1_TZ
+    remote = ((status or {}).get(field) or {}).get(key) or {}
+    tz = ((status or {}).get(field) or {}).get("tz") or daily.D1_TZ
     now = int(datetime.now(timezone.utc).timestamp())
     out = {}
-    for pair in PAIRS:
+    for pair in (PAIRS if names is None else names):
         path = folder / f"{pair}.parquet"
         old = pd.read_parquet(path) if path.exists() else None
         if old is not None and old.empty:
@@ -134,9 +135,9 @@ def sync_yahoo_d1(folder, status: dict | None = None, log=print) -> dict[str, pd
             out[pair] = old
             continue
         years = None if old is None else daily.years_to_read(int(old["ts"].max()), now, tz)
-        df = daily.merge(old, _bars_to_df(yahoo_d1_docs(pair, years)), years, tz)
+        df = daily.merge(old, _bars_to_df(yahoo_d1_docs(pair, years, collection)), years, tz)
         if years is not None and r.get("count") and int(r["count"]) != len(df):
-            df = daily.merge(None, _bars_to_df(yahoo_d1_docs(pair, None)), None, tz)
+            df = daily.merge(None, _bars_to_df(yahoo_d1_docs(pair, None, collection)), None, tz)
         if df.empty and old is None:
             continue
         tmp = path.with_suffix(".tmp")
@@ -145,8 +146,29 @@ def sync_yahoo_d1(folder, status: dict | None = None, log=print) -> dict[str, pd
         out[pair] = df
         if len(df):
             first, last = daily.day_of([df.ts.iloc[0], df.ts.iloc[-1]], tz)
-            log(f"  Yahoo D1 {pair}: {len(df):,} świec, {first} – {last}")
+            log(f"  Yahoo {label} {pair}: {len(df):,} świec, {first} – {last}")
     return out
+
+
+def admitted_pln(status: dict | None) -> list[str]:
+    """D-062: waluty przyjęte przez Apps Script (meta/status.pln.currencies) spośród kandydatów REV."""
+    from .rev_config import CANDIDATES
+
+    cur = (((status or {}).get("pln") or {}).get("currencies")) or {}
+    return [c for c in CANDIDATES if c in cur]
+
+
+def sync_yahoo_pln(folder, status: dict | None, log=print) -> dict[str, pd.DataFrame]:
+    """D-062: kopia kursów złotówkowych D1 (`candles_pln/{WALUTA}_{RRRR}`) — ta sama logika i budżet co D1
+    (waluta pomijana, gdy kopia = status; inaczej tylko lata od ostatniej świecy)."""
+    return sync_yahoo_d1(folder, status, log=log, names=admitted_pln(status), collection="candles_pln", field="pln",
+                         key="currencies", label="PLN")
+
+
+def load_yahoo_pln(folder) -> dict[str, pd.DataFrame]:
+    from .rev_config import CANDIDATES
+
+    return {c: pd.read_parquet(folder / f"{c}.parquet") for c in CANDIDATES if (folder / f"{c}.parquet").exists()}
 
 
 def load_yahoo_d1(folder) -> dict[str, pd.DataFrame]:

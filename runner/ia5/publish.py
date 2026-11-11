@@ -103,19 +103,21 @@ def publish_candles(h1: dict[str, pd.DataFrame], source: str, log=print) -> str 
     return sha
 
 
-def publish_candles_d1(d1: dict[str, pd.DataFrame], tz: str, log=print) -> str | None:
+def publish_candles_d1(d1: dict[str, pd.DataFrame], tz: str, log=print, folder: str = "candles_d1", label: str = "D1",
+                       meta: dict | None = None) -> str | None:
     """D-053: candles_d1/{PARA}.parquet (cała historia pary w jednym pliku, ok. 6 tys. świec) + candles_d1/manifest.json.
-    Plik pary zapisywany tylko, gdy się zmienił (zwykle raz na dobę). Zwraca SHA lub None."""
+    Plik pary zapisywany tylko, gdy się zmienił (zwykle raz na dobę). Zwraca SHA lub None.
+    D-062: ta sama funkcja publikuje kursy PLN (folder="candles_pln") — publish_candles_pln."""
     from .daily import day_of
 
     ensure_repo()
-    mpath = DATA_REPO / "candles_d1" / "manifest.json"
+    mpath = DATA_REPO / folder / "manifest.json"
     manifest = json.loads(mpath.read_text()) if mpath.exists() else {"files": {}}
     changed = 0
     for pair, df in d1.items():
         if df is None or df.empty:
             continue
-        rel = f"candles_d1/{pair}.parquet"
+        rel = f"{folder}/{pair}.parquet"
         part = df[["ts", "open", "high", "low", "close"]].reset_index(drop=True)
         h = frame_hash(part)
         if manifest["files"].get(rel, {}).get("hash") == h:
@@ -128,18 +130,25 @@ def publish_candles_d1(d1: dict[str, pd.DataFrame], tz: str, log=print) -> str |
                                   "first_day": str(first), "last_day": str(last)}
         changed += 1
     if not changed:
-        log("  świece D1 na gałęzi data: bez zmian")
+        log(f"  świece {label} na gałęzi data: bez zmian")
         return None
     manifest.update({"source": "yahoo", "interval": "1d", "tz": tz,
-                     "ts": "czas otwarcia = północ dnia w strefie tz (D1, D-053)"})
+                     "ts": "czas otwarcia = północ dnia w strefie tz (D1, D-053)", **(meta or {})})
     mpath.parent.mkdir(parents=True, exist_ok=True)
     mpath.write_text(json.dumps(manifest, indent=1, sort_keys=True))
     _git("add", "-A")
-    _git("commit", "-q", "-m", f"dane: świece D1 ({changed} par)")
+    _git("commit", "-q", "-m", f"dane: świece {label} ({changed})")
     _push()
     sha = _git("rev-parse", "HEAD")
-    log(f"  świece D1: {changed} par, {sha[:7]}")
+    log(f"  świece {label}: {changed}, {sha[:7]}")
     return sha
+
+
+def publish_candles_pln(pln: dict[str, pd.DataFrame], tz: str, log=print) -> str | None:
+    """D-062: candles_pln/{WALUTA}.parquet + candles_pln/manifest.json — kursy złotówkowe D1 przyjętych walut (REV)."""
+    from .rev_config import TICKER
+
+    return publish_candles_d1(pln, tz, log=log, folder="candles_pln", label="PLN", meta={"series": "pln", "ticker": TICKER})
 
 
 def publish_coverage(cov: dict, log=print) -> str | None:

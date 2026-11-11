@@ -13,7 +13,10 @@ RESULTS = HOME / "results"
 SCANS = HOME / "scans"
 SEARCHES = HOME / "searches"   # D-044: głębokie poszukiwanie (ia5 search)
 FOREST = HOME / "forest"       # D-048: las inwestorów, mapy, dziennik (current/, public/, archive/)
-DATA_ALLOWED = ("yahoo", "h1_ready", "yahoo_d1", "d1_ready")   # D-041, D-053, D-058: tylko świece Yahoo (H1, D1) i dane do liczenia
+REV = HOME / "rev"             # D-062: badania REV (research/{run}/)
+YAHOO_PLN = DATA / "yahoo_pln"   # D-062: kopia kursów złotówkowych D1 Yahoo z Firestore (surowa) — REV
+PLN_READY = DATA / "pln_ready"   # D-062: kursy PLN po warstwie REV (rev_data.clean_pln) — wejście REV
+DATA_ALLOWED = ("yahoo", "h1_ready", "yahoo_d1", "d1_ready", "yahoo_pln", "pln_ready")   # D-041, D-053, D-058, D-062: tylko dane Yahoo
 # D-039: pozostałości po źródle Dukascopy (usuwane przy starcie za zgodą Michała z 2026-10-31)
 LEGACY = (DATA / "m1", DATA / "h1", DATA / "h1_scan")
 SERVICE_ACCOUNT = HOME / "service-account.json"
