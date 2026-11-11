@@ -127,38 +127,6 @@
    "demo": false,
    "timeframe": "D1",
    "d1_background": false
-  },
-  {
-   "id": "3zFstW5UcXQ6sndsnYQA",
-   "name": "D2",
-   "run_id": "20261111-102532",
-   "created": 1794392732,
-   "verdict": "green",
-   "verdict_note": "wszystkie testy zaliczone",
-   "n_variants": 1,
-   "hypothesis": "Kurs, który odjechał o co najmniej 5% od swojej średniej z ok. 3 lat (756 dni handlu), wraca w jej stronę:\nparytet siły nabywczej, bilanse handlowe i polityka banków centralnych działają wolno, ale w skali lat ciągną kurs\nz powrotem. Cena ≥ 5% poniżej średniej = long, ≥ 5% powyżej = short (lustrzanie). Jedno wejście na tydzień (co najmniej\n5 dni handlu od poprzedniego w tej parze), zawsze ta sama wielkość. Zamknięcie tylko na powrocie do średniej, bez stop\nlossa. Liczone tylko od 2016-11-11 (ostatnie 10 lat); średnia 3-letnia korzysta z wcześniejszych danych.\nHipoteza zapisana PRZED liczeniem.",
-   "pairs": [
-    "AUDUSD",
-    "EURGBP",
-    "EURJPY",
-    "EURUSD",
-    "GBPUSD",
-    "USDCAD",
-    "USDCHF",
-    "USDJPY"
-   ],
-   "data_from": 846633600,
-   "data_to": 1794268800,
-   "source": "yahoo",
-   "engine_version": "0.11.0",
-   "best_exit": "poziomy TP/SL ze strategii, max 480",
-   "is_mean_r": 6.383611,
-   "oos_mean_r": 1.263509,
-   "oos_mean_pips": 108.628632,
-   "oos_trades": 272,
-   "demo": false,
-   "timeframe": "D1",
-   "d1_background": false
   }
  ]
 }
