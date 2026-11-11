@@ -1,0 +1,142 @@
+{
+ "best_variant_id": 1,
+ "best_exit": "poziomy TP/SL ze strategii, bez limitu czasu",
+ "best_params": {
+  "sl_gap": 0.75
+ },
+ "oos_trades": 52,
+ "oos_mean_pips": 481.68045,
+ "oos_mean_r": 0.674104,
+ "is_mean_r": -0.095853,
+ "pinned_variant": false,
+ "rank_is": 1,
+ "benchmark": {
+  "sims": 1000,
+  "actual_mean_pips": 40.020256,
+  "percentile": 98.3,
+  "p5": -209.707456,
+  "p50": -100.723872,
+  "p95": 1.80923
+ },
+ "dsr": {
+  "dsr": 0.11342,
+  "sharpe": -0.083665,
+  "sharpe0": 0.008782,
+  "trials": 3,
+  "trades": 179,
+  "skew": 0.490039,
+  "kurtosis": 1.321617
+ },
+ "pbo": {
+  "pbo": 0.707537,
+  "variants": 3,
+  "combinations": 12870,
+  "blocks": 16,
+  "logit_median": 0.0
+ },
+ "walk_forward": {
+  "windows": [
+   {
+    "from": 1263598560,
+    "to": 1423956240,
+    "variant_id": 1,
+    "train_r": -0.102918,
+    "test_trades": 75,
+    "test_r": -0.198627,
+    "test_pips": -52.421436
+   },
+   {
+    "from": 1423956240,
+    "to": 1584313920,
+    "variant_id": 1,
+    "train_r": -0.150143,
+    "test_trades": 34,
+    "test_r": 0.401553,
+    "test_pips": 81.705368
+   },
+   {
+    "from": 1584313920,
+    "to": 1744671601,
+    "variant_id": 1,
+    "train_r": -0.049295,
+    "test_trades": 45,
+    "test_r": 0.601435,
+    "test_pips": 487.359283
+   }
+  ],
+  "trades": 154,
+  "mean_r": 0.167665,
+  "mean_pips": 134.919098
+ },
+ "bootstrap": {
+  "all": {
+   "low": -104.491885,
+   "high": 180.313208,
+   "n": 231
+  },
+  "oos": {
+   "low": 277.325393,
+   "high": 689.195886,
+   "n": 52
+  }
+ },
+ "spread": {
+  "x1": 40.020261,
+  "x1_5": 39.238226,
+  "x2": 38.456192
+ },
+ "swap": {
+  "nights_mean": 381.995671,
+  "nights_total": 88241.0,
+  "overnight_pct": 100.0,
+  "x0_5": -150.977572,
+  "x1": -341.975407
+ },
+ "ambiguous_pct": 0.0,
+ "equity": {
+  "1.0": {
+   "final": 10768.695587,
+   "return_pct": 7.686956,
+   "cagr_pct": 0.274855,
+   "max_dd_pct": -15.344775,
+   "max_dd_mae_pct": -21.045836,
+   "calmar": 0.017912,
+   "sharpe": 0.102526,
+   "sortino": 0.028889,
+   "longest_underwater_days": 6462.958333,
+   "taken": 231,
+   "skipped_margin": 0
+  }
+ },
+ "verdict": {
+  "color": "yellow",
+  "note": "zaliczone 3 z 5 testów",
+  "checks": [
+   {
+    "test": "expectancy netto OOS > 0",
+    "ok": true,
+    "value": 481.68045
+   },
+   {
+    "test": "percentyl benchmarku ≥ 95",
+    "ok": true,
+    "value": 98.3
+   },
+   {
+    "test": "PBO < 0,3",
+    "ok": false,
+    "value": 0.707537
+   },
+   {
+    "test": "DSR ≥ 0,95",
+    "ok": false,
+    "value": 0.11342
+   },
+   {
+    "test": "dodatni przy spreadzie ×1,5",
+    "ok": true,
+    "value": 39.238226
+   }
+  ]
+ }
+}

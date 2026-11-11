@@ -1,6 +1,38 @@
 {
  "strategies": [
   {
+   "id": "yNiRuui7kP8m0aR1aV3K",
+   "name": "D4 v2",
+   "run_id": "20261111-220654",
+   "created": 1794434814,
+   "verdict": "yellow",
+   "verdict_note": "zaliczone 3 z 5 testów",
+   "n_variants": 3,
+   "hypothesis": "Kurs, który spadł o co najmniej 5% poniżej swojej średniej z ok. 3 lat (756 dni handlu), wraca w jej stronę:\nparytet siły nabywczej, bilanse handlowe i polityka banków centralnych działają wolno, ale w skali lat ciągną kurs\nz powrotem. Tylko long (cena ≥ 5% poniżej średniej). Jedno wejście na tydzień (co najmniej 5 dni handlu od poprzedniego\nw tej parze), do 3 pozycji naraz w parze. Cel = poziom średniej z dnia sygnału (stała cena), bez limitu czasu.\nWersja z zarządzaniem ryzykiem: STOP LOSS poniżej wejścia na odległość równą ułamkowi drogi do celu (0,5 / 0,75 / 1,0 ×\ndroga do średniej), więc z góry znany stosunek zysku do straty, a pozycja nie wisi latami na stracie. Każda pozycja\nma tę samą stratę przy stopie: ok. 0,5% kapitału (waga pozycji = 0,5% ÷ odległość do stopu), niezależnie od tego, jak\ngłęboko kurs jest pod średnią. Wszystko jak w wersji bez stopu, tylko ryzyko jest ograniczone i równe w każdej\ntransakcji. Cała dostępna historia D1 (ok. 27 lat sygnałów), żeby próba IS (ranking) i OOS (ostatnie 25%) miały dość transakcji.\nHipoteza zapisana PRZED liczeniem.",
+   "pairs": [
+    "AUDUSD",
+    "EURGBP",
+    "EURJPY",
+    "EURUSD",
+    "GBPUSD",
+    "USDCAD",
+    "USDCHF",
+    "USDJPY"
+   ],
+   "data_from": 846633600,
+   "data_to": 1794268800,
+   "source": "yahoo",
+   "engine_version": "0.13.0",
+   "best_exit": "poziomy TP/SL ze strategii, bez limitu czasu",
+   "is_mean_r": -0.095853,
+   "oos_mean_r": 0.674104,
+   "oos_mean_pips": 481.68045,
+   "oos_trades": 52,
+   "demo": false,
+   "timeframe": "D1",
+   "d1_background": false
+  },
+  {
    "id": "wSKI1vQ0WgIVXq2m53BL",
    "name": "Powrót",
    "run_id": "20261111-214443",

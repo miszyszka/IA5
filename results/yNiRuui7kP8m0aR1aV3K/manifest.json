@@ -1,0 +1,135 @@
+{
+ "id": "yNiRuui7kP8m0aR1aV3K",
+ "name": "D4 v2",
+ "run_id": "20261111-220654",
+ "engine_version": "0.13.0",
+ "code_hash": "a1509190cd142b7b",
+ "data_hash": "3197cf8521901cb3",
+ "data_source": "yahoo",
+ "timeframe": "D1",
+ "d1_background": false,
+ "d1_hash": null,
+ "candles": "pełne",
+ "pairs": [
+  "AUDUSD",
+  "EURGBP",
+  "EURJPY",
+  "EURUSD",
+  "GBPUSD",
+  "USDCAD",
+  "USDCHF",
+  "USDJPY"
+ ],
+ "params": [
+  {
+   "sl_gap": 0.5
+  },
+  {
+   "sl_gap": 0.75
+  },
+  {
+   "sl_gap": 1.0
+  }
+ ],
+ "n_variants": 3,
+ "n_exits": 1,
+ "oos_cutoff": 1557360000,
+ "sizing": [
+  1.0
+ ],
+ "pyramid": 3,
+ "max_pairs": null,
+ "pair_rank": null,
+ "hours": "D1: open dnia",
+ "data_from": 846633600,
+ "data_to": 1794268800,
+ "data_clean": {
+  "AUDUSD": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 0,
+   "gap_hours": 0,
+   "rejected": 148,
+   "closed_hours": 0
+  },
+  "EURGBP": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 0,
+   "gap_hours": 0,
+   "rejected": 69,
+   "closed_hours": 0
+  },
+  "EURJPY": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 1,
+   "gap_hours": 17,
+   "rejected": 235,
+   "closed_hours": 0
+  },
+  "EURUSD": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 3,
+   "gap_hours": 20,
+   "rejected": 130,
+   "closed_hours": 0
+  },
+  "GBPUSD": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 1,
+   "gap_hours": 3,
+   "rejected": 105,
+   "closed_hours": 0
+  },
+  "USDCAD": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 0,
+   "gap_hours": 0,
+   "rejected": 117,
+   "closed_hours": 0
+  },
+  "USDCHF": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 0,
+   "gap_hours": 0,
+   "rejected": 104,
+   "closed_hours": 0
+  },
+  "USDJPY": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 6,
+   "gap_hours": 29,
+   "rejected": 278,
+   "closed_hours": 0
+  }
+ },
+ "skipped": {
+  "B8": 5818,
+  "brak_danych": 0,
+  "rozgrzewka": 0,
+  "poza_godzinami": 0,
+  "luka_danych": 148,
+  "swieca_uzupelniona": 0
+ },
+ "hypothesis": "Kurs, który spadł o co najmniej 5% poniżej swojej średniej z ok. 3 lat (756 dni handlu), wraca w jej stronę:\nparytet siły nabywczej, bilanse handlowe i polityka banków centralnych działają wolno, ale w skali lat ciągną kurs\nz powrotem. Tylko long (cena ≥ 5% poniżej średniej). Jedno wejście na tydzień (co najmniej 5 dni handlu od poprzedniego\nw tej parze), do 3 pozycji naraz w parze. Cel = poziom średniej z dnia sygnału (stała cena), bez limitu czasu.\nWersja z zarządzaniem ryzykiem: STOP LOSS poniżej wejścia na odległość równą ułamkowi drogi do celu (0,5 / 0,75 / 1,0 ×\ndroga do średniej), więc z góry znany stosunek zysku do straty, a pozycja nie wisi latami na stracie. Każda pozycja\nma tę samą stratę przy stopie: ok. 0,5% kapitału (waga pozycji = 0,5% ÷ odległość do stopu), niezależnie od tego, jak\ngłęboko kurs jest pod średnią. Wszystko jak w wersji bez stopu, tylko ryzyko jest ograniczone i równe w każdej\ntransakcji. Cała dostępna historia D1 (ok. 27 lat sygnałów), żeby próba IS (ranking) i OOS (ostatnie 25%) miały dość transakcji.\nHipoteza zapisana PRZED liczeniem.",
+ "trades_rows": 724,
+ "created": 1794434814,
+ "seconds": 77.5,
+ "verdict": "yellow",
+ "frozen_at": null,
+ "frozen_variant": null
+}
