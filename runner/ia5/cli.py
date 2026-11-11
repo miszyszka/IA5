@@ -256,9 +256,21 @@ def do_health(ctx: dict, beat_state: str | None = None, write: bool = True) -> d
         docs = cloud.list_strategies()
     except Exception:  # noqa: BLE001
         docs = None
+    from .store import DATA_REPO, PLN_READY
+
+    universe, infos = None, {}
+    try:   # D-063: zbiór koszyków zamrożony w badaniu REV i liczby napraw warstwy czyszczenia
+        universe = json.loads((DATA_REPO / "rev" / "research.json").read_text(encoding="utf-8")).get("universe")
+    except (OSError, ValueError):
+        pass
+    for jf in sorted(PLN_READY.glob("*.json")) if PLN_READY.exists() else []:
+        try:
+            infos[jf.stem] = json.loads(jf.read_text())
+        except ValueError:
+            pass
     h = health.run(cloud.read_status(), ctx["yahoo"], ctx["cov"], docs=docs, beat_state=beat_state,
                    publish_error=ctx.get("publish_error"), home=HOME, ready=ctx.get("ready"), code=code_info(),
-                   d1=ctx.get("d1"))
+                   d1=ctx.get("d1"), pln=ctx.get("pln"), pln_universe=universe, pln_infos=infos)
     if write:
         cloud.write_health(h)
     bad = [c for c in h["checks"] if c["state"] != "ok"]
@@ -674,14 +686,14 @@ def handle_delete(sid: str) -> None:
 def cmd_health(_args) -> int:
     """Opisowy przegląd zdrowia na kopii lokalnej (bez synchronizacji świec); wynik też na dashboard (Stats)."""
     from . import cloud, coverage, health, ready
-    from .store import READY, YAHOO, YAHOO_D1
+    from .store import READY, YAHOO, YAHOO_D1, YAHOO_PLN
 
     yahoo = cloud.load_yahoo(YAHOO)
     if not yahoo:
         print("Na Macu nie ma jeszcze świec — uruchom ia5 start.")
         return 1
     ctx = {"yahoo": yahoo, "cov": coverage.build(yahoo), "ready": ready.build(yahoo, READY, log=log),
-           "d1": cloud.load_yahoo_d1(YAHOO_D1)}
+           "d1": cloud.load_yahoo_d1(YAHOO_D1), "pln": cloud.load_yahoo_pln(YAHOO_PLN)}
     h = do_health(ctx)
     print(health.report(h))
     return 0 if h["state"] != "bad" else 1

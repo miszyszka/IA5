@@ -75,3 +75,11 @@ ia5 start
 1. Apps Script: wklej nowy `apps_script/Code.gs` (Ctrl+A, wklej, zapisz). Wyzwalacz zostaje ten sam — nic więcej nie trzeba.
 2. Opcjonalnie od razu: wybierz funkcję `repair` i **Uruchom** — pobierze ponownie ostatnie 30 dni i wyczyści stare zgłoszenia. Bez tego zrobi to sam w ciągu 6 h.
 3. Na Macu: `cd ~/IA5 && git pull`, `uv tool install -e runner --force`, restart `ia5 start`.
+
+## Kursy złotówkowe — REV (D-063)
+
+1. Apps Script: wklej nowy `apps_script/Code.gs` (Ctrl+A, wklej, zapisz).
+2. Wybierz funkcję `backfillPLN` → **Uruchom** (raz; kilka minut — 24 waluty, cała historia). W arkuszu `log` pojawi się wiersz na walutę: przyjęte z zakresem dni, odrzucone z powodem (np. „historia krótsza niż 10 lat”). Od tej chwili `tick` sam dopisuje każdy kolejny dzień (≈ 20 zapisów dziennie).
+3. Uruchom raz `installTrigger()` (jak po każdej nowej wersji).
+4. Na Macu: `cd ~/IA5 && git pull`, `uv tool install -e runner --force`, restart `ia5 start`. Pierwsza synchronizacja skopiuje kursy PLN, zbuduje `data/pln_ready/`, opublikuje `candles_pln/` na gałęzi `data`, a potem policzy badanie REV (turniej metod). W Stats → Stan systemu pojawi się kontrola „Kursy złotówkowe (REV)”, a w zakładce REV — wynik badania i portfel od najbliższego wtorku 08:00.
+5. Napisz Claude'owi, że badanie się policzyło — lista przyjętych walut i daty odcinków trafią do `DECISIONS.md` (D-064).

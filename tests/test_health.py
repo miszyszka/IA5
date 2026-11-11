@@ -118,3 +118,69 @@ def test_flags_are_verified_against_data_and_never_warn_d060():
     for df in many.values():
         df.loc[: len(df) // 50, "high"] = 0.5                     # 2% złych świec we wszystkich parach → to już nie przypadek
     assert health.bars_valid(many)["state"] == "warn"
+
+
+# ---------- D-063: kursy złotówkowe (REV) ----------
+
+NOW_PLN = int(datetime(2026, 11, 11, 10, tzinfo=UTC).timestamp())
+
+
+def pln_status(pln, rejected=None):
+    cur = {c: {"lastTs": int(df.ts.max()), "count": len(df)} for c, df in pln.items()}
+    return {"pln": {"tz": "Europe/London", "currencies": cur, "rejected": rejected or {}}}
+
+
+def test_pln_no_data_warns_with_fix():
+    c = health.pln_rates({}, {}, None, NOW_PLN)
+    assert c["state"] == "warn" and "backfillPLN" in c["fix"]
+
+
+def test_pln_ok_lists_rejected():
+    from rev_fixtures import synthetic_raw
+
+    pln = synthetic_raw(["EUR", "USD", "CHF"], start="2014-01-01", end="2026-11-10")
+    c = health.pln_rates(pln_status(pln, {"QAR": "historia od 2023-11-01 — krótsza niż 10 lat"}), pln, None, NOW_PLN)
+    assert c["state"] == "ok", c
+    assert "QAR" in c["text"] and "3 waluty" in c["text"]
+
+
+def test_pln_cross_check_detects_scale():
+    from rev_fixtures import frame, workdays
+
+    days = workdays("2024-01-01", "2026-11-10")
+    rng = np.random.default_rng(3)
+    usdpln = 4.0 * np.exp(np.cumsum(rng.normal(0, 0.004, len(days))))
+    usdjpy = 150 * np.exp(np.cumsum(rng.normal(0, 0.004, len(days))))
+    pln = {"USD": frame(days, usdpln), "JPY": frame(days, usdpln / usdjpy * 100)}    # JPY kwotowany za 100 jednostek
+    fx = {"USDJPY": frame(days, usdjpy)}
+    cross = health.pln_cross(pln, fx)
+    assert cross["USD/JPY"]["median_pct"] > 50
+    c = health.pln_rates(pln_status(pln), pln, fx, NOW_PLN)
+    assert c["state"] == "warn" and "JPY" in c["text"]
+    ok = {"USD": pln["USD"], "JPY": frame(days, usdpln / usdjpy)}
+    assert health.pln_cross(ok, fx)["USD/JPY"]["median_pct"] < 0.01
+
+
+def test_pln_peg_break_warns():
+    from rev_fixtures import frame, workdays
+
+    days = workdays("2023-01-01", "2026-11-10")
+    rng = np.random.default_rng(4)
+    usd = 4.0 * np.exp(np.cumsum(rng.normal(0, 0.004, len(days))))
+    hkd = usd / 7.8 * (1 + rng.normal(0, 0.0003, len(days)))
+    pln = {"USD": frame(days, usd), "HKD": frame(days, hkd)}
+    assert health.pln_rates(pln_status(pln), pln, None, NOW_PLN)["state"] == "ok"
+    broken = hkd.copy()
+    broken[-20:] *= 1.05
+    pln["HKD"] = frame(days, broken)
+    c = health.pln_rates(pln_status(pln), pln, None, NOW_PLN)
+    assert c["state"] == "warn" and "HKD" in c["text"]
+
+
+def test_pln_stale_currency_warns():
+    from rev_fixtures import synthetic_raw
+
+    pln = synthetic_raw(["EUR", "CHF"], start="2014-01-01", end="2026-11-10")
+    pln["CHF"] = pln["CHF"].iloc[:-8]
+    c = health.pln_rates(pln_status(pln), pln, None, NOW_PLN)
+    assert c["state"] == "warn" and "CHF" in c["text"]

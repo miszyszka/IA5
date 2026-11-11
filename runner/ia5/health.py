@@ -239,6 +239,117 @@ def daily_candles(status: dict, d1: dict | None, now: int) -> dict:
                  problems + detail, " ".join(dict.fromkeys(fixes)))
 
 
+# D-063: test krzyżowy kursów PLN z dziennymi świecami FX — kurs implikowany PLN[a] / PLN[b] ≈ para a/b
+PLN_CROSS = {"EURUSD": ("EUR", "USD"), "GBPUSD": ("GBP", "USD"), "AUDUSD": ("AUD", "USD"),
+             "USDJPY": ("USD", "JPY"), "USDCHF": ("USD", "CHF"), "USDCAD": ("USD", "CAD")}
+PLN_CROSS_MAX_PCT = 0.5     # mediana odchylenia > 0,5% → skala albo kurs się nie zgadza
+PLN_CROSS_DAYS = 730
+
+
+def pln_cross(pln: dict | None, fx_d1: dict | None) -> dict[str, dict]:
+    """Mediana i p99 |PLN[a]/PLN[b] ÷ para − 1| w % z ostatnich 2 lat wspólnych dni (ten sam znacznik: północ w Londynie)."""
+    out = {}
+    for pair, (a, b) in PLN_CROSS.items():
+        fa, fb, fx = (pln or {}).get(a), (pln or {}).get(b), (fx_d1 or {}).get(pair)
+        if fa is None or fb is None or fx is None or not len(fa) or not len(fb) or not len(fx):
+            continue
+        m = (fa[["ts", "close"]].rename(columns={"close": "a"})
+             .merge(fb[["ts", "close"]].rename(columns={"close": "b"}), on="ts")
+             .merge(fx[["ts", "close"]].rename(columns={"close": "x"}), on="ts"))
+        m = m[m.ts >= m.ts.max() - PLN_CROSS_DAYS * 86400]
+        if len(m) < 20:
+            continue
+        dev = (m.a / m.b / m.x - 1).abs().to_numpy() * 100
+        out[f"{pair[:3]}/{pair[3:]}"] = {"median_pct": float(np.median(dev)), "p99_pct": float(np.percentile(dev, 99)),
+                                         "n": int(len(m))}
+    return out
+
+
+def _peg(pln: dict, anchor: str, member: str) -> tuple[float, float] | None:
+    """Odchylenie ostatniego kursu członka wobec kotwicy od mediany roku i korelacja tygodniowych zmian (52 tyg.)."""
+    fa, fm = pln.get(anchor), pln.get(member)
+    if fa is None or fm is None or len(fa) < 60 or len(fm) < 60:
+        return None
+    m = fa[["ts", "close"]].rename(columns={"close": "a"}).merge(fm[["ts", "close"]].rename(columns={"close": "m"}), on="ts")
+    m = m[m.ts >= m.ts.max() - 365 * 86400]
+    if len(m) < 60:
+        return None
+    ratio = (m.m / m.a).to_numpy()
+    dev = float(abs(ratio[-1] / np.median(ratio) - 1))
+    wk = m.iloc[::5]
+    ra, rm = np.diff(np.log(wk.a.to_numpy())), np.diff(np.log(wk.m.to_numpy()))
+    corr = float(np.corrcoef(ra, rm)[0, 1]) if len(ra) > 10 and ra.std() > 0 and rm.std() > 0 else 1.0
+    return dev, corr
+
+
+def pln_rates(status: dict, pln: dict | None, fx_d1: dict | None, now: int, universe: list[str] | None = None,
+              infos: dict | None = None) -> dict:
+    """D-063: kursy złotówkowe (REV) — przyjęte waluty obecne i świeże, kopia = Firestore, test krzyżowy z D1 FX, sztywne
+    kursy bloków, zbiór koszyków = zamrożony w badaniu. Zgodnie z D-060: zielono z liczbami, ostrzeżenie tylko, gdy jest
+    coś do zrobienia."""
+    from .daily import D1_TZ, day_of, expected_day
+    from .rev_config import BLOCS, MAX_STALE_WD, PEG_MAX_DEV, PEG_MIN_CORR, baskets
+    from .rev_data import _wd_ord
+
+    name = "Kursy złotówkowe (REV)"
+    st = (status or {}).get("pln") or {}
+    remote, rejected, tz = st.get("currencies") or {}, st.get("rejected") or {}, st.get("tz") or D1_TZ
+    pln = {c: df for c, df in (pln or {}).items() if df is not None and len(df)}
+    if not pln:
+        return check("pln", name, "warn", "Nie ma jeszcze kursów walut do złotego (REV).",
+                     fix="W Apps Script wklej nowy Code.gs i uruchom raz backfillPLN() (docs/SETUP.md, „Kursy złotówkowe”).")
+    exp = expected_day(now, tz)
+    problems, fixes, detail = [], [], []
+    for c, df in sorted(pln.items()):
+        first, last = day_of([int(df.ts.min()), int(df.ts.max())], tz)
+        behind = int(_wd_ord(np.datetime64(exp)) - _wd_ord(np.datetime64(str(last))))
+        detail.append(f"{c}: {first} – {last}, {fmt(len(df))} dni")
+        if behind > MAX_STALE_WD:
+            problems.append(f"{c}: ostatni kurs {last} ({behind} dni roboczych temu)")
+            fixes.append("Waluta stoi: sprawdź log Apps Script (tickPLN_); jeśli Yahoo przestało ją notować — zgłoś Claude'owi "
+                         "(decyzja o wyłączeniu z REV).")
+        r = remote.get(c) or {}
+        if r and int(r.get("lastTs") or 0) > int(df.ts.max()):
+            problems.append(f"{c}: na Macu starsza kopia niż w Firestore")
+            fixes.append("Poczekaj na najbliższą synchronizację albo uruchom ia5 start ponownie.")
+    cross = pln_cross(pln, fx_d1)
+    bad_cross = [k for k, v in cross.items() if v["median_pct"] > PLN_CROSS_MAX_PCT]
+    if bad_cross:
+        legs = {k.replace("USD", "").replace("/", "") or "USD" for k in bad_cross}
+        who = "USD" if len(bad_cross) >= 3 else ", ".join(sorted(legs))
+        problems.append(f"{who}: kurs do PLN nie zgadza się z parą FX ({', '.join(bad_cross)}) — skala albo kurs")
+        fixes.append("Yahoo mogło zmienić skalę kwotowania (np. za 100 jednostek) — zgłoś Claude'owi z tą linią.")
+    for k, v in cross.items():
+        detail.append(f"test krzyżowy {k}: mediana {v['median_pct']:.3f}%, p99 {v['p99_pct']:.3f}% ({v['n']} dni)")
+    for anchor, mem in BLOCS.items():
+        for m in mem:
+            peg = _peg(pln, anchor, m)
+            if peg is None:
+                continue
+            dev, corr = peg
+            detail.append(f"blok {anchor}: {m} odchylenie {100 * dev:.2f}%, korelacja {corr:.3f}")
+            if dev > PEG_MAX_DEV or corr < PEG_MIN_CORR:
+                problems.append(f"{m}: sztywny kurs wobec {anchor} mógł pęknąć (odchylenie {100 * dev:.1f}%, korelacja {corr:.2f})")
+                fixes.append("Sztywny kurs mógł przestać obowiązywać — decyzja Michała (blok w REV), zgłoś Claude'owi.")
+    if universe is not None and set(baskets(pln)) != set(universe):
+        problems.append("lista koszyków różni się od zamrożonej w badaniu REV")
+        fixes.append("Zbiór walut zmienił się po badaniu (backfillPLN() z nowym wynikiem?) — zgłoś Claude'owi: zmiana listy = "
+                     "nowa REV_VERSION.")
+    if problems:
+        return check("pln", name, "warn", problems[0] + (f" (i {len(problems) - 1} więcej)" if len(problems) > 1 else "") + ".",
+                     problems + detail, " ".join(dict.fromkeys(fixes)))
+    first_year = min(day_of([int(df.ts.min())], tz)[0] for df in pln.values())[:4]
+    rej = ", ".join(f"{k} ({v})" for k, v in sorted(rejected.items())) or "brak"
+    rep = ""
+    if infos:
+        sp = sum(int(i.get("spikes", 0)) for i in infos.values())
+        rs = sum(len(i.get("rescaled", [])) for i in infos.values())
+        rep = f" Naprawione przy liczeniu: wyskoki {sp}, przeskalowania {rs}."
+    n = len(pln)
+    return check("pln", name, "ok", f"{n} {pl(n, 'waluta', 'waluty', 'walut')} od {first_year}, ostatni oczekiwany dzień {exp} jest; "
+                 f"odrzucone przy przyjęciu: {rej}.{rep}", detail)
+
+
 def mac_copy(status: dict, yahoo: dict) -> dict:
     """Kopia świec na Macu (data/yahoo) ma to samo co Firestore — inaczej liczenie idzie na starych danych."""
     pairs = status.get("pairs") or {}
@@ -493,6 +604,9 @@ def run(
     ready: dict | None = None,
     code: dict | None = None,
     d1: dict | None = None,
+    pln: dict | None = None,
+    pln_universe: list[str] | None = None,
+    pln_infos: dict | None = None,
 ) -> dict:
     now = now or int(time.time())
     checks = [
@@ -509,6 +623,8 @@ def run(
     ]
     if d1 is not None:
         checks.append(daily_candles(status, d1, now))
+    if pln is not None:
+        checks.append(pln_rates(status, pln, d1, now, pln_universe, pln_infos))
     if code is not None:
         checks.append(code_version(code))
     if home is not None:
