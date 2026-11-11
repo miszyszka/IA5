@@ -1,6 +1,38 @@
 {
  "strategies": [
   {
+   "id": "6wzKUigQvRVkWOImnKtK",
+   "name": "D4",
+   "run_id": "20261111-113756",
+   "created": 1794397076,
+   "verdict": "green",
+   "verdict_note": "wszystkie testy zaliczone",
+   "n_variants": 1,
+   "hypothesis": "Kurs, który spadł o co najmniej 5% poniżej swojej średniej z ok. 3 lat (756 dni handlu), wraca w jej stronę:\nparytet siły nabywczej, bilanse handlowe i polityka banków centralnych działają wolno, ale w skali lat ciągną kurs\nz powrotem. Tylko long (cena ≥ 5% poniżej średniej). Jedno wejście na tydzień (co najmniej 5 dni handlu od poprzedniego\nw tej parze), zawsze ta sama wielkość. Zamknięcie tylko na powrocie do średniej, bez stop lossa i bez limitu czasu.\nLiczone tylko od 2016-11-11 (ostatnie 10 lat); średnia 3-letnia korzysta z wcześniejszych danych.\nHipoteza zapisana PRZED liczeniem.",
+   "pairs": [
+    "AUDUSD",
+    "EURGBP",
+    "EURJPY",
+    "EURUSD",
+    "GBPUSD",
+    "USDCAD",
+    "USDCHF",
+    "USDJPY"
+   ],
+   "data_from": 846633600,
+   "data_to": 1794268800,
+   "source": "yahoo",
+   "engine_version": "0.13.0",
+   "best_exit": "poziomy TP/SL ze strategii, bez limitu czasu",
+   "is_mean_r": 8.31097,
+   "oos_mean_r": 5.635101,
+   "oos_mean_pips": 516.070374,
+   "oos_trades": 95,
+   "demo": false,
+   "timeframe": "D1",
+   "d1_background": false
+  },
+  {
    "id": "wSKI1vQ0WgIVXq2m53BL",
    "name": "Powrót",
    "run_id": "20261111-111159",
