@@ -14,7 +14,21 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from .rev_config import BAND, BASE, CAP, ELIGIBLE_WEEKS, START_PLN, SWITCH_EVERY, SWITCH_LOOKBACK, WINDOW_MAX_MISSING
+from .rev_config import (
+    BAND,
+    BASE,
+    BRAKE_LONG,
+    BRAKE_MULT,
+    BRAKE_SHORT,
+    CAP,
+    ELIGIBLE_WEEKS,
+    OVERLAYS,
+    PLN_CAP_VALVE,
+    START_PLN,
+    SWITCH_EVERY,
+    SWITCH_LOOKBACK,
+    WINDOW_MAX_MISSING,
+)
 
 EPS = 1e-12
 
@@ -160,46 +174,46 @@ def score(x: pd.DataFrame, name: str, mask: pd.DataFrame | None = None) -> pd.Da
 
 # ---------- podział, limit 50%, pasmo ----------
 
-def _spill(w: np.ndarray, order: np.ndarray, cap: float, groups: list[np.ndarray]) -> np.ndarray:
-    """Ucina wagi powyżej `cap`, a nadwyżkę rozdziela grupami: w grupie najpierw proporcjonalnie do koszyków z wagą
-    w (0, cap), potem kolejno według `order` (każdy do `cap`); co się nie zmieści — następna grupa."""
+def _spill(w: np.ndarray, order: np.ndarray, cap, groups: list[np.ndarray]) -> np.ndarray:
+    """Ucina wagi powyżej limitu (`cap`: liczba albo wektor — D-065: PLN może mieć inny limit), a nadwyżkę rozdziela grupami:
+    w grupie najpierw proporcjonalnie do koszyków z wagą poniżej limitu, potem kolejno według `order`; co się nie zmieści —
+    następna grupa. Kapitał nigdy nie znika (gdy nie ma gdzie — limit przekroczony z konieczności)."""
     w = np.asarray(w, float).copy()
+    c = np.broadcast_to(np.asarray(cap, float), w.shape).copy()
     total = float(w.sum())
-    cut_from = w > cap + EPS
-    excess = float(np.maximum(w - cap, 0).sum())
-    w = np.minimum(w, cap)
-    return _spill_groups(w, order, cap, groups, excess, total, cut_from)
-
-
-def _spill_groups(w: np.ndarray, order: np.ndarray, cap: float, groups: list[np.ndarray], excess: float, total: float,
-                  cut_from: np.ndarray) -> np.ndarray:
+    cut_from = w > c + EPS
+    excess = float(np.maximum(w - c, 0).sum())
+    w = np.minimum(w, c)
     for g in groups:
         for _ in range(len(w) + 1):
             if excess <= EPS:
-                return w
-            rec = g & (w > EPS) & (w < cap - EPS)
+                break
+            rec = g & (w > EPS) & (w < c - EPS)
             if not rec.any():
                 break
-            put = np.minimum(excess * w[rec] / w[rec].sum(), cap - w[rec])
+            put = np.minimum(excess * w[rec] / w[rec].sum(), c[rec] - w[rec])
             w[rec] += put
             excess -= float(put.sum())
         for i in order:
             if excess <= EPS:
-                return w
-            if g[i] and w[i] < cap - EPS:
-                p = min(cap - w[i], excess)
-                w[i] += p
-                excess -= p
-    if excess > EPS:   # nie ma gdzie zmieścić (np. wszystko zamrożone poza PLN) — limit przekroczony z konieczności,
-        back = cut_from & (w > EPS)          # kapitał nigdy nie znika: nadwyżka wraca do koszyków, którym ją ucięto
+                break
+            if g[i] and w[i] < c[i] - EPS:
+                q = min(c[i] - w[i], excess)
+                w[i] += q
+                excess -= q
+        if excess <= EPS:
+            break
+    if excess > EPS:
+        back = cut_from & (w > EPS)          # nadwyżka wraca do koszyków, którym ją ucięto
         if not back.any():
             back = w > EPS
-        w[back] += excess * w[back] / w[back].sum() if back.any() else 0.0
+        if back.any():
+            w[back] += excess * w[back] / w[back].sum()
     assert abs(w.sum() - total) < 1e-9, "podział zgubił kapitał"
     return w
 
 
-def cap_fill(w: np.ndarray, order: np.ndarray, cap: float = CAP) -> np.ndarray:
+def cap_fill(w: np.ndarray, order: np.ndarray, cap=CAP) -> np.ndarray:
     """Normalizuje wagi i ucina każdą powyżej `cap`; nadwyżka idzie proporcjonalnie do koszyków z wagą w (0, cap),
     a gdy takich brak — kolejno do następnych w `order` (od najlepszej oceny), każdy do `cap`."""
     w = np.asarray(w, float)
@@ -241,13 +255,14 @@ def target_weights(s: pd.Series, how: str, cap: float = CAP) -> pd.Series:
 
 
 def rebalance(cur: np.ndarray, target: np.ndarray, order: np.ndarray, frozen: np.ndarray, band: float = BAND,
-              cap: float = CAP) -> np.ndarray:
+              cap=CAP) -> np.ndarray:
     """Pasmo: koszyk zmieniamy, gdy cel różni się od udziału o ≥ `band` albo udział przekracza limit; koszyk zamrożony
     (bez ceny) zostaje. Wolny kapitał (1 − to, czego nie ruszamy) idzie na zmieniane koszyki proporcjonalnie do celu,
     z limitem; gdy nadwyżki nie da się zmieścić — do kolejnych niezamrożonych w `order`."""
     cur = np.asarray(cur, float)
     target = np.asarray(target, float)
     frozen = np.asarray(frozen, bool)
+    cap = np.broadcast_to(np.asarray(cap, float), cur.shape)
     mask = ((np.abs(target - cur) >= band - 1e-12) | (cur > cap + EPS)) & ~frozen
     if not mask.any():
         return cur.copy()
@@ -270,16 +285,89 @@ class Variant:
     score: str
     how: str
     label: str
+    overlay: str = ""
+
+    @property
+    def base(self) -> str:
+        return f"{self.score}-{self.how}"
 
 
 _SCORE_LABEL = {"V3": "Przecena 3 lata", "V5": "Przecena 5 lat", "M3": "Trend 3 mies.", "M12": "Trend 12 mies.",
                 "V3M3": "Tania i przestała tanieć (3 lata)", "V5M3": "Tania i przestała tanieć (5 lat)"}
 _HOW_LABEL = {"P": "proporcjonalnie", "R": "ranking"}
+OVERLAY_LABEL = {"": "", "Z26": " + zawór złotówkowy 6 mies.", "Z52": " + zawór złotówkowy 12 mies.",
+                 "H": " + hamulec zmienności", "S": " + nie sprzedawaj na stracie"}
 VARIANTS: tuple[Variant, ...] = tuple(
-    Variant(f"{s}-{h}", s, h, f"{_SCORE_LABEL[s]}, {_HOW_LABEL[h]}") for s in SCORES for h in ("P", "R")
+    Variant(f"{s}-{h}" + (f"+{o}" if o else ""), s, h, f"{_SCORE_LABEL[s]}, {_HOW_LABEL[h]}{OVERLAY_LABEL[o]}", o)
+    for s in SCORES for h in ("P", "R") for o in OVERLAYS
 ) + (Variant("SW", "", "", "Przełącznik (co 13 tygodni najlepszy z 3 lat)"),)
 STATIC = tuple(v for v in VARIANTS if v.id != "SW")
 VARIANT_BY_ID = {v.id: v for v in VARIANTS}
+
+
+# ---------- nakładki (D-065): zawór złotówkowy i hamulec zmienności ----------
+
+def foreign_index(prices: pd.DataFrame) -> pd.Series:
+    """Indeks walut obcych wobec PLN: łańcuchowa średnia tygodniowych zmian ln kursu koszyków poza PLN z ceną w obu
+    tygodniach. Rośnie, gdy złoty słabnie; spada, gdy złoty się umacnia."""
+    cols = [c for c in prices.columns if c != BASE]
+    if not cols:
+        return pd.Series(0.0, index=prices.index)
+    y = np.log(prices[cols].to_numpy(float))
+    d = y[1:] - y[:-1]
+    ok = np.isfinite(d)
+    n = ok.sum(axis=1)
+    step = np.where(n > 0, np.where(ok, d, 0.0).sum(axis=1) / np.maximum(n, 1), 0.0)
+    return pd.Series(np.r_[0.0, np.cumsum(step)], index=prices.index, name="foreign")
+
+
+def valve_on(prices: pd.DataFrame, weeks: int) -> np.ndarray:
+    """Zawór złotówkowy: indeks walut obcych niżej niż `weeks` tygodni temu (złoty się umacnia)."""
+    f = foreign_index(prices)
+    d = (f - f.shift(weeks)).to_numpy(float)
+    return np.where(np.isfinite(d), d < 0, False)
+
+
+def brake_on(prices: pd.DataFrame, short: int = BRAKE_SHORT, long: int = BRAKE_LONG, mult: float = BRAKE_MULT) -> np.ndarray:
+    """Hamulec zmienności: odchylenie tygodniowych zmian indeksu z `short` tygodni > `mult` × mediana tego odchylenia
+    z `long` tygodni (bieżący tydzień wliczony — tylko przeszłość)."""
+    sd = foreign_index(prices).diff().rolling(short, min_periods=short - 3).std()
+    ref = sd.rolling(long, min_periods=long // 2).median()
+    on = (sd > mult * ref).to_numpy()
+    return np.where(np.isfinite(sd.to_numpy()) & np.isfinite(ref.to_numpy()), on, False)
+
+
+def overlay_on(prices: pd.DataFrame, overlay: str) -> np.ndarray | None:
+    if overlay in ("Z26", "Z52"):
+        return valve_on(prices, int(overlay[1:]))
+    if overlay == "H":
+        return brake_on(prices)
+    return None
+
+
+def pln_floor(W: np.ndarray, on: np.ndarray, pln: int, floor: float = PLN_CAP_VALVE) -> tuple[np.ndarray, np.ndarray]:
+    """W tygodniach z włączonym zaworem/hamulcem PLN ma co najmniej `floor`, reszta proporcjonalnie mniej (waluty obce dalej
+    ≤ 50%). Zwraca (cele, limity): limit PLN = `floor` w tych tygodniach, inaczej CAP."""
+    W = np.asarray(W, float).copy()
+    caps = np.full(W.shape, CAP)
+    for t in np.flatnonzero(on):
+        p = W[t, pln]
+        if p < floor:
+            rest = 1.0 - p
+            if rest > EPS:
+                W[t] *= (1.0 - floor) / rest
+            W[t, pln] = floor
+        caps[t, pln] = floor
+    return W, caps
+
+
+@dataclass
+class Plan:
+    targets: pd.DataFrame
+    orders: np.ndarray
+    caps: np.ndarray | None = None        # T×N; None = CAP wszędzie
+    no_loss: np.ndarray | bool = False    # tydzień po tygodniu: czy działa „nie sprzedawaj na stracie”
+    on: np.ndarray | None = None          # tydzień po tygodniu: czy działa zawór / hamulec
 
 
 @dataclass
@@ -291,8 +379,24 @@ class Sim:
     trades: int
 
 
+def variant_plan(prices: pd.DataFrame, elig: pd.DataFrame, v: Variant, base: dict | None = None) -> Plan:
+    """Plan wariantu statycznego: cele metody podstawowej (z `base`, gdy już policzone) i nakładka (D-065)."""
+    key = v.base
+    if base is not None and key in base:
+        W, orders = base[key]
+    else:
+        W, orders = variant_targets(prices, elig, VARIANT_BY_ID[key])
+        if base is not None:
+            base[key] = (W, orders)
+    on = overlay_on(prices, v.overlay)
+    if on is not None:
+        Wf, caps = pln_floor(W.to_numpy(float), on, list(prices.columns).index(BASE))
+        return Plan(pd.DataFrame(Wf, index=W.index, columns=W.columns), orders, caps, False, on)
+    return Plan(W, orders, None, v.overlay == "S", None)
+
+
 def variant_targets(prices: pd.DataFrame, elig: pd.DataFrame, v: Variant) -> tuple[pd.DataFrame, np.ndarray]:
-    """Cele i kolejność (od najwyższej oceny) dla wariantu statycznego, tydzień po tygodniu."""
+    """Cele i kolejność (od najwyższej oceny) metody podstawowej wariantu, tydzień po tygodniu (bez nakładki)."""
     s = score(relative(prices), v.score, elig).where(elig)
     S = s.to_numpy(float)
     W = np.zeros_like(S)
@@ -311,14 +415,39 @@ def equal_targets(elig: pd.DataFrame) -> pd.DataFrame:
     return e.div(e.sum(axis=1).replace(0, np.nan), axis=0).fillna(0.0)
 
 
+def loss_hold(units: np.ndarray, cost: np.ndarray, last_px: np.ndarray, target: np.ndarray, cap=CAP) -> np.ndarray:
+    """D-065 „nie sprzedawaj na stracie”: koszyk z kursem poniżej średniej ceny zakupu, który metoda chce zmniejszyć,
+    zostaje bez sprzedaży — chyba że jest ponad limitem (wtedy sprzedaż do limitu)."""
+    px = np.where(np.isfinite(last_px), last_px, 0.0)
+    V = float(units @ px)
+    cur = units * px / V if V > 0 else np.zeros(len(units))
+    c = np.broadcast_to(np.asarray(cap, float), cur.shape)
+    with np.errstate(invalid="ignore"):
+        loss = np.isfinite(cost) & (cost > 0) & (px > 0) & (px < cost)
+    return loss & (target < cur - 1e-12) & (cur <= c + EPS) & (units > 0)
+
+
+def update_cost(cost: np.ndarray, before: np.ndarray, after: np.ndarray, px: np.ndarray) -> np.ndarray:
+    """Średnia cena zakupu: dokupienie uśrednia, sprzedaż jej nie zmienia, zero jednostek ją kasuje."""
+    c = np.asarray(cost, float).copy()
+    buy = after > before + 1e-12
+    old = np.where(np.isfinite(c), c, 0.0)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        c[buy] = (before[buy] * old[buy] + (after[buy] - before[buy]) * px[buy]) / after[buy]
+    c[after <= 1e-12] = np.nan
+    return c
+
+
 def trade(units: np.ndarray, raw_px: np.ndarray, last_px: np.ndarray, target: np.ndarray, order: np.ndarray,
-          band: float = BAND, cap: float = CAP) -> tuple[np.ndarray, float, np.ndarray, np.ndarray]:
+          band: float = BAND, cap=CAP, hold: np.ndarray | None = None) -> tuple[np.ndarray, float, np.ndarray, np.ndarray]:
     """Jedno przeliczenie (to samo w badaniu i na żywo): wycena jednostek po ostatnich znanych cenach, koszyk bez ceny
-    w dniu decyzji zamrożony, `rebalance` do celu; zmieniają się tylko koszyki, którym zmienia się udział.
-    Zwraca (nowe jednostki, wartość, zamrożone, zmienione)."""
+    w dniu decyzji zamrożony (także `hold` — „nie sprzedawaj na stracie”), `rebalance` do celu; zmieniają się tylko
+    koszyki, którym zmienia się udział. Zwraca (nowe jednostki, wartość, zamrożone, zmienione)."""
     px = np.where(np.isfinite(last_px), last_px, 0.0)
     V = float(units @ px)
     frozen = ~np.isfinite(raw_px)
+    if hold is not None:
+        frozen = frozen | np.asarray(hold, bool)
     cur = units * px / V if V > 0 else np.zeros(len(units))
     new = rebalance(cur, target, order, frozen, band, cap)
     chg = ~frozen & (px > 0) & (np.abs(new - cur) > 1e-12)
@@ -328,8 +457,14 @@ def trade(units: np.ndarray, raw_px: np.ndarray, last_px: np.ndarray, target: np
     return nu, V, frozen, chg
 
 
+def simulate_plan(exe: pd.DataFrame, plan: Plan, band: float = BAND, v0: float = START_PLN, start: int = 0,
+                  end: int | None = None) -> Sim:
+    return simulate(exe, plan.targets, plan.orders, band, CAP, v0, start, end, caps=plan.caps, no_loss=plan.no_loss)
+
+
 def simulate(exe: pd.DataFrame, targets: pd.DataFrame, orders: np.ndarray | None = None, band: float = BAND,
-             cap: float = CAP, v0: float = START_PLN, start: int = 0, end: int | None = None) -> Sim:
+             cap: float = CAP, v0: float = START_PLN, start: int = 0, end: int | None = None,
+             caps: np.ndarray | None = None, no_loss: np.ndarray | bool = False) -> Sim:
     """Portfel tygodniowy od wiersza `start`: w t wycena jednostek po `exe` (brak ceny → ostatnia znana), koszyk bez ceny
     w t zamrożony, `rebalance` do celu, nowe jednostki. Pierwsza decyzja z całości w PLN. Bez kosztów (R3)."""
     cols = list(exe.columns)
@@ -344,12 +479,19 @@ def simulate(exe: pd.DataFrame, targets: pd.DataFrame, orders: np.ndarray | None
     U = np.zeros((len(P), N))
     Wt = np.zeros((len(P), N))
     trades = 0
+    cost = np.full(N, np.nan)
+    nl = np.broadcast_to(np.asarray(no_loss, bool), (len(P),))
     for t in range(start, T):
         o = orders[t] if orders is not None else _order(Tg[t])
-        units, V, _, chg = trade(units, P[t], last[t], Tg[t], o, band, cap)
+        cv = caps[t] if caps is not None else cap
+        hold = loss_hold(units, cost, last[t], Tg[t], cv) if nl[t] else None
+        before = units
+        units, V, _, chg = trade(units, P[t], last[t], Tg[t], o, band, cv, hold)
+        px = np.where(np.isfinite(last[t]), last[t], 0.0)
+        cost = update_cost(cost, before, units, px)
+        cost[cols.index(BASE)] = np.nan
         vals[t] = V
         trades += int(chg.sum())
-        px = np.where(np.isfinite(last[t]), last[t], 0.0)
         U[t], Wt[t] = units, (units * px / V if V > 0 else 0)
     idx = exe.index
     value = pd.Series(vals, index=idx)
@@ -374,20 +516,24 @@ def ir(x) -> float:
     return float(a.mean() / sd * math.sqrt(52)) if sd > 0 else float("nan")
 
 
-def switcher_targets(excess: pd.DataFrame, static: dict[str, pd.DataFrame], equal: pd.DataFrame, start: int,
-                     static_orders: dict[str, np.ndarray] | None = None, every: int = SWITCH_EVERY,
-                     lookback: int = SWITCH_LOOKBACK) -> tuple[pd.DataFrame, pd.Series, np.ndarray]:
-    """Przełącznik: co `every` tygodni od `start` wybiera wariant o najwyższym IR nadwyżki z ostatnich `lookback` tygodni
-    (tylko wiersze < t — znane w chwili decyzji); remis → pierwszy w VARIANTS; przed `lookback` tygodniami — równy podział.
-    Zwraca (cele, wybrany wariant w każdym tygodniu, kolejność)."""
+def switcher_plan(rets: pd.DataFrame, plans: dict[str, Plan], equal: pd.DataFrame, start: int, every: int = SWITCH_EVERY,
+                  lookback: int = SWITCH_LOOKBACK) -> tuple[Plan, pd.Series]:
+    """Przełącznik: co `every` tygodni od `start` wybiera wariant o najwyższej mierze (Sharpe przekazanych tygodniowych
+    zwrotów — D-065: zwroty kapitału w PLN) z ostatnich `lookback` tygodni (tylko wiersze < t — znane w chwili decyzji);
+    remis → pierwszy w VARIANTS; przed `lookback` tygodniami — równy podział. Przejmuje cele, kolejność, limity
+    i „nie sprzedawaj na stracie” wybranego wariantu."""
     idx = equal.index
     T = len(idx)
+    N = equal.shape[1]
     W = equal.to_numpy(float).copy()
-    order = np.tile(np.arange(W.shape[1]), (T, 1))
+    order = np.tile(np.arange(N), (T, 1))
+    caps = np.full((T, N), CAP)
+    nl = np.zeros(T, bool)
+    on = np.zeros(T, bool)
     chosen = pd.Series("equal", index=idx, dtype=object)
-    ids = [v.id for v in STATIC if v.id in static]
+    ids = [v.id for v in STATIC if v.id in plans]
     pick = "equal"
-    ex = excess.reindex(idx)
+    ex = rets.reindex(idx)
     for t in range(start, T):
         if (t - start) % every == 0:
             if t - start >= lookback:
@@ -399,10 +545,24 @@ def switcher_targets(excess: pd.DataFrame, static: dict[str, pd.DataFrame], equa
                 pick = "equal"
         chosen.iloc[t] = pick
         if pick != "equal":
-            W[t] = static[pick].iloc[t].to_numpy(float)
-            if static_orders is not None:
-                order[t] = static_orders[pick][t]
-    return pd.DataFrame(W, index=idx, columns=equal.columns), chosen, order
+            pl = plans[pick]
+            W[t] = pl.targets.iloc[t].to_numpy(float)
+            order[t] = pl.orders[t]
+            if pl.caps is not None:
+                caps[t] = pl.caps[t]
+            nl[t] = bool(np.broadcast_to(np.asarray(pl.no_loss, bool), (T,))[t])
+            on[t] = bool(pl.on[t]) if pl.on is not None else False
+    return Plan(pd.DataFrame(W, index=idx, columns=equal.columns), order, caps, nl, on), chosen
+
+
+def switcher_targets(rets: pd.DataFrame, static: dict[str, pd.DataFrame], equal: pd.DataFrame, start: int,
+                     static_orders: dict[str, np.ndarray] | None = None, every: int = SWITCH_EVERY,
+                     lookback: int = SWITCH_LOOKBACK) -> tuple[pd.DataFrame, pd.Series, np.ndarray]:
+    """Zgodność wstecz: przełącznik na samych celach (bez limitów i nakładek)."""
+    T, N = equal.shape
+    plans = {k: Plan(w, static_orders[k] if static_orders else np.tile(np.arange(N), (T, 1))) for k, w in static.items()}
+    plan, chosen = switcher_plan(rets, plans, equal, start, every, lookback)
+    return plan.targets, chosen, plan.orders
 
 
 def daily_equity(units: pd.DataFrame, daily: pd.DataFrame) -> pd.Series:

@@ -38,9 +38,11 @@ def test_periods_split_and_fixed():
 
 def test_research_shape(research):
     r = research
-    assert len(r["variants"]) == 13 and r["winner"] in {v["id"] for v in r["variants"]}
+    assert len(r["variants"]) == 61 and r["winner"] in {v["id"] for v in r["variants"]}   # D-065: 12 metod × 5 odmian + przełącznik
     assert r["frozen"]["code_hash"] == rr.code_hash() and r["frozen"]["id"] == r["winner"]
-    assert r["validation"]["dsr"]["trials"] == 13
+    assert r["validation"]["dsr"]["trials"] == 61 and r["validation"]["selection"] == "sharpe_pln"
+    best = max(r["variants"], key=lambda v: v["is"]["sharpe"] if v["is"]["sharpe"] is not None else -9)
+    assert best["id"] == r["winner"]                                       # wybór po Sharpe w PLN na IS
     assert 0 <= r["validation"]["random_pct"] <= 100
     ts = r["history"]["ts"]
     assert all(a < b for a, b in zip(ts, ts[1:])) and len(ts) == len(r["history"]["winner"]) == len(r["history"]["equal"])

@@ -253,3 +253,22 @@ def test_unchanged_monday_close_does_not_delay(raw):
     r, i = ready_at(raw, now, flat)
     st = live_step(None, research(), r, now, i)
     assert len(st["rebalances"]) == 1
+
+
+@pytest.mark.parametrize("vid", ["V5-P+S", "V5-P+Z26"])
+def test_overlay_variants_live_stepwise_equals_once(raw, vid):
+    """D-065: nakładki na żywo (koszt zakupu w stanie, limit PLN 75%) — nadrabianie = krok po kroku."""
+    t0, t1 = ts("2026-11-17 06:00"), ts("2026-12-02 00:00")
+    st = None
+    for now in range(t0, t1 + 1, 12 * 3600):
+        r, i = ready_at(raw, now)
+        st = live_step(roundtrip(st) if st else None, research(vid), r, now, i)
+    r, i = ready_at(raw, t1)
+    once = live_step(None, research(vid), r, t1, i)
+    assert len(st["rebalances"]) == len(once["rebalances"]) == 3
+    assert [x["basket"] for x in st["ledger"]] == [x["basket"] for x in once["ledger"]]
+    assert np.allclose([x["units_after"] for x in st["ledger"]], [x["units_after"] for x in once["ledger"]])
+    assert all(rb["pln_cap"] in (0.5, 0.75) for rb in st["rebalances"])
+    assert max(st["rebalances"][-1]["weights"].values()) <= 0.75 + 1e-9
+    if vid.endswith("+S"):
+        assert any(v is not None for v in st["cost"].values())

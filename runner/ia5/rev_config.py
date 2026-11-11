@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-REV_VERSION = "1"
+REV_VERSION = "2"   # D-065: nakładki (zawór złotówkowy, hamulec, „nie sprzedawaj na stracie”), wybór po Sharpe w PLN
 CLEAN_PLN_VERSION = "1"
 
 # 24 waluty od Michała bez RUB (sankcje, notowania Yahoo stoją) — rzadkie kursy odpadają przy przyjęciu (Apps Script)
@@ -21,7 +21,8 @@ TICKER = "{}PLN=X"
 BASE = "PLN"
 
 START_PLN = 10_000.0
-CAP = 0.5      # R4: żaden koszyk (waluta, blok, PLN) > 50% kapitału
+CAP = 0.5      # R4: żaden koszyk (waluta, blok, PLN) > 50% kapitału…
+PLN_CAP_VALVE = 0.75   # …poza PLN przy włączonym zaworze albo hamulcu (D-065, wybór Michała „B”): wtedy PLN co najmniej i najwyżej 75%
 BAND = 0.02    # pasmo bez przewalutowania: zmiana udziału < 2 p.p. — bez transakcji
 
 # R2: przeliczenie we wtorek 08:00 czasu polskiego po zamknięciu poniedziałku; najpóźniej o 20:00 bez spóźnionych świec
@@ -54,6 +55,13 @@ RANDOM_PATHS = 1000
 CSCV_BLOCKS = 16
 BOOT_BLOCK = 8
 VERDICT = {"random_pct": 95.0, "dsr": 0.95, "pbo": 0.3, "red_random_pct": 80.0}
+
+# D-065: nakładki — spisane przed liczeniem (projekt REV §10)
+VALVE_WEEKS = (26, 52)   # zawór złotówkowy: indeks walut obcych wobec PLN spadł przez tyle tygodni → PLN 75%
+BRAKE_SHORT = 13         # hamulec zmienności: odchylenie tygodniowych zmian indeksu z 13 tygodni…
+BRAKE_LONG = 260         # …wobec mediany tego odchylenia z 260 tygodni…
+BRAKE_MULT = 1.5         # …większe o 50% → PLN 75%
+OVERLAYS = ("", "Z26", "Z52", "H", "S")   # bez nakładki, zawór 26/52 tyg., hamulec, „nie sprzedawaj na stracie”
 
 # kontrola bloków: członek odbiega od kotwicy albo przestaje iść razem z nią
 PEG_MAX_DEV = 0.03

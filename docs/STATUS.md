@@ -2,6 +2,19 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-11 (wieczór) — REV wersja 2 (D-064, D-065), CLAUDE.md 0.53
+
+**Pierwsze badanie na prawdziwych kursach (REV 1):** 8 walut obcych + PLN (AUD, CHF, EUR, GBP, JPY, NZD, SGD, USD); zwycięzca V5-P (przecena 5 lat, proporcjonalnie), 🟡 4/5: nadwyżka OOS +1,5% rocznie nad równym podziałem, percentyl losowych 96,8, PBO 0,29, opóźnienie +1,2%; DSR 0,43. Krzywa spadała w latach umacniania się złotego (2023, 2025) — limit 50% na PLN wymuszał ≥ 50% w walutach obcych.
+
+**Zrobione (na prośbę Michała)**
+- **D-064:** pierwszy podział od razu po badaniu (cena z ostatniego zamkniętego dnia), potem co wtorek 08:00.
+- **D-065 (REV_VERSION 2):** 61 wariantów — 12 metod × {bez nakładki, zawór złotówkowy 26/52 tyg., hamulec zmienności, „nie sprzedawaj na stracie”} + przełącznik; przy zaworze/hamulcu PLN do 75% (wybór Michała „B”); wybór po Sharpe tygodniowych zwrotów w PLN na IS. Reguły spisane przed liczeniem (projekt §10). Te same odcinki co REV 1 (drugie otwarcie OOS w dzienniku). Portfel REV 1 idzie do archiwum, nowy startuje od razu po badaniu.
+- Apps Script: `diagnosePLN()` (tylko odczyt) — dlaczego CAD, CZK, ILS, NOK, SEK, TRY, ZAR wyszły „Yahoo nie zwraca notowań”.
+
+**Następne — kroki Michała**
+1. Mac: `git pull && uv tool install -e runner --force`, restart `ia5 start` → badanie REV 2 (kilka minut) i od razu nowy podział.
+2. Apps Script: wklej nowy `Code.gs`, uruchom `diagnosePLN()` i wklej Claude'owi wiersze „PLN diagnoza” z arkusza `log` — od tego zależy, czy wrócą CAD, CZK, NOK, SEK, ILS, TRY, ZAR (zbiór koszyków jest zamrożony w badaniu; więcej walut = nowa `REV_VERSION`).
+
 ## 2026-11-11 (popołudnie) — REV: kapitał PLN na przecenione waluty (D-063), CLAUDE.md 0.51
 
 **Zrobione (na prośbę Michała; projekt `docs/superpowers/specs/2026-11-11-rev-design.md` zatwierdzony, plan `docs/superpowers/plans/2026-11-11-rev.md`)**
@@ -16,7 +29,7 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 **Następne — kroki Michała**
 1. Apps Script: wklej nowy `Code.gs`, uruchom raz `backfillPLN()` (ponowne uruchomienie jest bezpieczne — upsert) (kilka minut; w arkuszu `log` przyjęte i odrzucone waluty), potem `installTrigger()`.
 2. Mac: `cd /Users/szyszka/IA5 && git pull && uv tool install -e runner --force`, restart `ia5 start` — kopia kursów PLN, potem badanie REV (ok. minuty) i od razu pierwszy podział (D-064, cena z ostatniego zamkniętego dnia); dalej co wtorek 08:00.
-3. Napisz Claude'owi po pierwszym badaniu: D-065 z listą przyjętych walut, datami odcinków IS/OOS i werdyktem.
+3. Napisz Claude'owi po pierwszym badaniu: D-066 z listą przyjętych walut, datami odcinków IS/OOS i werdyktem.
 
 **Znane ograniczenia**
 - Badanie i rzadkie kursy sprawdzone tylko na danych syntetycznych i w symulacji Apps Script (Yahoo niedostępne z sesji Claude) — pierwsze prawdziwe pobranie rozstrzygnie, które waluty wejdą.

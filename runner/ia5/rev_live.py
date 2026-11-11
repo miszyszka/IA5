@@ -16,7 +16,7 @@ import pandas as pd
 
 from . import rev_method as rm
 from .daily import is_expected_day
-from .rev_config import BASE, DEADLINE_HOUR, DECISION_HOUR, DECISION_TZ, START_PLN
+from .rev_config import BASE, CAP, DEADLINE_HOUR, DECISION_HOUR, DECISION_TZ, START_PLN
 from .rev_data import daily_panel, decision_times, next_decision, weekly_panel
 from .rev_research import clean_json
 
@@ -51,7 +51,7 @@ def new_state(research: dict, archive: list | None = None) -> dict:
     return {"rev_version": research.get("rev_version"), "method": m, "universe": universe,
             "blocs": research.get("blocs", {}), "start_ts": int(start), "capital0": START_PLN,
             "units": dict(units), "equal_units": dict(units), "ledger": [], "rebalances": [], "valuation": [],
-            "scale_known": [], "scale_applied": [], "last_px": {BASE: 1.0}, "last_day": None, "last_decision": None,
+            "scale_known": [], "scale_applied": [], "last_px": {BASE: 1.0}, "cost": {}, "last_day": None, "last_decision": None,
             "next_rebalance": int(start), "today": {}, "archive": list(archive or []), "computedAt": None}
 
 
@@ -93,25 +93,26 @@ def _decision(st: dict, research: dict, ready: dict, D: int, exp_day: str) -> No
     elig = rm.eligible(prices)
     x = rm.relative(prices)
     mid = st["method"]["id"]
-    if mid == "SW":
+    if mid == "SW":   # przełącznik: wszystkie warianty statyczne od nowa z cen (bez portfeli „w cieniu”)
         start = int(np.searchsorted(times, int(research["periods"]["start_ts"])))
         eqt = rm.equal_targets(elig)
-        eq = rm.simulate(prices, eqt, None, band=0.0, start=start)
-        targets, orders, excess = {}, {}, {}
+        plans, base, rets = {}, {}, {}
         for v in rm.STATIC:
-            tg, od = rm.variant_targets(prices, elig, v)
-            targets[v.id], orders[v.id] = tg, od
-            excess[v.id] = rm.simulate(prices, tg, od, start=start).ret.reindex(prices.index) - eq.ret.reindex(prices.index)
-        tg_sw, chosen, od_sw = rm.switcher_targets(pd.DataFrame(excess), targets, eqt, start, orders)
-        target, order = tg_sw.iloc[-1].to_numpy(float), od_sw[-1]
+            plans[v.id] = rm.variant_plan(prices, elig, v, base)
+            rets[v.id] = rm.simulate_plan(prices, plans[v.id], start=start).ret.reindex(prices.index)
+        plan, chosen = rm.switcher_plan(pd.DataFrame(rets), plans, eqt, start)
         pick = str(chosen.iloc[-1])
         sc = rm.score(x, rm.VARIANT_BY_ID[pick].score, elig).where(elig).iloc[-1] if pick != "equal" else None
     else:
         v = rm.VARIANT_BY_ID[mid]
+        plan = rm.variant_plan(prices, elig, v)
         sc = rm.score(x, v.score, elig).where(elig).iloc[-1]
-        target = rm.target_weights(sc, v.how).to_numpy(float)
-        order = rm._order(sc.to_numpy(float))
         pick = mid
+    target = plan.targets.iloc[-1].to_numpy(float)
+    order = plan.orders[-1]
+    capv = plan.caps[-1] if plan.caps is not None else np.full(len(universe), CAP)
+    no_loss = bool(np.broadcast_to(np.asarray(plan.no_loss, bool), (len(times),))[-1])
+    pln_on = bool(plan.on[-1]) if plan.on is not None else False
     value_s = rm.score(x, "V5", elig).where(elig).iloc[-1]
     trend_s = rm.score(x, "M3", elig).where(elig).iloc[-1]
     raw = prices.iloc[-1].to_numpy(float)
@@ -119,7 +120,13 @@ def _decision(st: dict, research: dict, ready: dict, D: int, exp_day: str) -> No
     known = st.setdefault("last_px", {})
     last = np.array([x if np.isfinite(x) else known.get(b, np.nan) for b, x in zip(universe, last)], float)
     units = np.array([st["units"][b] for b in universe], float)
-    nu, V, frozen, chg = rm.trade(units, raw, last, target, order)
+    cost = np.array([np.nan if st.setdefault("cost", {}).get(b) is None else float(st["cost"][b]) for b in universe], float)
+    hold = rm.loss_hold(units, cost, last, target, capv) if no_loss else None   # D-065 „nie sprzedawaj na stracie”
+    nu, V, frozen, chg = rm.trade(units, raw, last, target, order, cap=capv, hold=hold)
+    pxv0 = np.where(np.isfinite(last), last, 0.0)
+    cost = rm.update_cost(cost, units, nu, pxv0)
+    cost[universe.index(BASE)] = np.nan
+    st["cost"] = {b: (float(c) if np.isfinite(c) else None) for b, c in zip(universe, cost)}
     eu = np.array([st["equal_units"][b] for b in universe], float)
     enu, EV, _, _ = rm.trade(eu, raw, last, rm.equal_targets(elig).iloc[-1].to_numpy(float), order, band=0.0)
     days = {b: (pd.Timestamp(int(t), unit="s", tz="UTC").tz_convert("Europe/London").strftime("%Y-%m-%d")
@@ -143,7 +150,10 @@ def _decision(st: dict, research: dict, ready: dict, D: int, exp_day: str) -> No
                    for b, s in zip(universe, (sc.to_numpy(float) if sc is not None else [np.nan] * len(universe)))},
         "value_score": {b: (float(s) if np.isfinite(s) else None) for b, s in zip(universe, value_s.to_numpy(float))},
         "trend_score": {b: (float(s) if np.isfinite(s) else None) for b, s in zip(universe, trend_s.to_numpy(float))},
-        "late": late, "frozen": [b for b, f in zip(universe, frozen) if f], "price_day": exp_day})
+        "late": late, "frozen": [b for b, f, h in zip(universe, frozen, hold if hold is not None else [False] * len(universe))
+                                 if f and not h],
+        "held": [b for b, h in zip(universe, hold if hold is not None else []) if h],
+        "pln_cap": float(capv[universe.index(BASE)]), "pln_valve": pln_on, "price_day": exp_day})
     st["units"] = {b: float(u) for b, u in zip(universe, nu)}
     st["equal_units"] = {b: float(u) for b, u in zip(universe, enu)}
     known.update({b: float(x) for b, x in zip(universe, last) if np.isfinite(x)})

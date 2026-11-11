@@ -1,8 +1,9 @@
-"""REV (D-063) — turniej 13 wariantów na historii kursów walut do PLN, walidacja, werdykt i raport dla Claude.
+"""REV (D-063, D-065) — turniej 61 wariantów (12 metod × 5 odmian + przełącznik) na historii kursów walut do PLN,
+walidacja, werdykt i raport dla Claude.
 
 Odcinki (R5): IS = pierwsze 75% wtorków wspólnego okresu przy pierwszym badaniu, OOS = reszta do dnia badania; daty stałe
-(`prior` = poprzedni research.json). Zwycięzca = najwyższy IR nadwyżki nad równym podziałem na IS. Testy potwierdzające
-liczone poza danymi wyboru: losowe podziały, bootstrap i opóźnienie na OOS; DSR na IS (13 prób); PBO na całości.
+(`prior` = poprzedni research.json). Zwycięzca = najwyższy Sharpe tygodniowych zwrotów kapitału w PLN na IS (D-065). Testy potwierdzające
+liczone poza danymi wyboru: losowe podziały, bootstrap i opóźnienie na OOS; DSR na IS (wszystkie próby); PBO na całości.
 Projekt: docs/superpowers/specs/2026-11-11-rev-design.md, §6.3.
 """
 from __future__ import annotations
@@ -115,7 +116,7 @@ def metrics(ret: pd.Series, eq_ret: pd.Series, lo: int, hi: int, idx: np.ndarray
     e = eq_ret.to_numpy(float)[sel]
     ex = r - e
     w = windows52(r, e)
-    return {"ir": ir(ex), "cagr_pct": _ann_pct(float(np.nanmean(r))) if len(r) else float("nan"),
+    return {"sharpe": ir(r), "ir": ir(ex), "cagr_pct": _ann_pct(float(np.nanmean(r))) if len(r) else float("nan"),
             "excess_pct_yr": _ann_pct(float(np.nanmean(ex))) if len(r) else float("nan"),
             "up52": w["up"], "beat52": w["beat"], "max_dd_pct": max_dd_pct(r), "weeks": int(len(r))}
 
@@ -205,7 +206,8 @@ def _decision_frame(ready: dict[str, pd.DataFrame], universe: list[str], now: in
 
 def run_research(ready: dict[str, pd.DataFrame], admitted: list[str], prior: dict | None, now: int,
                  paths: int = RANDOM_PATHS, seed: int = 7, log=print, rejected: dict | None = None) -> dict:
-    """Turniej: 12 wariantów statycznych + przełącznik na tych samych wtorkach, walidacja zwycięzcy, werdykt."""
+    """Turniej (D-065): 12 metod × 5 odmian (nakładki) + przełącznik na tych samych wtorkach; zwycięzca = najwyższy Sharpe
+    zwrotów kapitału w PLN na IS; walidacja zwycięzcy, werdykt."""
     t0 = time.time()
     universe = list(prior["universe"]) if prior else baskets(admitted)
     times, prices, lagged = _decision_frame(ready, universe, now, prior)
@@ -219,24 +221,25 @@ def run_research(ready: dict[str, pd.DataFrame], admitted: list[str], prior: dic
     eq = rm.simulate(prices, eqt, None, band=0.0, start=start, end=end + 1)
     eq_ret = eq.ret.reindex(prices.index)
 
-    sims, targets, orders = {}, {}, {}
+    sims, plans, base = {}, {}, {}
     for v in rm.STATIC:
-        tg, od = rm.variant_targets(prices, elig, v)
-        targets[v.id], orders[v.id] = tg, od
-        sims[v.id] = rm.simulate(prices, tg, od, start=start, end=end + 1)
-    excess = pd.DataFrame({k: s.ret.reindex(prices.index) - eq_ret for k, s in sims.items()})
-    tg_sw, chosen, od_sw = rm.switcher_targets(excess, targets, eqt, start, orders)
-    targets["SW"], orders["SW"] = tg_sw, od_sw
-    sims["SW"] = rm.simulate(prices, tg_sw, od_sw, start=start, end=end + 1)
-    log(f"  REV: 13 wariantów policzone ({time.time() - t0:.0f} s)")
+        plans[v.id] = rm.variant_plan(prices, elig, v, base)
+        sims[v.id] = rm.simulate_plan(prices, plans[v.id], start=start, end=end + 1)
+    rets = pd.DataFrame({k: s.ret.reindex(prices.index) for k, s in sims.items()})
+    plans["SW"], chosen = rm.switcher_plan(rets, plans, eqt, start)
+    sims["SW"] = rm.simulate_plan(prices, plans["SW"], start=start, end=end + 1)
+    log(f"  REV: {len(rm.VARIANTS)} wariantów policzone ({time.time() - t0:.0f} s)")
 
     variants = []
     for v in rm.VARIANTS:
         r = sims[v.id].ret.reindex(prices.index)
-        variants.append({"id": v.id, "label": v.label, "is": metrics(r, eq_ret, start, is_end, idx),
-                         "oos": metrics(r, eq_ret, is_end + 1, end - 1, idx)})
-    is_ir = np.array([x["is"]["ir"] for x in variants], float)
-    winner = variants[int(np.nanargmax(np.where(np.isfinite(is_ir), is_ir, -np.inf)))]["id"]
+        on = plans[v.id].on
+        variants.append({"id": v.id, "label": v.label, "overlay": v.overlay,
+                         "is": metrics(r, eq_ret, start, is_end, idx), "oos": metrics(r, eq_ret, is_end + 1, end - 1, idx),
+                         "pln75_pct": float(np.mean(on[start:end + 1]) * 100) if on is not None else 0.0})
+    # D-065: wybór po Sharpe tygodniowych zwrotów kapitału w PLN na IS (cel: wzrost w złotych z małymi wahaniami)
+    is_sh = np.array([x["is"]["sharpe"] for x in variants], float)
+    winner = variants[int(np.nanargmax(np.where(np.isfinite(is_sh), is_sh, -np.inf)))]["id"]
     win = sims[winner]
     wret = win.ret.reindex(prices.index)
     wex = (wret - eq_ret).to_numpy(float)
@@ -247,19 +250,18 @@ def run_research(ready: dict[str, pd.DataFrame], admitted: list[str], prior: dic
     rand = random_benchmark(prices, elig, start, is_end, end, eq_ret, n=paths, seed=seed)
     w_oos = float(np.nansum(wex[oos_sel]))
     random_pct = float(((rand < w_oos).mean() + 0.5 * (rand == w_oos).mean()) * 100) if len(rand) else float("nan")
-    trial = np.array([per_trade_sharpe((sims[v.id].ret.reindex(prices.index) - eq_ret).to_numpy(float)[is_sel])
-                      for v in rm.VARIANTS])
-    dsr = deflated_sharpe(wex[is_sel], trial)
+    trial = np.array([per_trade_sharpe(sims[v.id].ret.reindex(prices.index).to_numpy(float)[is_sel]) for v in rm.VARIANTS])
+    dsr = deflated_sharpe(wret.to_numpy(float)[is_sel], trial)
     rows = []
     for v in rm.VARIANTS:
-        e = (sims[v.id].ret.reindex(prices.index) - eq_ret).to_numpy(float)
+        e = sims[v.id].ret.reindex(prices.index).to_numpy(float)
         sel = (idx >= start) & (idx < end) & np.isfinite(e)
         rows.append(pd.DataFrame({"variant_id": v.id, "r_net": e[sel], "entry_ts": times[sel]}))
     pbo = pbo_cscv(pd.concat(rows, ignore_index=True), pd.concat(rows, ignore_index=True)["entry_ts"], CSCV_BLOCKS)
     boot = block_bootstrap_ci(wex[oos_sel])
     boot_pct = {"low": _ann_pct(boot["low"]), "high": _ann_pct(boot["high"]), "n": boot["n"]}
     lag_eq = rm.simulate(lagged, eqt, None, band=0.0, start=start, end=end + 1).ret.reindex(prices.index)
-    lag_w = rm.simulate(lagged, targets[winner], orders[winner], start=start, end=end + 1).ret.reindex(prices.index)
+    lag_w = rm.simulate_plan(lagged, plans[winner], start=start, end=end + 1).ret.reindex(prices.index)
     lag_ex = (lag_w - lag_eq).to_numpy(float)[oos_sel]
     daily = daily_panel(ready, universe, from_ts=int(times[start]), to_ts=int(times[end]))
     dd_w = rm.daily_equity(win.units, daily)
@@ -278,6 +280,8 @@ def run_research(ready: dict[str, pd.DataFrame], admitted: list[str], prior: dic
         "lag_excess_pct": _ann_pct(float(np.nanmean(lag_ex))) if len(lag_ex) else float("nan"),
         "max_dd_daily_pct": {"winner": ddd(dd_w), "equal": ddd(dd_e)},
         "trades_per_year": float(win.trades / max(per["weeks"] / 52, 1e-9)),
+        "selection": "sharpe_pln", "variants": len(rm.VARIANTS),
+        "pln75_pct": next(x["pln75_pct"] for x in variants if x["id"] == winner),
     }
     ver = verdict({"oos_excess_pct": validation["oos_excess_pct"], "random_pct": random_pct, "dsr": dsr.get("dsr"),
                    "pbo": pbo.get("pbo"), "lag_excess_pct": validation["lag_excess_pct"]})
@@ -359,7 +363,8 @@ def _f(x, nd: int = 2, sign: bool = False) -> str:
 
 COLOR = {"green": "🟢", "yellow": "🟡", "red": "🔴"}
 CHECK_NAME = {"oos_excess": "Nadwyżka nad równym podziałem na OOS (% rocznie)",
-              "random": "Percentyl wobec losowych podziałów (OOS)", "dsr": "DSR (IS, 13 prób)", "pbo": "PBO (CSCV, całość)",
+              "random": "Percentyl wobec losowych podziałów (OOS)", "dsr": "DSR (IS, Sharpe w PLN, wszystkie próby)",
+              "pbo": "PBO (CSCV, całość)",
               "lag": "Nadwyżka przy wymianie dzień później (OOS, % rocznie)"}
 
 
@@ -372,7 +377,9 @@ def report_md(res: dict) -> str:
          "do oceny przeceny lub trendu, limit 50% na koszyk (waluta, blok o sztywnym kursie, PLN), pasmo 2 p.p., bez kosztów. "
          "Ceny względem łańcuchowego koszyka wszystkich koszyków (PLN też jest oceniany). Przecena = odchylenie od własnego "
          "trendu liniowego z 3/5 lat (ochrona przed pułapką inflacji), trend = zmiana z 3 mies. albo z roku bez ostatniego "
-         "miesiąca; kombinacje = ½·z(przecena) + ½·z(trend 3 mies.). Zwycięzca wybrany tylko na IS (IR nadwyżki).", "",
+         "miesiąca; kombinacje = ½·z(przecena) + ½·z(trend 3 mies.). Nakładki (D-065): zawór złotówkowy 26/52 tyg. i hamulec "
+         "zmienności (PLN 75%, gdy złoty się umacnia albo kursy mocno skaczą), „nie sprzedawaj na stracie”. Zwycięzca wybrany "
+         "tylko na IS: najwyższy Sharpe tygodniowych zwrotów kapitału w PLN.", "",
          "## Dane", "",
          f"- Koszyki ({len(res['universe'])}): {', '.join(res['universe'])}",
          "- Bloki: " + ("; ".join(f"{a} (+{', '.join(m)})" for a, m in res["blocs"].items() if m) or "brak"),
@@ -384,16 +391,16 @@ def report_md(res: dict) -> str:
          f"| OOS | po {_d(p['is_end_ts'])} | {_d(p['oos_end_ts'])} | {p['oos_weeks']} |",
          f"| Na żywo | po {_d(p['oos_end_ts'])} | — | — |", "",
          f"Otwarcia OOS REV: {res.get('oos_openings', 1)}.", "",
-         "## Warianty (13)", "",
-         "| Wariant | IR IS | Nadwyżka IS % r. | CAGR IS % | IR OOS | Nadwyżka OOS % r. | CAGR OOS % | Wzrost 52 tyg. OOS % | "
-         "Lepszy od równego OOS % | Maks. spadek OOS % |",
+         f"## Warianty ({len(res['variants'])}) — od najwyższego Sharpe na IS", "",
+         "| Wariant | Sharpe IS | CAGR IS % | Nadwyżka IS % r. | Sharpe OOS | CAGR OOS % | Nadwyżka OOS % r. | Wzrost 52 tyg. OOS % | "
+         "Maks. spadek OOS % | PLN 75% (% tyg.) |",
          "|---|---|---|---|---|---|---|---|---|---|"]
-    for x in res["variants"]:
+    for x in sorted(res["variants"], key=lambda x: -(x["is"].get("sharpe") or -9)):
         mark = " **(zwycięzca)**" if x["id"] == res["winner"] else ""
         i, o = x["is"], x["oos"]
-        L.append(f"| {x['id']} {x['label']}{mark} | {_f(i['ir'])} | {_f(i['excess_pct_yr'], sign=True)} | "
-                 f"{_f(i['cagr_pct'], sign=True)} | {_f(o['ir'])} | {_f(o['excess_pct_yr'], sign=True)} | "
-                 f"{_f(o['cagr_pct'], sign=True)} | {_f(o['up52'], 0)} | {_f(o['beat52'], 0)} | {_f(o['max_dd_pct'], 1)} |")
+        L.append(f"| {x['id']} {x['label']}{mark} | {_f(i.get('sharpe'))} | {_f(i['cagr_pct'], sign=True)} | "
+                 f"{_f(i['excess_pct_yr'], sign=True)} | {_f(o.get('sharpe'))} | {_f(o['cagr_pct'], sign=True)} | "
+                 f"{_f(o['excess_pct_yr'], sign=True)} | {_f(o['up52'], 0)} | {_f(o['max_dd_pct'], 1)} | {_f(x.get('pln75_pct'), 0)} |")
     L += ["", "## Walidacja", "", "| Test | Wynik | Próg | ✓ |", "|---|---|---|---|"]
     for c in ver["checks"]:
         L.append(f"| {CHECK_NAME[c['id']]} | {_f(c['value'])} | {c['need']} | {'✓' if c['ok'] else '✗'} |")
@@ -421,7 +428,7 @@ def report_md(res: dict) -> str:
           "- Jedno źródło: Yahoo; rzadsze kursy mają gorszą historię; ok. 20 koszyków i kilkanaście lat to mała próba.",
           "- Bloki o sztywnym kursie traktowane jak kotwica — pęknięcie kursu wykrywa kontrola zdrowia, nie badanie.", "",
           "## Pytania do recenzenta", "",
-          "1. Czy przewaga zwycięzcy na IS ma sensowną przyczynę ekonomiczną, czy to szczęście wśród 13 prób?",
+          "1. Czy przewaga zwycięzcy na IS ma sensowną przyczynę ekonomiczną, czy to szczęście wśród wszystkich prób?",
           "2. Czy wynik nie stoi na jednej walucie lub jednym roku (tabele lat i wkładu)?",
           "3. Czy wynik przetrwa wymianę dzień później i inne pasmo?", ""]
     return "\n".join(L)
