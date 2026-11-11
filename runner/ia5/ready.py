@@ -66,5 +66,55 @@ def build(yahoo: dict[str, pd.DataFrame], out_dir: Path, pairs=COMPUTE_PAIRS, lo
     return out
 
 
+MIN_BARS_D1 = 260   # D-058: para z mniej niż ~rokiem świec dziennych nie trafia do liczenia na D1
+
+
+def build_d1(d1: dict[str, pd.DataFrame], out_dir: Path, tz: str | None = None, pairs=COMPUTE_PAIRS, log=print) -> dict:
+    """D-058: świece dzienne do liczenia (data/d1_ready/) — jak build(), ale warstwa czyszczenia D1 (daily.clean_d1).
+    Pliki {PARA}.json mają "source": "yahoo" i "timeframe": "D1"."""
+    from .daily import CLEAN_D1_VERSION, D1_TZ, clean_d1
+
+    tz = tz or D1_TZ
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for f in list(out_dir.glob("*.parquet")) + list(out_dir.glob("*.json")) + list(out_dir.glob("*.tmp")):
+        if f.stem not in pairs or f.suffix == ".tmp":
+            f.unlink()
+    out = {}
+    for pair in pairs:
+        jf, pf = out_dir / f"{pair}.json", out_dir / f"{pair}.parquet"
+        try:
+            old = json.loads(jf.read_text())
+        except (FileNotFoundError, ValueError):
+            old = {}
+        raw = d1.get(pair)
+        raw = raw if raw is not None and len(raw) else None
+        h = hashlib.sha256(f"{SOURCE}:D1:{CLEAN_D1_VERSION}:{MIN_BARS_D1}:{tz}".encode())
+        if raw is not None:
+            h.update(pd.util.hash_pandas_object(raw[COLS].reset_index(drop=True), index=False).values.tobytes())
+        sig = h.hexdigest()[:16]
+        if old.get("sig") == sig and old.get("source") == SOURCE and (pf.exists() or not old.get("bars")):
+            out[pair] = {**old, "rebuilt": False}
+            continue
+        if raw is None or len(raw) < MIN_BARS_D1:
+            pf.unlink(missing_ok=True)
+            info = {"version": CLEAN_D1_VERSION, "source": SOURCE, "timeframe": "D1", "sig": sig, "bars": 0,
+                    "raw_bars": 0 if raw is None else len(raw)}
+            jf.write_text(json.dumps(info))
+            out[pair] = {**info, "rebuilt": True}
+            log(f"  D1 {pair}: za mało świec dziennych ({info['raw_bars']}) — para pominięta w liczeniu na D1")
+            continue
+        df, info = clean_d1(raw, tz)
+        tmp = pf.with_suffix(".tmp")
+        df.to_parquet(tmp, index=False)
+        tmp.replace(pf)
+        info = {**info, "source": SOURCE, "timeframe": "D1", "sig": sig, "raw_bars": len(raw), "gaps_n": len(info["gaps"]),
+                "gaps": info["gaps"][-200:], "at": int(time.time())}
+        jf.write_text(json.dumps(info))
+        out[pair] = {**info, "rebuilt": True}
+        log(f"  D1 {pair} do liczenia: {info['bars']:,} dni · odrzucone {info['rejected']} (D5) + {info['off_session']} weekend/święto "
+            f"+ {info['flat']} płaskie · brakujące dni {info['missing_days']} · przerwy {info['gaps_n']} ({info['gap_days']} dni)")
+    return out
+
+
 def load(folder: Path, pairs=COMPUTE_PAIRS) -> dict[str, pd.DataFrame]:
     return {p: pd.read_parquet(folder / f"{p}.parquet") for p in pairs if (folder / f"{p}.parquet").exists()}

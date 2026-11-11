@@ -116,3 +116,84 @@ def years_to_read(last_ts: int, now: int, tz: str = D1_TZ) -> list[str]:
     y0 = int(day_of([last_ts], tz)[0][:4])
     y1 = datetime.fromtimestamp(now, timezone.utc).astimezone(ZoneInfo(tz)).year
     return [str(y) for y in range(y0, y1 + 1)]
+
+
+# ---------- warstwa czyszczenia D1 do liczenia (D-058) ----------
+
+CLEAN_D1_VERSION = "1"
+GAP_DAYS = 3        # ≥ 3 kolejne brakujące dni robocze = przerwa w danych (B12); 1–2 dni to zwykle święto, którego Yahoo nie ma
+DAY = 86400
+
+
+def close_ts(ts, tz: str = D1_TZ) -> np.ndarray:
+    """Czas zamknięcia świecy D1 = północ NASTĘPNEGO dnia kalendarzowego w strefie Yahoo (dokładnie, z czasem letnim)."""
+    loc = local_dt(ts, tz)
+    nxt = (loc.tz_localize(None).normalize() + pd.Timedelta(days=1)).tz_localize(tz, ambiguous="NaT", nonexistent="shift_forward")
+    epoch = pd.Timestamp("1970-01-01", tz="UTC")
+    sec = ((nxt.tz_convert("UTC") - epoch) // pd.Timedelta(seconds=1)).to_numpy()
+    out = np.asarray(ts, dtype="int64") + DAY          # zapasowo +24 h (niejednoznaczna północ — nie zdarza się w Londynie)
+    ok = ~pd.isna(sec)
+    out[ok] = np.asarray(sec, dtype=float)[ok].astype("int64")
+    return out
+
+
+def clean_d1(raw: pd.DataFrame, tz: str = D1_TZ) -> tuple[pd.DataFrame, dict]:
+    """Świece D1 do liczenia (D8 dla D1): odrzucone = łamiące D5 (OHLC, cena ≤ 0, czas nie o północy, dwa wpisy na dzień);
+    poza sesją = weekend/święto (stara historia Yahoo) i świece płaskie O=H=L=C (brak notowań, powtórzona cena).
+    Brakujące dni robocze: < GAP_DAYS z rzędu → nic (dzień bez świecy jak weekend); ≥ GAP_DAYS → gap_before = liczba dni
+    (B12: transakcje przez przerwę anulowane). Bez uzupełniania (filled zawsze False) — doba to za dużo, żeby interpolować.
+    Kolumny jak w h1_ready: ts, open, high, low, close, filled, gap_before + close_ts (koniec dnia w UTC)."""
+    info = {"version": CLEAN_D1_VERSION, "tz": tz, "bars": 0, "rejected": 0, "rejected_ts": [], "off_session": 0, "flat": 0,
+            "filled": 0, "gaps": [], "gap_hours": 0, "gap_days": 0, "missing_days": 0, "closed_hours": 0}
+    cols = COLS + ["filled", "gap_before", "close_ts"]
+    if raw is None or raw.empty:
+        return pd.DataFrame(columns=cols), info
+    df = raw[COLS].sort_values("ts").drop_duplicates("ts", keep="last").reset_index(drop=True)
+    o, h, lo, c = (df[k].to_numpy(float) for k in ("open", "high", "low", "close"))
+    loc = local_dt(df["ts"], tz)
+    with np.errstate(invalid="ignore"):
+        bad = ~np.isfinite(np.c_[o, h, lo, c]).all(axis=1)
+        bad |= np.minimum.reduce([o, h, lo, c]) <= 0
+        bad |= (h < np.maximum(o, c) - 1e-12) | (lo > np.minimum(o, c) + 1e-12)
+    offgrid = ~np.asarray((loc.hour == 0) & (loc.minute == 0) & (loc.second == 0))
+    days = np.asarray(loc.strftime("%Y-%m-%d"))
+    dup = pd.Series(np.where(offgrid, "", days)).duplicated(keep="last").to_numpy() & ~offgrid   # dwa wpisy o północy tego samego dnia
+    bad |= offgrid | dup
+    if bad.any():
+        info["rejected"] = int(bad.sum())
+        info["rejected_ts"] = [int(t) for t in df["ts"].to_numpy()[bad][:50]]
+        df, days = df[~bad].reset_index(drop=True), days[~bad]
+        o, h, lo, c = (df[k].to_numpy(float) for k in ("open", "high", "low", "close"))
+    wk = np.array([not is_expected_day(date.fromisoformat(d)) for d in days]) if len(days) else np.zeros(0, bool)
+    flat = (o == h) & (h == lo) & (lo == c)
+    off = wk | flat
+    if off.any():
+        info["off_session"], info["flat"] = int(wk.sum()), int(flat.sum())
+        df, days = df[~off].reset_index(drop=True), days[~off]
+    if df.empty:
+        return pd.DataFrame(columns=cols), info
+    # przerwy: serie kolejnych brakujących dni roboczych między dwiema świecami
+    have = {d: i for i, d in enumerate(days)}
+    gap_before = np.zeros(len(df), np.int64)
+    d, end, run, missing = date.fromisoformat(days[0]), date.fromisoformat(days[-1]), 0, 0
+    while d <= end:
+        key = d.isoformat()
+        if key in have:
+            if run >= GAP_DAYS:
+                i = have[key]
+                gap_before[i] = run
+                info["gaps"].append([int(df["ts"].iloc[i - 1]), int(df["ts"].iloc[i]), run])
+                info["gap_days"] += run
+            run = 0
+        elif is_expected_day(d):
+            run += 1
+            missing += 1
+        d += timedelta(days=1)
+    out = df.copy()
+    out["ts"] = out["ts"].astype("int64")
+    out["filled"] = False
+    out["gap_before"] = gap_before
+    out["close_ts"] = close_ts(out["ts"].to_numpy(), tz)
+    info.update({"bars": int(len(out)), "missing_days": int(missing), "gap_hours": int(info["gap_days"] * 24),
+                 "from": int(out["ts"].iloc[0]), "to": int(out["ts"].iloc[-1])})
+    return out, info

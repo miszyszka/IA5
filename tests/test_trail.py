@@ -2,6 +2,7 @@
 import numpy as np
 import pandas as pd
 import pytest
+
 from ia5.engine import Exit, find_entries, prepare, simulate
 from ia5.sandbox import StrategyError, read_settings
 

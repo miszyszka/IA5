@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 import numpy as np
 import pandas as pd
+
 from ia5 import health
 from ia5.coverage import expected_hours
 

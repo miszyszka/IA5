@@ -2,6 +2,7 @@
 import numpy as np
 import pandas as pd
 import pytest
+
 from ia5.engine import Exit, default_exits, find_entries, no_overlap, prepare, run, simulate
 
 T0 = 1761523200  # poniedziałek 2025-10-27 00:00 UTC

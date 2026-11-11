@@ -1,6 +1,7 @@
 """D-037: skaner hipotez — znajduje podłożony efekt, nie patrzy w OOS, kontroluje wielokrotne próby."""
 import numpy as np
 import pandas as pd
+
 from ia5 import scan
 
 T0 = 1041811200  # 2003-01-06 00:00 UTC, poniedziałek

@@ -173,3 +173,44 @@ def session(df: pd.DataFrame) -> pd.Series:
     """Sesja wg godziny UTC: 'azja' 0–6, 'europa' 7–12, 'usa' 13–20, 'poza' 21–23 (jak w raporcie, 8.6)."""
     h = df.index.hour
     return pd.Series(np.select([h < 7, h < 13, h < 21], ["azja", "europa", "usa"], "poza"), index=df.index)
+
+
+# ---------- tło D1 dla strategii H1 (D-058) ----------
+
+_D1: dict[int, pd.DataFrame] = {}   # tło D1 trzymane tu, a w df.attrs tylko klucz: pandas kopiuje attrs przy KAŻDEJ operacji
+
+
+def attach_d1(df: pd.DataFrame, d: pd.DataFrame | None) -> None:
+    """Podpina (albo odpina) świece dzienne pod ramkę H1 — używa sandbox przed wywołaniem signals()."""
+    _D1.clear()
+    if d is None:
+        df.attrs.pop("d1_key", None)
+        return
+    key = id(d)
+    _D1[key] = d
+    df.attrs["d1_key"] = key
+
+
+def d1(df: pd.DataFrame) -> pd.DataFrame | None:
+    """Świece dzienne tej pary (indeks = czas otwarcia dnia UTC; open, high, low, close, close_ts) — tylko dni ZAMKNIĘTE
+    przed końcem df. None, gdy strategia liczy się bez tła D1 (np. kontrola na danych bez D1). Licz na nich wskaźniki
+    jak na df (ind.sma(d.close, 200)), a wynik przenieś na H1 przez ind.d1_to_h1(df, x)."""
+    return _D1.get(df.attrs.get("d1_key"))
+
+
+def d1_to_h1(df: pd.DataFrame, x) -> pd.Series | pd.DataFrame:
+    """Wartości policzone na D1 (Series/DataFrame na indeksie ind.d1(df)) przeniesione na świece H1 bez look-ahead:
+    świeca H1 o otwarciu t widzi wartość dnia d tylko, gdy dzień d zamknął się najpóźniej na zamknięciu tej świecy (t + 1 h).
+    Przed pierwszym znanym dniem — NaN."""
+    d = d1(df)
+    if d is None:
+        raise ValueError("brak świec D1 w df.attrs['d1'] — strategia z tłem D1 wymaga danych D1 (ia5 start po backfillD1)")
+    frame = x.to_frame(name=getattr(x, "name", None) or "d1") if isinstance(x, pd.Series) else x.copy()
+    known = pd.to_datetime(d["close_ts"].reindex(frame.index).to_numpy(), unit="s", utc=True).as_unit("ns")
+    right = frame.set_index(known).sort_index()
+    right = right[~right.index.isna()]
+    left = pd.DataFrame(index=(df.index + pd.Timedelta(hours=1)).as_unit("ns"))
+    out = pd.merge_asof(left.reset_index(names="_t"), right.reset_index(names="_k"), left_on="_t", right_on="_k",
+                        direction="backward").drop(columns=["_t", "_k"])
+    out.index = df.index
+    return out.iloc[:, 0] if isinstance(x, pd.Series) else out

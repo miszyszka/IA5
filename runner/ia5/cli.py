@@ -142,6 +142,10 @@ def do_prepare(progress=None) -> dict:
         progress("Dane do liczenia", 60)
     log("Dane do liczenia (warstwa czyszczenia, D8)…")
     rdy = ready.build(yahoo, READY, log=log)
+    if d1:   # D-058: świece dzienne do liczenia (TIMEFRAME = "D1" i tło D1 dla strategii H1)
+        from .store import D1_READY
+
+        ready.build_d1(d1, D1_READY, tz=d1_tz, log=log)
     log("Mapa pokrycia…")
     cov = coverage.build(yahoo)
     if progress:
@@ -442,12 +446,12 @@ def handle_job(sid: str, data: dict, state: dict) -> None:
                 cloud.heartbeat("computing", state["job"])
 
     try:
-        from .store import READY
+        from .store import D1_READY, READY
 
         fz = data.get("frozenAt")   # D-056: zamrożona → ocena zamrożonego wariantu i blok forward od tej daty
         fv = data.get("frozenVariant")
         out = run_file(data.get("code", ""), name, READY, HOME / "results", log=step, source="yahoo", strategy_id=sid,
-                       require_source="yahoo", frozen_at=int(fz) if fz else None,
+                       require_source="yahoo", d1_dir=D1_READY, frozen_at=int(fz) if fz else None,
                        frozen_variant=int(fv) if fz and fv is not None and str(fv).lstrip("-").isdigit() else None)
         sha = publish.publish_result(out, log=log)
         v = json.loads((out / "validation.json").read_text(encoding="utf-8"))
@@ -484,7 +488,7 @@ def handle_investors(docs: dict, owner: str | None, state: dict, source: str = "
     Błąd jednego inwestora nie zatrzymuje pozostałych — zostaje jego ostatni opublikowany stan."""
     from . import alerts, cloud, publish
     from .investors import compute
-    from .store import DATA_REPO, READY
+    from .store import D1_READY, DATA_REPO, READY
 
     if not owner:
         if docs:
@@ -509,7 +513,7 @@ def handle_investors(docs: dict, owner: str | None, state: dict, source: str = "
                             "phase": "paper trading"}
             beat("computing", state["job"])
             try:
-                states[iid] = compute({**d, "id": iid}, READY, log=log)
+                states[iid] = compute({**d, "id": iid}, READY, log=log, d1_dir=D1_READY)
                 e = states[iid]["equity"]
                 log(f"Inwestor „{d.get('name')}”: kapitał {e['now']:,.2f} USD ({e['return_pct']:+.2f}%), "
                     f"{states[iid]['counts']['closed']} zamkniętych, {states[iid]['counts']['open']} otwartych")
@@ -558,16 +562,27 @@ def cmd_live(_args) -> None:
     import pandas as pd
 
     from . import cloud, publish, ready
-    from .store import DATA_REPO, READY, YAHOO
+    from .store import D1_READY, DATA_REPO, READY, YAHOO, YAHOO_D1
 
     publish.ensure_repo()
     YAHOO.mkdir(parents=True, exist_ok=True)
+    YAHOO_D1.mkdir(parents=True, exist_ok=True)
     for pair in PAIRS:
         files = sorted((DATA_REPO / "candles" / pair).glob("*.parquet"))
         if files:
             pd.concat(pd.read_parquet(f) for f in files).to_parquet(YAHOO / f"{pair}.parquet", index=False)
+        fd1 = DATA_REPO / "candles_d1" / f"{pair}.parquet"   # D-058: świece dzienne z gałęzi data (inwestorzy strategii D1)
+        if fd1.exists():
+            pd.read_parquet(fd1).to_parquet(YAHOO_D1 / f"{pair}.parquet", index=False)
     yahoo = cloud.sync_yahoo(YAHOO, log=log)
     ready.build(yahoo, READY, log=log)
+    try:
+        st = cloud.read_status()
+    except Exception:  # noqa: BLE001
+        st = {}
+    d1, d1_tz = sync_d1(cloud, st)
+    if d1:
+        ready.build_d1(d1, D1_READY, tz=d1_tz, log=log)
     handle_investors(cloud.list_investors(), config().get("owner_uid"), {}, source="actions")
 
 
@@ -641,15 +656,16 @@ def cmd_run(args) -> int:
     from .sandbox import StrategyError
 
     path = Path(args.file)
-    from .store import READY
+    from .store import D1_READY, READY
 
     h1_dir = Path(args.h1) if args.h1 else READY
+    d1_dir = Path(args.d1) if getattr(args, "d1", None) else D1_READY
     if not any(h1_dir.glob("*.parquet")):
         print(f"Brak świec do liczenia w {h1_dir} — najpierw ia5 start (zrobi kopię świec Yahoo).")
         return 1
     try:
         run_file(path.read_text(encoding="utf-8"), args.name or path.stem, h1_dir, HOME / "results", log=log,
-                 require_source=None if args.h1 else "yahoo")
+                 require_source=None if args.h1 else "yahoo", d1_dir=d1_dir)
     except StrategyError as e:
         print(f"Błąd strategii: {e}")
         return 1
@@ -661,13 +677,14 @@ def cmd_check(args) -> int:
     from pathlib import Path
 
     from .check import check_code_on, format_result
-    from .store import READY
+    from .store import D1_READY, READY
 
     h1_dir = Path(args.h1) if args.h1 else READY
+    d1_dir = Path(args.d1) if getattr(args, "d1", None) else D1_READY
     if not any(h1_dir.glob("*.parquet")):
         print(f"Brak świec do liczenia w {h1_dir} — najpierw ia5 start (zrobi kopię świec Yahoo).")
         return 1
-    res = check_code_on(Path(args.file).read_text(encoding="utf-8"), h1_dir)
+    res = check_code_on(Path(args.file).read_text(encoding="utf-8"), h1_dir, d1_dir=d1_dir)
     print(format_result(res, str(h1_dir)))
     return 0 if res["ok"] else 1
 
@@ -813,10 +830,12 @@ def main(argv=None) -> int:
     p_run.add_argument("file")
     p_run.add_argument("--name")
     p_run.add_argument("--h1", help="katalog ze świecami H1 (domyślnie ~/.ia5/data/h1_ready)")
+    p_run.add_argument("--d1", help="katalog ze świecami D1 (domyślnie ~/.ia5/data/d1_ready; D-058)")
     p_run.set_defaults(func=cmd_run)
     p_chk = sub.add_parser("check", help="sprawdź kod strategii (kontrakt, look-ahead, sygnały)")
     p_chk.add_argument("file")
     p_chk.add_argument("--h1")
+    p_chk.add_argument("--d1")
     p_chk.set_defaults(func=cmd_check)
     p_scan = sub.add_parser("scan", help="skaner hipotez: tysiące–miliony prostych reguł z kontrolą FDR (D-037)")
     p_scan.add_argument("--duzy", action="store_true", help="duża siatka: ~160 tys. reguł na parę (~1,3 mln na 8 par)")

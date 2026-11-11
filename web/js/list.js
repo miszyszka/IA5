@@ -59,6 +59,7 @@ function row(s, beat) {
         h('span', { class: `dot ${vcls}`, title: `werdykt: ${vlabel}` }),
         h('h3', {}, s.name),
         r?.demo ? h('span', { class: 'chip demo' }, 'DEMO') : null,
+        r?.timeframe === 'D1' ? h('span', { class: 'chip', title: 'świece dzienne — cała historia Yahoo (D-058)' }, 'D1') : null,
         s.doc?.frozenAt ? h('span', { class: 'chip frozen' }, '❄ zamrożona') : null,
         s.doc?.forwardError ? h('span', { class: 'chip warn', title: s.doc.forwardError.message }, 'forward: błąd') : null,
         stateChip(s, beat)),

@@ -211,23 +211,28 @@ def ready_source(h1_dir: Path) -> str | None:
 def run_file(code: str, name: str, h1_dir: Path, out_root: Path, log=print,
              source: str | None = None, full_candles: bool = True, strategy_id: str | None = None,
              extra: dict | None = None, require_source: str | None = None, frozen_at: int | None = None,
-             frozen_variant: int | None = None) -> Path:
+             frozen_variant: int | None = None, d1_dir: Path | None = None) -> Path:
     """require_source="yahoo" (ia5 start, ia5 run) — liczenie tylko na danych z tego źródła (D7, D-041).
-    frozen_at / frozen_variant (D-056): strategia zamrożona — walidacja na tym wariancie, blok „forward” od tej daty."""
+    frozen_at / frozen_variant (D-056): strategia zamrożona — walidacja na tym wariancie, blok „forward” od tej daty.
+    d1_dir (D-058): świece dzienne do liczenia — dane strategii z TIMEFRAME = "D1", tło D1 dla strategii H1."""
     t_start = time.time()
-    src = ready_source(h1_dir)
     if not any(h1_dir.glob("*.parquet")):
         raise SystemExit(f"Brak danych do liczenia w {h1_dir} — uruchom ia5 start (zrobi kopię świec Yahoo).")
-    if require_source and src != require_source:
-        raise SystemExit(f"Dane do liczenia w {h1_dir} nie pochodzą w całości z {require_source} (źródło: {src or 'nieznane'}) — "
-                         "ia5 start przebuduje je z kopii świec Yahoo.")
+    if d1_dir is not None and not any(Path(d1_dir).glob("*.parquet")):
+        d1_dir = None
     log("Sygnały (osobny proces, detektor look-ahead)…")
-    sig, meta = run_strategy_code(code, h1_dir)
+    sig, meta = run_strategy_code(code, h1_dir, d1_dir=d1_dir)
     if meta["lookahead"]:
         bad = meta["lookahead"][0]
         raise SystemExit(f"Błąd: look-ahead (B2) — {bad['pair']}, wariant parametrów {bad['param_id']}: "
                          "sygnały zmieniają się po dopisaniu przyszłych świec.")
-    h1 = {f.stem: pd.read_parquet(f) for f in sorted(h1_dir.glob("*.parquet"))}
+    tf = meta.get("timeframe", "H1")
+    data_dir = Path(d1_dir) if tf == "D1" else h1_dir          # D-058: strategia D1 liczy na świecach dziennych
+    src = ready_source(data_dir)
+    if require_source and src != require_source:
+        raise SystemExit(f"Dane do liczenia w {data_dir} nie pochodzą w całości z {require_source} (źródło: {src or 'nieznane'}) — "
+                         "ia5 start przebuduje je z kopii świec Yahoo.")
+    h1 = {f.stem: pd.read_parquet(f) for f in sorted(data_dir.glob("*.parquet"))}
     signals, levels = {}, {}
     for pid in range(len(meta["params"])):
         for pair, df in h1.items():
@@ -272,15 +277,18 @@ def run_file(code: str, name: str, h1_dir: Path, out_root: Path, log=print,
 
     manifest = {
         "id": sid, "name": name, "run_id": run_id, "engine_version": ENGINE_VERSION,       # D6
-        "code_hash": hashlib.sha256(code.encode()).hexdigest()[:16], "data_hash": data_hash(h1_dir),
-        "data_source": src or source or "inne",
+        "code_hash": hashlib.sha256(code.encode()).hexdigest()[:16], "data_hash": data_hash(data_dir),
+        "data_source": src or source or "inne", "timeframe": tf,
+        "d1_background": bool(meta.get("d1_background")),
+        "d1_hash": data_hash(Path(d1_dir)) if (tf == "H1" and meta.get("d1_background") and d1_dir) else None,
         "candles": "pełne" if full_candles else f"wycinki ±{CANDLE_PAD} świec wokół transakcji {TOP_FOR_CANDLES} najlepszych wariantów",
         "pairs": sorted(h1), "params": meta["params"], "n_variants": res["n_variants"], "n_exits": len(exits),
         "oos_cutoff": int(res["cutoff"]), "sizing": sizing, "pyramid": pyramid,
         "max_pairs": max_pairs, "pair_rank": pair_rank,
-        "hours": "bez okna" if hours is False else (list(hours) if hours else "07–17 czasu polskiego (B11)"),
+        "hours": ("D1: open dnia" if tf == "D1" else "bez okna" if hours is False
+                  else (list(hours) if hours else "07–17 czasu polskiego (B11)")),
         "data_from": int(min(df.ts.iloc[0] for df in h1.values())), "data_to": int(max(df.ts.iloc[-1] for df in h1.values())),
-        "data_clean": data_clean_info(h1_dir, h1),
+        "data_clean": data_clean_info(data_dir, h1),
         "skipped": res["skipped"], "hypothesis": meta.get("hypothesis"), "trades_rows": int(len(trades)),
         "created": int(time.time()), "seconds": round(time.time() - t_start, 1),
         "verdict": validation.get("verdict", {}).get("color"),

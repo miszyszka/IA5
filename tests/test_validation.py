@@ -1,6 +1,7 @@
 """Walidacja i kapitał: zachowanie na przypadkach o znanej odpowiedzi."""
 import numpy as np
 import pandas as pd
+
 from ia5.portfolio import simulate_equity
 from ia5.validate import bootstrap_ci, deflated_sharpe, pbo_cscv, spread_stress, verdict, walk_forward
 

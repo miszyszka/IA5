@@ -132,6 +132,15 @@ test('wycinki świec: okna, przerwy i transakcje tylko w swoim oknie (D-033)', a
   const d = seriesData(bars, w);
   assert.equal(d.filter((x) => x.open === undefined).length, 16);   // 8 pustych miejsc po każdym z dwóch okien
   assert.ok(d.every((x, i) => i === 0 || x.time > d[i - 1].time));
+  // D-058: świece dzienne — weekend i pojedynczy brakujący dzień nie dzielą okna, ponad tydzień tak
+  const { barStep } = await import('../../web/js/candlewin.js');
+  const D = 86400, mon = Date.UTC(2025, 4, 12, 0) / 1000;
+  const daily = [0, 1, 2, 3, 4, 7, 8, 10, 11, 25, 28, 29].map((k) => ({ ts: mon + k * D, open: 1, high: 1.1, low: 0.9, close: 1 }));
+  assert.equal(barStep(daily), D);
+  assert.deepEqual(splitWindows(daily).map((x) => [x.from, x.to]), [[0, 9], [9, 12]]);
+  const dd = seriesData(daily, splitWindows(daily));
+  assert.equal(dd.filter((x) => x.open === undefined).length, 8);
+  assert.ok(dd.every((x, i) => i === 0 || x.time > dd[i - 1].time));
 });
 
 test('otwarcie tygodnia: Yahoo zaczyna później niż kalendarz — bez czerwonego zegara (D-039)', async () => {

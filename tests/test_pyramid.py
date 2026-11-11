@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+
 from ia5 import ENGINE_VERSION
 from ia5.backtest import run_file
 from ia5.engine import Exit, find_entries, no_overlap, prepare, run, simulate
@@ -78,8 +79,8 @@ def test_signal_weights_validation_and_settings():
     assert _as_signal(pd.Series([0, -1.6, 3.0], index=df.index), df).tolist() == pytest.approx([0, -1.6, 3.0])
     with pytest.raises(StrategyError):
         _as_signal([0, 11, 0], df)
-    assert read_settings({}) == {"pyramid": 1}
-    assert read_settings({"PYRAMID": 5, "HOURS": False}) == {"pyramid": 5, "hours": False}
+    assert read_settings({}) == {"pyramid": 1, "timeframe": "H1"}
+    assert read_settings({"PYRAMID": 5, "HOURS": False}) == {"pyramid": 5, "hours": False, "timeframe": "H1"}
     for bad in ({"PYRAMID": 0}, {"PYRAMID": 2.5}, {"HOURS": (17, 7)}, {"EXITS": [{"kind": "rsi_streak", "run": 0, "level": 70}]},
                 {"EXITS": [{"kind": "x"}]}, {"EXITS": [{"kind": "time", "n": 5, "cap": 500}]}):
         with pytest.raises(StrategyError):

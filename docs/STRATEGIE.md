@@ -1,6 +1,6 @@
 # STRATEGIE — jak pisać kod strategii dla IA5
 
-Wersja 0.41 · 2026-11-11 (dodane: `levels()` — TP/SL jako ceny ze strategii, D-057; noce i obsunięcie z MAE w raporcie, D-054/D-055)
+Wersja 0.42 · 2026-11-11 (dodane: `TIMEFRAME = "D1"` i tło D1 w strategiach H1 — D-058; `levels()` — D-057; noce i obsunięcie z MAE — D-054/D-055)
 
 > Ten plik jest **regułą dla Claude**. Gdy Michał mówi „zrób mi strategię …”, Claude postępuje dokładnie według sekcji 1 i zwraca kod, który bez zmian wkleja się do okna „Nowa strategia” w dashboardzie i który program `ia5` na Macu zrozumie.
 > Kontrakt jest egzekwowany w kodzie: `runner/ia5/sandbox.py` (wykonanie), `runner/ia5/check.py` (kontrola), `web/js/metrics.js` → `checkStrategyCode` (kontrola w przeglądarce).
@@ -45,6 +45,7 @@ def signals(df, p, ind):       # WYMAGANE — dokładnie ta nazwa i te trzy argu
     ...
     return seria               # +1 long, -1 short, 0 nic — na indeksie df
 
+# TIMEFRAME = "D1"             # opcjonalne: świece dzienne (cała historia Yahoo) zamiast H1 — sekcja 2a (D-058)
 # EXITS = [...]                # opcjonalne: własna siatka wyjść zamiast domyślnej (sekcja 5)
 # SIZING = [5, 10, 20]         # opcjonalne: % kapitału jako depozyt (domyślnie 5, 10, 15, 20, 30)
 # PYRAMID = 5                  # opcjonalne, tylko na życzenie: do 5 pozycji naraz w parze, jeden kierunek (D-034)
@@ -69,7 +70,39 @@ Silnik dodatkowo: pomija sygnały, gdy w danej parze jest już otwarta pozycja t
 
 **Krótka historia (D-039).** Dane to świece Yahoo od ok. 2024-10 (~12 tys. świec na parę, rośnie z każdą godziną). Wskaźnik z długą rozgrzewką zjada dużą część próby: SMA200 na D1 to ~40% historii, a OOS (ostatnie 25%) to tylko ~6 miesięcy. Preferuj okresy liczone w godzinach i dniach, nie w miesiącach; mało wariantów (`PARAMS` ≤ ~12), bo każdy kolejny przy tak krótkiej próbie mocniej podnosi poprzeczkę DSR. TP i SL w tej samej świecy zawsze liczone jako SL (B5) — bardzo ciasne TP/SL w ATR częściej dają `ambiguous`.
 
-**Świece dzienne Yahoo (D-053).** W bazie jest też pełna historia świec D1 Yahoo (od ok. 2003), ale `signals` jej **nie dostaje** — `df` to nadal tylko H1. Do czasu osobnej decyzji filtry dzienne buduj z H1 (`resample`, wzorzec w sekcji 4) i pamiętaj o krótkiej historii.
+**Świece dzienne Yahoo (D-053, D-058).** Pełna historia D1 (od ok. 2003) jest dostępna na dwa sposoby — sekcja 2a. Filtr dzienny w strategii H1 bierz z `ind.d1(df)`, nie z `resample` na H1: ten sam wskaźnik ma wtedy 20 lat rozgrzewki zamiast 2.
+
+### 2a. Świece dzienne (D-058)
+
+**Strategia na D1** — jedna linia w kodzie:
+
+```python
+TIMEFRAME = "D1"
+
+def signals(df, p, ind):             # df = świece DZIENNE jednej pary, indeks = czas otwarcia dnia (północ w Londynie, UTC)
+    fast, slow = ind.sma(df.close, 50), ind.sma(df.close, 200)
+    return ((fast > slow) & ind.cross_above(ind.rsi(df.close, 14), 40)).astype("int8")
+```
+
+- Wejście na open następnego dnia; okno B11 nie dotyczy (`HOURS = (od, do)` = błąd). „Świeca” w wyjściach = dzień: `po 24 świecach` = 24 dni handlu, ATR dzienny, limit `cap` do 480 dni.
+- Historia ok. 20 lat × 8 par — rozgrzewka SMA200 to ~4% próby, OOS ~5 lat. Można używać dłuższych okresów i trochę więcej wariantów niż na H1.
+- Koszt spreadu jest mały wobec ruchu dnia — za to **każda pozycja przechodzi przez noc**: patrz „koszt nocy” w walidacji (D-054), bo swapy (O5) na D1 ważą najwięcej.
+- B5 (TP i SL w tej samej świecy → SL) jest na D1 bardziej pesymistyczne — ciasne TP/SL w ATR dziennym często mieszczą się w jednej świecy. Wyjścia czasowe i szerokie (≥ 1,5 ATR) są tu uczciwiej liczone.
+- Dane: `data/d1_ready/` — świece z D5-błędem, weekendowe i płaskie (stara historia Yahoo) odrzucone; ≥ 3 brakujące dni robocze z rzędu = przerwa (B12).
+
+**Tło D1 w strategii H1** — kierunek z dziennych, wejście z godzinowych:
+
+```python
+def signals(df, p, ind):                                  # df = H1
+    d = ind.d1(df)                                        # zamknięte świece dzienne tej pary (DataFrame) albo None
+    if d is None:
+        return pd.Series(0, index=df.index, dtype="int8")
+    up = ind.d1_to_h1(df, d.close > ind.sma(d.close, 200)).fillna(False).astype(bool)   # liczone na D1 → na H1
+    return (up & ind.cross_above(ind.rsi(df.close, 14), 30)).astype("int8")
+```
+
+- `ind.d1(df)` zawiera tylko dni zamknięte przed końcem `df` (kolumny `open`, `high`, `low`, `close`, `close_ts`).
+- `ind.d1_to_h1(df, x)` przenosi wartość dnia d na świece H1 **od zamknięcia dnia d** (północ w Londynie). Nie używaj `reindex(df.index, method="ffill")` — przenosi dzień od jego **otwarcia** i detektor look-ahead to odrzuci.
 
 ---
 
@@ -93,6 +126,8 @@ Wszystkie wskaźniki zgodne z TA-Lib (test `tests/test_indicators.py`), wartośc
 | `ind.hour(df)` | godzina otwarcia UTC 0–23 |
 | `ind.weekday(df)` | 0 = poniedziałek … 6 = niedziela (UTC) |
 | `ind.session(df)` | `"azja"` 0–6, `"europa"` 7–12, `"usa"` 13–20, `"poza"` 21–23 UTC |
+| `ind.d1(df)` | D-058: zamknięte świece dzienne tej pary (tło dla strategii H1) albo `None` |
+| `ind.d1_to_h1(df, x)` | D-058: wartość z D1 (Series/DataFrame na indeksie `ind.d1(df)`) przeniesiona na H1 od zamknięcia dnia |
 
 Brakuje wskaźnika? Najpierw dopisz go do `runner/ia5/indicators.py` z testem zgodności z TA-Lib (B9), dopiero potem użyj w strategii.
 
@@ -207,7 +242,7 @@ def levels(df, p, ind):                      # ten sam df i p co signals(); licz
 
 ## 7. Przykłady (każdy sprawdzany w CI)
 
-`strategies/examples/`: `donchian_d1_trend.py` (wybicie z kanału + trend D1, wyjścia ATR/SMA/przeciwny), `donchian_d1_trail.py` (to samo ze stopem kroczącym), `trend_pullback_v2.py` (powrót RSI w trendzie, stop w ATR), `rsi_trend_pyramid.py` (dokładanie z wagami, `PYRAMID`, `HOURS`, wyjście `rsi_streak`), `rsi_trend_single.py` (to samo, 1 pozycja), `sma200_rsi_pullback.py`, `donchian_breakout.py`, `bollinger_reversion.py`, `macd_trend_adx.py`, `asia_range_breakout.py` (poziomy sesji bez look-ahead), `stoch_session_reversal.py` (filtry czasu).
+`strategies/examples/`: `donchian_d1_trend.py` (wybicie z kanału + trend D1, wyjścia ATR/SMA/przeciwny), `donchian_d1_trail.py` (to samo ze stopem kroczącym), `trend_pullback_v2.py` (powrót RSI w trendzie, stop w ATR), `rsi_trend_pyramid.py` (dokładanie z wagami, `PYRAMID`, `HOURS`, wyjście `rsi_streak`), `rsi_trend_single.py` (to samo, 1 pozycja), `sma200_rsi_pullback.py`, `donchian_breakout.py`, `bollinger_reversion.py`, `macd_trend_adx.py`, `asia_range_breakout.py` (poziomy sesji bez look-ahead), `stoch_session_reversal.py` (filtry czasu). Nowe: `d1_trend_pullback.py` (strategia na świecach dziennych, `TIMEFRAME = "D1"`, D-058), `h1_z_tlem_d1.py` (H1 z trendem z D1 — `ind.d1`, `ind.d1_to_h1`), `powrot_poziom.py` (TP/SL jako ceny, `levels()`, D-057).
 
 ---
 

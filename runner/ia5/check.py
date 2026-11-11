@@ -37,11 +37,38 @@ def synthetic_h1(folder: Path, n: int = 6000, seed: int = 3) -> Path:
     return folder
 
 
-def check_code_on(code: str, h1_dir: Path) -> dict:
-    """Wynik: {"ok", "errors", "warnings", "info", "signals": tabela}."""
+def synthetic_d1(folder: Path, days: int = 5000, seed: int = 4) -> Path:
+    """D-058: 8 par świec dziennych (dni robocze, północ w Londynie) z losowym błądzeniem — tylko do kontroli kodu."""
+    from .config import PAIRS
+    from .daily import close_ts
+
+    folder.mkdir(parents=True, exist_ok=True)
+    start = {"EURUSD": 1.10, "USDJPY": 150.0, "GBPUSD": 1.30, "EURGBP": 0.85, "AUDUSD": 0.66,
+             "USDCHF": 0.88, "USDCAD": 1.37, "EURJPY": 163.0}
+    rng = np.random.default_rng(seed)
+    bdays = pd.bdate_range(end="2026-10-30", periods=days, tz="Europe/London")
+    ts = (bdays.tz_convert("UTC") - pd.Timestamp("1970-01-01", tz="UTC")) // pd.Timedelta(seconds=1)
+    ts = np.asarray(ts, dtype="int64")
+    for pair in PAIRS:
+        p0 = start[pair]
+        vol = p0 * 0.006
+        c = p0 + np.cumsum(rng.normal(0, vol, days))
+        o = np.r_[c[0], c[:-1]]
+        h = np.maximum(o, c) + rng.random(days) * vol
+        lo = np.minimum(o, c) - rng.random(days) * vol
+        pd.DataFrame({"ts": ts, "open": o, "high": h, "low": lo, "close": c, "filled": False, "gap_before": 0,
+                      "close_ts": close_ts(ts)}).to_parquet(folder / f"{pair}.parquet", index=False)
+        (folder / f"{pair}.json").write_text('{"source": "syntetyczne", "timeframe": "D1"}')
+    return folder
+
+
+def check_code_on(code: str, h1_dir: Path, d1_dir: Path | None = None) -> dict:
+    """Wynik: {"ok", "errors", "warnings", "info", "signals": tabela}. d1_dir (D-058): świece dzienne (TIMEFRAME = "D1" / tło)."""
     errors, warnings, info = [], [], []
+    if d1_dir is not None and not any(Path(d1_dir).glob("*.parquet")):
+        d1_dir = None
     try:
-        sig, meta = run_strategy_code(code, h1_dir, timeout=600)
+        sig, meta = run_strategy_code(code, h1_dir, timeout=600, d1_dir=d1_dir)
     except StrategyError as e:
         return {"ok": False, "errors": [str(e)], "warnings": [], "info": [], "signals": None}
     if meta["lookahead"]:
@@ -58,7 +85,11 @@ def check_code_on(code: str, h1_dir: Path) -> dict:
         warnings.append(f"{n_var} wariantów — przy tak dużym przeszukaniu DSR i PBO mocno ukarzą wynik (W2). Zawęź PARAMS.")
     if meta.get("pyramid", 1) > 1:
         info.append(f"Dokładanie: do {meta['pyramid']} pozycji naraz w parze (PYRAMID, D-034).")
-    if meta.get("hours") is False:
+    if meta.get("timeframe") == "D1":
+        info.append("Świece dzienne (TIMEFRAME = D1, D-058): sygnał na zamknięciu dnia, wejście na open następnego; bez okna B11.")
+    elif meta.get("d1_background"):
+        info.append("Tło D1: strategia H1 widzi zamknięte świece dzienne (ind.d1 / ind.d1_to_h1, D-058).")
+    if meta.get("hours") is False and meta.get("timeframe") != "D1":
         info.append("Bez okna godzin: wejścia o każdej porze (HOURS = False, D-034).")
     w = sig["sig"].abs() if len(sig) else sig["sig"]
     if len(w) and (w != 1).any():
@@ -66,7 +97,8 @@ def check_code_on(code: str, h1_dir: Path) -> dict:
     if not meta.get("hypothesis"):
         warnings.append("Brak HYPOTHESIS — spisz w 1–3 zdaniach, dlaczego to ma działać, zanim zobaczysz wynik.")
 
-    bars = {f.stem: len(pd.read_parquet(f, columns=["ts"])) for f in sorted(h1_dir.glob("*.parquet"))}
+    data_dir = Path(d1_dir) if meta.get("timeframe") == "D1" else h1_dir
+    bars = {f.stem: len(pd.read_parquet(f, columns=["ts"])) for f in sorted(data_dir.glob("*.parquet"))}
     rows = []
     for pid, p in enumerate(params):
         for pair, n in bars.items():

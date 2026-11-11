@@ -7,6 +7,7 @@ backtesting.py na otwarciu świecy e+5 to ta sama cena. Wymagana identyczna list
 import numpy as np
 import pandas as pd
 import pytest
+
 from ia5 import indicators as ind
 from ia5.engine import Exit, run
 

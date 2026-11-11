@@ -67,12 +67,13 @@ def paper_trades(P: dict, sig: np.ndarray, ex, pair: str, start: int, hours=None
     out["exit_px"] = np.where(is_open, px_last, out["exit_px"].to_numpy(float))
     out["exit_ts"] = np.where(is_open, np.nan, out["exit_ts"].to_numpy(float))
     out["bars"] = np.where(is_open, last - out["entry_i"].to_numpy() + 1, out["bars"].to_numpy(float))
+    out["nights"] = np.where(is_open, np.nan, out["nights"].to_numpy(float))
     out["pips_net"] = out["pips_gross"] - c.spread_pips          # B3: spread jednorazowo, także przy wycenie
     out["status"] = np.where(cancel, np.where(gap, "anulowana: przerwa w danych", "anulowana: świeca uzupełniona"),
                              np.where(is_open, "otwarta", "zamknięta"))
     out.loc[is_open, "reason"] = "wycena"
     out["pair"] = pair
-    out["mark_ts"] = int(P["ts"][last]) + H
+    out["mark_ts"] = int(P["cts"][last])
     return out
 
 
@@ -88,12 +89,13 @@ def exit_levels(ex, entry, d, atr14, atr5, tp_px=None, sl_px=None) -> tuple:
     return tp, sl
 
 
-def upcoming_signals(code: str, h1_dir: Path, pid: int, strategy: int, target: int, hours, busy: set) -> list[dict]:
+def upcoming_signals(code: str, h1_dir: Path, pid: int, strategy: int, target: int, hours, busy: set,
+                     d1_dir: Path | None = None) -> list[dict]:
     """D-051: na którym instrumencie sygnał jest osiągalny przy zamknięciu trwającej świecy (o `target`) i przy jakiej cenie."""
     if not bool(in_trading_hours(np.array([target]), hours)[0]):
         return []
     best: dict = {}
-    for x in run_probe(code, h1_dir, pid, PROBE_MOVES):
+    for x in run_probe(code, h1_dir, pid, PROBE_MOVES, d1_dir=d1_dir):
         if x["pair"] in busy:
             continue
         key = (x["pair"], x["dir"])
@@ -108,7 +110,8 @@ def pending_signals(P: dict, sig: np.ndarray, start: int, hours=None) -> list[di
     last = len(P["ts"]) - 1
     v = float(np.nan_to_num(np.asarray(sig, float))[last]) if last >= 0 else 0.0
     ts = int(P["ts"][last])
-    if not v or ts + H <= start or not bool(in_trading_hours(np.array([ts + H]), hours)[0]):
+    cts = int(P["cts"][last])
+    if not v or cts <= start or not bool(in_trading_hours(np.array([cts]), hours)[0]):
         return []
     return [{"signal_ts": ts, "dir": int(np.sign(v)), "weight": abs(v)}]
 
@@ -186,35 +189,47 @@ def limit_pairs(t: pd.DataFrame, max_pairs: int, rank: list[str], pyramid: int) 
     return t[keep | ~act]
 
 
-def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print) -> dict:
-    """Pełny stan inwestora na aktualnych danych do liczenia (data/h1_ready)."""
+def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print, d1_dir: Path | None = None) -> dict:
+    """Pełny stan inwestora na aktualnych danych do liczenia (data/h1_ready; D-058: data/d1_ready dla strategii D1)."""
     now = int(time.time()) if now is None else int(now)
     start = _ts(inv.get("createdAt"))
     capital, pct = float(inv["capital"]), float(inv["pct"])
+    if d1_dir is not None and not any(Path(d1_dir).glob("*.parquet")):
+        d1_dir = None
     h1 = {f.stem: pd.read_parquet(f) for f in sorted(Path(h1_dir).glob("*.parquet"))}
     preps = {p: prepare(df) for p, df in h1.items()}
-    data_to = max((int(df["ts"].iloc[-1]) + H for df in h1.values()), default=0)
+    data_to = max((int(P["cts"][-1]) for P in preps.values()), default=0)
+    d1_frames: dict = {}
+    d1_preps: dict = {}
     frames, pending, strat_info, probes = [], [], [], []
     for k, s in enumerate(inv.get("strategies") or []):
         info = {"strategyId": s.get("strategyId"), "name": s.get("name"), "variantId": int(s.get("variantId", 0)),
                 "variantLabel": s.get("variantLabel"), "code_hash": hashlib.sha256((s.get("code") or "").encode()).hexdigest()[:16]}
         try:
             # wariant = param_id × liczba wyjść + numer wyjścia (engine.run) — liczymy tylko ten wariant parametrów
-            _sig0, meta0 = run_strategy_code(s.get("code") or "", h1_dir, param_ids=[])
+            _sig0, meta0 = run_strategy_code(s.get("code") or "", h1_dir, param_ids=[], d1_dir=d1_dir)
             exits = exits_from(meta0.get("exits"))
             pid, xid = divmod(info["variantId"], len(exits))
             if pid >= len(meta0["params"]):
                 raise StrategyError(f"wariant {info['variantId']} nie istnieje w kodzie strategii")
-            sig, meta = run_strategy_code(s.get("code") or "", h1_dir, param_ids=[pid])
+            sig, meta = run_strategy_code(s.get("code") or "", h1_dir, param_ids=[pid], d1_dir=d1_dir)
             if meta["lookahead"]:
                 raise StrategyError("look-ahead (B2): sygnały zmieniają się po dopisaniu przyszłych świec")
             hours = meta.get("hours")
             hours = tuple(hours) if isinstance(hours, list) else hours
             pyramid = int(meta.get("pyramid") or 1)
             ex = exits[xid]
-            info.update({"params": meta["params"][pid], "exit": ex.label()})
+            tf = meta.get("timeframe", "H1")
+            info.update({"params": meta["params"][pid], "exit": ex.label(), "timeframe": tf})
+            if tf == "D1":   # D-058: strategia na świecach dziennych
+                if not d1_frames:
+                    d1_frames.update({f.stem: pd.read_parquet(f) for f in sorted(Path(d1_dir).glob("*.parquet"))})
+                    d1_preps.update({p: prepare(df) for p, df in d1_frames.items()})
+                data, prp = d1_frames, d1_preps
+            else:
+                data, prp = h1, preps
             mine = []
-            for pair, df in h1.items():
+            for pair, df in data.items():
                 arr = np.zeros(len(df), np.float32)
                 part = sig[(sig.param_id == pid) & (sig.pair == pair)]
                 arr[part["i"].to_numpy(int)] = part["sig"].to_numpy(np.float32)
@@ -223,7 +238,7 @@ def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print) -> dict:
                     lvl = np.full((len(df), 2), np.nan)
                     lvl[part["i"].to_numpy(int), 0] = part["tp"].to_numpy(float)
                     lvl[part["i"].to_numpy(int), 1] = part["sl"].to_numpy(float)
-                t = paper_trades(preps[pair], arr, ex, pair, start, hours, pyramid, lv=lvl)
+                t = paper_trades(prp[pair], arr, ex, pair, start, hours, pyramid, lv=lvl)
                 if not t.empty:
                     tpx = t["tp_px"] if "tp_px" in t else [None] * len(t)
                     spx = t["sl_px"] if "sl_px" in t else [None] * len(t)
@@ -233,8 +248,8 @@ def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print) -> dict:
                     t["sl"] = [x[1] for x in lv]
                     t["strategy"] = k
                     mine.append(t)
-                for x in pending_signals(preps[pair], arr, start, hours):
-                    P, i = preps[pair], len(preps[pair]["ts"]) - 1
+                for x in pending_signals(prp[pair], arr, start, hours):
+                    P, i = prp[pair], len(prp[pair]["ts"]) - 1
                     px = float(P["c"][i])
                     tp, sl = exit_levels(ex, px, x["dir"], float(P["atr14"][i]), float(P["atr5"][i]),
                                          lvl[i, 0] if lvl is not None else None, lvl[i, 1] if lvl is not None else None)
@@ -242,7 +257,10 @@ def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print) -> dict:
             if mine and meta.get("max_pairs"):
                 mine = [limit_pairs(pd.concat(mine, ignore_index=True), meta["max_pairs"], meta.get("pair_rank") or [], pyramid)]
             frames += mine
-            probes.append((k, s.get("code") or "", pid, ex, hours, pyramid))
+            if tf == "H1":   # zapowiedź „za x minut możliwy sygnał” ma sens tylko na świecach godzinowych
+                probes.append((k, s.get("code") or "", pid, ex, hours, pyramid))
+            else:
+                probes.append((k, None, pid, ex, hours, pyramid))
         except (StrategyError, SystemExit) as e:
             info["error"] = str(e)[:500]
             log(f"  inwestor „{inv.get('name')}”: strategia „{s.get('name')}” — błąd: {e}")
@@ -268,9 +286,11 @@ def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print) -> dict:
     target = data_to + H                            # zamknięcie trwającej świecy; po przerwie w danych leży w przeszłości
     if h1 and target > now and data_to > 0:
         for k, code, pid, _ex, hours, pyramid in probes:
+            if code is None:
+                continue
             busy = set() if pyramid > 1 else {q for s_, q in held if s_ == k} | {p["pair"] for p in pending if p["strategy"] == k}
             try:
-                upcoming += upcoming_signals(code, h1_dir, pid, k, target, hours, busy)
+                upcoming += upcoming_signals(code, h1_dir, pid, k, target, hours, busy, d1_dir=d1_dir)
             except (StrategyError, SystemExit) as e:
                 log(f"  inwestor „{inv.get('name')}”: prognoza sygnału — błąd: {e}")
     rows = []

@@ -49,6 +49,7 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
     }) if len(ranked) else pd.DataFrame()
     n_var = m["n_variants"]
     sk = m["skipped"]
+    tf = m.get("timeframe", "H1")
     spreads = ", ".join(f"{p} {c.spread_pips:g}" for p, c in PAIRS.items())
     vd = v.get("verdict", {})
 
@@ -61,13 +62,18 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
                              for c in vd.get("checks", [])])) if vd.get("checks") else "",
         "## Hipoteza", m.get("hypothesis") or "_Brak hipotezy — spisz ją przed liczeniem._",
         "## Dane i model wykonania",
-        f"- Pary: {', '.join(m['pairs'])}; świece H1 od {_d(m['data_from'])} do {_d(m['data_to'])}; źródło: {m['data_source']}.",
+        f"- Pary: {', '.join(m['pairs'])}; świece {tf} od {_d(m['data_from'])} do {_d(m['data_to'])}; źródło: {m['data_source']}"
+        + ("; tło D1 (świece dzienne, cała historia Yahoo) w signals() — D-058" if m.get("d1_background") else "") + ".",
         f"- In-sample do {_d(m['oos_cutoff'])}, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS.",
-        ("- Wejście na open świecy po sygnale, o dowolnej godzinie (strategia wyłączyła okno handlu, HOURS = False, D-034); "
+        ("- Świece dzienne (D-058): sygnał na zamknięciu dnia (północ w Londynie), wejście na open następnego dnia; okno B11 nie dotyczy; "
+         if tf == "D1" else
+         "- Wejście na open świecy po sygnale, o dowolnej godzinie (strategia wyłączyła okno handlu, HOURS = False, D-034); "
          if m.get("hours") == "bez okna" else
          "- Wejście na open świecy po sygnale, tylko w oknie handlu 07:00–17:00 czasu polskiego (B11 — najniższe spready); ")
         + "wyjście na dowolnej świecy, także po nocy i weekendzie (D-032). TP i SL w tej samej świecy: "
-        + "przyjęty SL (pesymistycznie — świece H1 nie mówią, co padło pierwsze; transakcja z flagą `ambiguous`, B5).",
+        + f"przyjęty SL (pesymistycznie — świece {tf} nie mówią, co padło pierwsze; transakcja z flagą `ambiguous`, B5)"
+        + (" — na świecach dziennych ten pesymizm jest większy niż na H1: ciasne TP/SL w ATR dziennym często mieszczą się "
+           "w jednej świecy." if tf == "D1" else "") + ".",
         f"- Spread raz na transakcję (pips): {spreads}. Swapy pominięte (O5) — liczba nocy i stres „koszt nocy” w walidacji (D-054).",
         (f"- Dokładanie (D-034): do {m['pyramid']} pozycji naraz w parze, tylko w jednym kierunku; każda pozycja ma własne "
          "TP i limit czasu, wyjście wskaźnikowe zamyka wszystkie naraz. Waga pozycji (|sygnał|) mnoży depozyt w symulacji "
@@ -130,9 +136,12 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
         parts += ["## Forward test od zamrożenia (W4, D-056)", _forward_lines(fw, v)]
     parts += [
         "## Znane ograniczenia",
-        "- Dane: świece H1 Yahoo (jedno źródło, D-039) — historia od ok. 2 lat wstecz i rośnie; krótka historia = mało transakcji "
-        "w OOS, a wyniki są wrażliwe na jeden reżim rynku. Yahoo nie podaje bid/ask ani wolumenu.",
-        "- Brak swapów. Spread stały z tabeli. TP i SL w tej samej świecy H1 — przyjmowany SL (brak danych wewnątrz świecy).",
+        ("- Dane: świece dzienne Yahoo (D-058) — historia od ok. 2003; stara historia Yahoo ma pojedyncze brakujące dni i świece "
+         "płaskie (odrzucone w warstwie czyszczenia). Yahoo nie podaje bid/ask ani wolumenu."
+         if tf == "D1" else
+         "- Dane: świece H1 Yahoo (jedno źródło, D-039) — historia od ok. 2 lat wstecz i rośnie; krótka historia = mało transakcji "
+         "w OOS, a wyniki są wrażliwe na jeden reżim rynku. Yahoo nie podaje bid/ask ani wolumenu."),
+        f"- Brak swapów. Spread stały z tabeli. TP i SL w tej samej świecy {tf} — przyjmowany SL (brak danych wewnątrz świecy).",
         "- Kapitał: zwrot liczony na nominale w walucie kwotowanej (dla EUR/GBP, EUR/JPY, USD/JPY, USD/CHF, USD/CAD "
         "przybliżenie — pomija zmianę kursu przeliczenia w trakcie transakcji).",
         "- Benchmark losowy nie stosuje reguły jednej pozycji na parę.",

@@ -82,6 +82,8 @@ def prepare(df: pd.DataFrame) -> dict:
     df = df.reset_index(drop=True)
     return {
         "ts": df["ts"].to_numpy(np.int64),
+        # D-058: czas zamknięcia świecy — H1: open + 1 h; D1: północ następnego dnia w Londynie (kolumna close_ts z clean_d1)
+        "cts": df["close_ts"].to_numpy(np.int64) if "close_ts" in df else df["ts"].to_numpy(np.int64) + H,
         "o": df["open"].to_numpy(float), "h": df["high"].to_numpy(float),
         "l": df["low"].to_numpy(float), "c": df["close"].to_numpy(float),
         "atr5": ind.atr(df, 5).to_numpy(), "atr14": ind.atr(df, 14).to_numpy(),
@@ -299,7 +301,7 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
         risk = np.where(ex.sl > 0, ex.sl * atr, ent["atr14"].to_numpy())
     bar_idx = w["idx"][rows, np.clip(exit_j, 0, cap)]
     out["exit_i"] = np.where(done, bar_idx, np.nan)
-    out["exit_ts"] = np.where(done, P["ts"][bar_idx] + np.where(exit_at_open, 0, H), np.nan)
+    out["exit_ts"] = np.where(done, np.where(exit_at_open, P["ts"][bar_idx], P["cts"][bar_idx]), np.nan)
     out["exit_px"] = exit_n * d
     out["pips_gross"] = gross / pip
     out["r"] = gross / risk

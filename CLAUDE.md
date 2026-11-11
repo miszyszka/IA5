@@ -3,13 +3,13 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.45 · 2026-11-11 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku; `ia5 search` (D-044); zakładka Inwestorzy (D-045); eksperyment FOREST (D-048, v2: D-049); świece dzienne D1 (D-053); silnik 0.10.0: noce, obsunięcie z MAE, uczciwy forward, wyjście „level” (D-054–D-057) — `docs/STATUS.md`
+Wersja 0.46 · 2026-11-11 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku; `ia5 search` (D-044); zakładka Inwestorzy (D-045); eksperyment FOREST (D-048, v2: D-049); świece dzienne D1 (D-053); silnik 0.10.0: noce, obsunięcie z MAE, uczciwy forward, wyjście „level” (D-054–D-057); silnik 0.11.0: strategie na D1 i tło D1 dla H1 (D-058) — `docs/STATUS.md`
 
 ---
 
 ## 0. Cel
 
-IA5 to laboratorium do **szukania i weryfikowania** strategii FX na świecach godzinowych (H1).
+IA5 to laboratorium do **szukania i weryfikowania** strategii FX na świecach godzinowych (H1) i dziennych (D1, cała historia Yahoo — D-058).
 Dashboard ma odpowiadać na dwa pytania naraz: *ile strategia by zarobiła* i *czy to nie przypadek*.
 
 Zakres teraz: system świec + program na Macu (`ia5`) + dashboard (zakładki **Strategie**, **Stats**, **Inwestorzy**, **FOREST**).
@@ -27,8 +27,8 @@ Zakładka **FOREST** (D-048, v2: D-049): demokratyczny eksperyment — do 1000 r
 - **D4.** Dane surowe są niezmienne. Czyszczenie (weekendowe świece, odrzucone błędy) to osobna, jawna i wersjonowana warstwa.
 - **D5.** Każda świeca przechodzi kontrolę jakości (kalendarz sesji bez weekendów i świąt 24/25.12 i 31.12/1.01 — D-028): `high ≥ max(open, close)`, `low ≤ min(open, close)`, ceny > 0, `ts % 3600 == 0`, brak luk w sesji (tydzień FX: niedziela ~21/22:00 → piątek ~21/22:00 UTC, zależnie od czasu letniego w USA), test krzyżowy par (EUR/JPY ≈ EUR/USD × USD/JPY; EUR/GBP ≈ EUR/USD ÷ GBP/USD). Naruszenie = flaga w statusie, **nigdy cicha naprawa**.
 - **D6.** Każdy wynik backtestu zapisuje hash danych, hash kodu strategii i `ENGINE_VERSION`. Wynik bez tych trzech pól nie istnieje.
-- **D7.** **Jedno źródło cen: Yahoo** (Apps Script → Firestore → kopia na Macu) — do backtestów, forward testów, skanera i monitoringu (D-039). Innych źródeł nie używamy ani nie doklejamy; dane z `research/` służą tylko do szukania hipotez, nigdy do liczenia wyników. Dwie serie: **świece H1** — historia ok. 730 dni wstecz (tyle udostępnia Yahoo), rośnie z każdą godziną; **świece dzienne D1** (D-053) — cała historia, jaką Yahoo ma (dla par FX od ok. 2003), rośnie o każdy dzień. Silnik, skaner, las i inwestorzy liczą **tylko na H1**; D1 jest przechowywana, sprawdzana i publikowana — użycie w liczeniu wymaga osobnej decyzji. **Lokalnie na Macu tylko świece Yahoo** (`data/yahoo/` H1 i `data/yahoo_d1/` D1 — po 8 par) i dane do liczenia zbudowane z H1 (`data/h1_ready/`); wszystko inne w `~/.ia5/data` `ia5 start` usuwa przy każdym starcie i synchronizacji, a silnik odmawia liczenia na danych, których opis nie mówi „yahoo” (D-041).
-- **D7a.** Świeca D1 (D-053): znacznik = czas otwarcia = **północ dnia w strefie Yahoo** (dla par FX `Europe/London`: zimą 00:00 UTC, latem 23:00 UTC dnia poprzedniego). Zapisujemy tylko dni zamknięte (w tej strefie zaczął się już następny dzień, + 60 s). Wpis nie o północy, zły OHLC, cena ≤ 0 = flaga, nigdy cicha naprawa (D5). Oczekiwane dni: poniedziałek–piątek bez 25.12 i 1.01; luki, płaskie świece i świece weekendowe w starej historii Yahoo są tylko pokazywane.
+- **D7.** **Jedno źródło cen: Yahoo** (Apps Script → Firestore → kopia na Macu) — do backtestów, forward testów, skanera i monitoringu (D-039). Innych źródeł nie używamy ani nie doklejamy; dane z `research/` służą tylko do szukania hipotez, nigdy do liczenia wyników. Dwie serie: **świece H1** — historia ok. 730 dni wstecz (tyle udostępnia Yahoo), rośnie z każdą godziną; **świece dzienne D1** (D-053) — cała historia, jaką Yahoo ma (dla par FX od ok. 2003), rośnie o każdy dzień. Silnik i inwestorzy liczą na H1 albo — gdy strategia ustawi `TIMEFRAME = "D1"` — na D1; strategia H1 może też czytać zamknięte świece dzienne jako tło (`ind.d1`, `ind.d1_to_h1`) (D-058). Skaner, `ia5 search` i las liczą tylko na H1. **Lokalnie na Macu tylko świece Yahoo** (`data/yahoo/` H1 i `data/yahoo_d1/` D1 — po 8 par) i dane do liczenia zbudowane z nich (`data/h1_ready/`, `data/d1_ready/`); wszystko inne w `~/.ia5/data` `ia5 start` usuwa przy każdym starcie i synchronizacji, a silnik odmawia liczenia na danych, których opis nie mówi „yahoo” (D-041).
+- **D7a.** Świeca D1 (D-053): znacznik = czas otwarcia = **północ dnia w strefie Yahoo** (dla par FX `Europe/London`: zimą 00:00 UTC, latem 23:00 UTC dnia poprzedniego). Zapisujemy tylko dni zamknięte (w tej strefie zaczął się już następny dzień, + 60 s). Wpis nie o północy, zły OHLC, cena ≤ 0 = flaga, nigdy cicha naprawa (D5). Oczekiwane dni: poniedziałek–piątek bez 25.12 i 1.01; luki, płaskie świece i świece weekendowe w starej historii Yahoo są pokazywane w kontroli. **Do liczenia** (D-058, `daily.clean_d1` → `data/d1_ready/`): świeca łamiąca D5 odrzucona; weekend/święto i świeca płaska (O=H=L=C) odrzucone; 1–2 brakujące dni robocze — nic; ≥ 3 — przerwa w danych (`gap_before`, B12); bez uzupełniania; `close_ts` = północ następnego dnia w Londynie (czas zamknięcia świecy).
 - **D8.** Backtest liczy na kopii świec Yahoo po **warstwie czyszczenia** (`ia5/clean.py`, dane w `data/h1_ready/`, wersja w raporcie): świeca łamiąca D5 jest odrzucana; świeca poza sesją jest odrzucana, gdy to sobota/święto albo świeca płaska (Yahoo powtarza wtedy starą cenę); brak **≤ 3 godzin** przy weekendzie/święcie to **granica tygodnia** (Yahoo zaczyna i kończy tydzień inaczej niż kalendarz) — nic; inny brak ≤ 3 h → uzupełniony liniowo od zamknięcia przed nim do otwarcia po nim, znacznik `filled`; brak > 3 h → **przerwa w danych** (`gap_before`), także gdy brakuje we wszystkich parach naraz. Liczymy wszystkie pary z `COMPUTE_PAIRS` (8); para z mniej niż ~4 tygodniami świec jest pomijana. Surowa kopia (`data/yahoo/`) zostaje nietknięta; liczby odrzuconych, uzupełnionych i przerw są w raporcie.
 
 ### Backtest (model wykonania)
@@ -42,7 +42,7 @@ Zakładka **FOREST** (D-048, v2: D-049): demokratyczny eksperyment — do 1000 r
 - **B8.** Jedna pozycja na parę na wariant. Sygnał przy otwartej pozycji w tej parze jest pomijany (licznik pominiętych w raporcie). Wyjątek na życzenie Michała: strategia ustawia `PYRAMID = k` — do k pozycji naraz w parze, tylko w jednym kierunku; |sygnał| = waga depozytu (D-034). Strategia może też ustawić `MAX_PAIRS = k` — najwyżej k par z otwartymi pozycjami naraz; przy równoczesnych sygnałach wygrywa para wyżej w `PAIR_RANK` (ranking tylko z IS) (D-050).
 - **B9.** Wskaźniki tylko z modułu `ia5.indicators`, zweryfikowanego testami zgodności z TA-Lib. Strategie nie piszą własnych RSI/ATR.
 - **B10.** Zmiana logiki silnika = podbicie `ENGINE_VERSION`. Wyniki starszej wersji dashboard oznacza jako nieaktualne.
-- **B11.** Handlujemy tylko **07:00–17:00 czasu polskiego** (`Europe/Warsaw`, z czasem letnim; zimą 06–16 UTC, latem 05–15 UTC) — wtedy spready są najniższe (D-028). Wejście wyłącznie na open świecy otwartej o 07:00…16:00 czasu polskiego; sygnały poza oknem są pomijane i liczone w raporcie. **Wyjście na dowolnej świecy** — według wariantu wyjścia, także w nocy i po weekendzie; bez limitu 23:00 (D-032 zastępuje D-030). Benchmark losowych wejść (W3) losuje w tym samym oknie. Strategia może wyłączyć okno (`HOURS = False`) albo podać własne (`HOURS = (od, do)`) — tylko na wyraźne życzenie Michała (D-034).
+- **B11.** Handlujemy tylko **07:00–17:00 czasu polskiego** (`Europe/Warsaw`, z czasem letnim; zimą 06–16 UTC, latem 05–15 UTC) — wtedy spready są najniższe (D-028). Wejście wyłącznie na open świecy otwartej o 07:00…16:00 czasu polskiego; sygnały poza oknem są pomijane i liczone w raporcie. **Wyjście na dowolnej świecy** — według wariantu wyjścia, także w nocy i po weekendzie; bez limitu 23:00 (D-032 zastępuje D-030). Benchmark losowych wejść (W3) losuje w tym samym oknie. Strategia może wyłączyć okno (`HOURS = False`) albo podać własne (`HOURS = (od, do)`) — tylko na wyraźne życzenie Michała (D-034). Strategia na świecach dziennych (`TIMEFRAME = "D1"`) wchodzi na open dnia — okno jej nie dotyczy (D-058).
 - **B12.** Transakcja nachodząca na **przerwę w danych** (D8) (od świecy wejścia do świecy wyjścia, także przerwa między sygnałem a wejściem) albo mająca świecę sygnału, wejścia lub wyjścia **uzupełnioną** jest **anulowana** — jakby jej nie było; liczby anulowanych (osobno) w raporcie. **Weekend, święto i granica tygodnia nie są przerwą:** po ostatniej piątkowej świecy następna jest pierwsza niedzielna/poniedziałkowa. Benchmark losowy anuluje tak samo (D-031, D-032, D-039).
 
 ### Walidacja (bez niej wynik to anegdota)
@@ -235,7 +235,8 @@ forest/report.md                     # raport dla Claude
   source.json                              # {"source": "yahoo"} — znacznik po przejściu na jedno źródło (D-039)
   data/yahoo/{PARA}.parquet                # surowa kopia świec z Firestore — niezmieniana (D4); tylko 8 par z sekcji 2 (D-041)
   data/yahoo_d1/{PARA}.parquet             # D-053: surowa kopia świec dziennych z Firestore — niezmieniana (D4); 8 par
-  data/h1_ready/{PARA}.parquet + .json     # po warstwie czyszczenia (filled, gap_before) + opis — jedyne wejście silnika i skanera (D8)
+  data/h1_ready/{PARA}.parquet + .json     # po warstwie czyszczenia (filled, gap_before) + opis — wejście silnika (H1) i skanera (D8)
+  data/d1_ready/{PARA}.parquet + .json     # D-058: D1 po warstwie czyszczenia (gap_before, close_ts) — wejście silnika przy TIMEFRAME = "D1" i tło D1
   data-repo/                               # lokalny klon gałęzi data
   results/{id}/{run}/  scans/{run}/        # wyniki liczenia i skanów (to samo trafia na gałąź data)
   searches/{run}/                          # głębokie poszukiwanie (D-044); all_is.parquet tylko lokalnie
@@ -270,8 +271,8 @@ forest/report.md                     # raport dla Claude
 - `ia5 start` — **jedyny proces** (D-039): najpierw weryfikuje aktualność danych, potem nasłuchuje strategii do policzenia.
   1. Pierwszy start po D-039: usuwa z `~/.ia5` dane Dukascopy i policzone na nich wyniki, z gałęzi `data` wyniki i skany policzone na Dukascopy (historia gita zostaje), a policzone strategie wysyła do ponownego liczenia na świecach Yahoo (zgoda Michała z 2026-10-31).
   2. Stan bazy (`meta/status`), kopia świec Yahoo z Firestore (pierwszy raz pełna, potem miesiące od ostatniej świecy kopii — po przerwie Maca kopia nie ma dziur). Kopia świec D1 (D-053): para doczytywana tylko, gdy `meta/status.d1` ma nowszą świecę lub inną liczbę świec niż kopia.
-  3. Sprzątanie: w `~/.ia5/data` zostaje tylko `yahoo/`, `yahoo_d1/` (po 8 par) i `h1_ready/` (D-041, D-053). Kontrola aktualności (czy każda para ma ostatnią zamkniętą świecę sesji) i jakości (D5, trójkąty par).
-  4. Dane do liczenia (`data/h1_ready/`, warstwa czyszczenia D8) — przebudowa pary tylko, gdy zmieniły się jej świece.
+  3. Sprzątanie: w `~/.ia5/data` zostaje tylko `yahoo/`, `yahoo_d1/` (po 8 par), `h1_ready/` i `d1_ready/` (D-041, D-053, D-058). Kontrola aktualności (czy każda para ma ostatnią zamkniętą świecę sesji) i jakości (D5, trójkąty par).
+  4. Dane do liczenia (`data/h1_ready/`, warstwa czyszczenia D8; `data/d1_ready/`, D7a/D-058) — przebudowa pary tylko, gdy zmieniły się jej świece.
   5. Mapa pokrycia (D-022) i push na gałąź `data` świec H1, świec D1 (`candles_d1/`) oraz `coverage/coverage.json` (każde tylko, jeśli coś się zmieniło); przegląd zdrowia (D-023) → `meta/status.health` (z kontrolą „Świece dzienne (D1)”).
   6. Heartbeat co 30 s do `runner/heartbeat`; `caffeinate -i`, żeby Mac nie usnął.
   7. Nasłuch `strategies` ze statusem `do_policzenia` / `do_usuniecia`; kolejka FIFO, jedna strategia na raz.
@@ -315,14 +316,16 @@ def signals(df, p, ind):          # df: H1 jednej pary, indeks UTC = czas otwarc
     return (trend_up & oversold).astype("int8")                       # +1 long / −1 short / 0
 ```
 
-Egzekwowanie: `runner/ia5/sandbox.py` (osobny proces, dozwolone importy `numpy`, `pandas`, `math`), detektor look-ahead (cięcia danych + zaburzenie przyszłości), `ia5 check` / `scripts/check_strategy.py`, kontrola w edytorze dashboardu.
+Interwał (D-058): `TIMEFRAME = "D1"` → `df` to świece dzienne (cała historia Yahoo), wyjścia liczone w dniach. W strategii H1 tło dzienne: `d = ind.d1(df)` (zamknięte dni) i `ind.d1_to_h1(df, wartość_na_d1)` (przeniesienie na H1 bez look-ahead). Szczegóły: `docs/STRATEGIE.md`.
+
+Egzekwowanie: `runner/ia5/sandbox.py` (osobny proces, dozwolone importy `numpy`, `pandas`, `math`), detektor look-ahead (cięcia danych + zaburzenie przyszłości, także tła D1), `ia5 check` / `scripts/check_strategy.py`, kontrola w edytorze dashboardu.
 
 ---
 
 ## 8. Silnik backtestu
 
 ### 8.1 Wejścia
-Domyślnie open świecy `t+1`, tylko w oknie 07:00–17:00 czasu polskiego (B11). Opcjonalne warianty: opóźnienie o k świec; potwierdzenie (następna świeca zamyka się w kierunku sygnału).
+Domyślnie open świecy `t+1`, tylko w oknie 07:00–17:00 czasu polskiego (B11). Przy `TIMEFRAME = "D1"` (D-058): open następnego dnia, bez okna; „świeca” we wszystkich wyjściach = dzień, czas wyjścia na zamknięciu = `close_ts`. Opcjonalne warianty: opóźnienie o k świec; potwierdzenie (następna świeca zamyka się w kierunku sygnału).
 
 ### 8.2 Domyślna siatka wyjść (~230 wariantów)
 - **Czasowe:** wyjście po N świecach, N ∈ {1, 2, 3, 4, 6, 8, 12, 16, 24, 36, 48, 72, 96, 120}.
@@ -452,7 +455,7 @@ IA5/
 │  ├─ pyproject.toml
 │  └─ ia5/  cli.py  config.py  session.py  store.py
 │           quality.py  clean.py  ready.py  coverage.py  health.py  cloud.py  publish.py   # dane (E2)
-           daily.py                                                      # świece dzienne D1: kalendarz, kontrola (D-053)
+           daily.py                                                      # świece dzienne D1: kalendarz, kontrola (D-053), warstwa czyszczenia do liczenia (D-058)
 │           indicators.py  engine.py  sandbox.py  backtest.py  report.py # silnik (E3)
 │           validate.py  portfolio.py  check.py                           # walidacja, kapitał, kontrola (E5)
 │           scan.py                                                       # skaner hipotez (D-037)

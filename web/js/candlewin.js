@@ -10,12 +10,23 @@ export function sessionHoursBetween(a, b, limit = 4) {
   return n;
 }
 
-/** Okna ciągłych świec: [{ from, to }] (indeksy w bars, to wyłącznie). Przerwa = ≥ 4 brakujące godziny sesji. */
-export function splitWindows(bars) {
+/** Krok świec: H1 = 3600 s; D1 (D-058) = doba. Rozpoznawany po medianie odstępów, gdy nie podano. */
+export function barStep(bars) {
+  if (bars.length < 3) return H;
+  const d = [];
+  for (let i = 1; i < Math.min(bars.length, 200); i++) d.push(bars[i].ts - bars[i - 1].ts);
+  d.sort((a, b) => a - b);
+  return d[d.length >> 1] >= 20 * H ? 86400 : H;
+}
+
+/** Okna ciągłych świec: [{ from, to }] (indeksy w bars, to wyłącznie). Przerwa = ≥ 4 brakujące godziny sesji (H1)
+ *  albo ponad tydzień bez świecy (D1). */
+export function splitWindows(bars, step = barStep(bars)) {
   const out = [];
   let from = 0;
+  const broken = (a, b) => (step === H ? sessionHoursBetween(a, b) >= 4 : b - a > 7 * 86400);
   for (let i = 1; i <= bars.length; i++) {
-    if (i === bars.length || sessionHoursBetween(bars[i - 1].ts, bars[i].ts) >= 4) {
+    if (i === bars.length || broken(bars[i - 1].ts, bars[i].ts)) {
       if (i > from) out.push({ from, to: i });
       from = i;
     }
@@ -49,7 +60,7 @@ export function placeTrades(bars, windows, trades) {
 }
 
 /** Dane dla serii: świece + puste miejsca (whitespace) między oknami, żeby przerwa była widoczna. */
-export function seriesData(bars, windows, gapBars = 8) {
+export function seriesData(bars, windows, gapBars = 8, step = barStep(bars)) {
   const out = [];
   windows.forEach((w, k) => {
     for (let i = w.from; i < w.to; i++) {
@@ -59,7 +70,7 @@ export function seriesData(bars, windows, gapBars = 8) {
     const next = windows[k + 1];
     if (next) {
       const end = bars[w.to - 1].ts, start = bars[next.from].ts;
-      for (let j = 1; j <= gapBars && end + j * H < start; j++) out.push({ time: end + j * H });
+      for (let j = 1; j <= gapBars && end + j * step < start; j++) out.push({ time: end + j * step });
     }
   });
   return out;

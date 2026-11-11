@@ -180,6 +180,7 @@ def index_entry(res_dir: Path) -> dict:
         "engine_version": m["engine_version"], "best_exit": v.get("best_exit"),
         "is_mean_r": v.get("is_mean_r"), "oos_mean_r": v.get("oos_mean_r"), "oos_mean_pips": v.get("oos_mean_pips"),
         "oos_trades": v.get("oos_trades"), "demo": bool(m.get("demo")),
+        "timeframe": m.get("timeframe", "H1"), "d1_background": bool(m.get("d1_background")),   # D-058
     }
 
 

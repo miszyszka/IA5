@@ -4,6 +4,7 @@ import json
 import numpy as np
 import pandas as pd
 import pytest
+
 from ia5 import indicators as ind
 from ia5.backtest import run_file
 from ia5.sandbox import StrategyError, check_code, lookahead_cuts, param_grid, run_strategy_code
@@ -170,3 +171,38 @@ def test_levels_go_through_lookahead_detector_and_engine_d057(h1_dir, tmp_path):
         run_strategy_code(LEVELS_OK.replace("def levels", "def poziomy"), h1_dir)
     with pytest.raises(StrategyError, match="level"):
         run_strategy_code(LEVELS_OK.replace('"kind": "level"', '"kind": "time", "n": 24'), h1_dir)
+
+
+D1_CODE = '''
+TIMEFRAME = "D1"
+HYPOTHESIS = "Powrót RSI na świecach dziennych."
+PARAMS = {"lvl": [35, 40]}
+def signals(df, p, ind):
+    rsi = ind.rsi(df.close, 14)
+    return ind.cross_above(rsi, p["lvl"]).astype("int8") - ind.cross_below(rsi, 100 - p["lvl"]).astype("int8")
+'''
+
+
+def test_full_run_on_d1_uses_daily_candles_close_ts_and_no_hours_window_d058(h1_dir, tmp_path):
+    from ia5.check import synthetic_d1
+
+    d1_dir = synthetic_d1(tmp_path / "d1", days=3000)
+    out = run_file(D1_CODE, "d1", h1_dir, tmp_path / "results", log=lambda m: None, d1_dir=d1_dir)
+    m = json.loads((out / "manifest.json").read_text())
+    assert m["timeframe"] == "D1" and m["hours"] == "D1: open dnia" and m["pairs"] == sorted(p.stem for p in d1_dir.glob("*.parquet"))
+    t = pd.read_parquet(out / "trades.parquet")
+    d1 = pd.read_parquet(d1_dir / "EURUSD.parquet")
+    te = t[t["pair"] == "EURUSD"]
+    assert set(te["entry_ts"]) <= set(d1["ts"])                                  # wejście na open DNIA
+    timed = te[te["reason"] == "czas"]
+    assert set(timed["exit_ts"]) <= set(d1["close_ts"])                         # wyjście czasowe = koniec dnia (północ w Londynie)
+    assert (t["nights"] >= 1).all()                                             # każda pozycja D1 przechodzi przez noc
+    assert m["skipped"]["poza_godzinami"] == 0                                   # B11 nie dotyczy D1
+    v = json.loads((out / "validation.json").read_text())
+    assert v["verdict"]["color"] in {"green", "yellow", "red"} and v["benchmark"]["sims"] == 1000
+    rep = (out / "report.md").read_text()
+    assert "Świece dzienne (D-058)" in rep and "świece D1 od" in rep
+    # H1 bez TIMEFRAME liczy nadal na H1, a manifest mówi, czy miała tło D1
+    out2 = run_file(GOOD, "h1", h1_dir, tmp_path / "r2", log=lambda m: None, d1_dir=d1_dir)
+    m2 = json.loads((out2 / "manifest.json").read_text())
+    assert m2["timeframe"] == "H1" and m2["d1_background"] is True and m2["d1_hash"]

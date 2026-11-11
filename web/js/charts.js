@@ -1,6 +1,6 @@
 // Wykresy: ECharts (kapitał, heatmapa, krzywe) i Lightweight Charts (świece z transakcjami).
 // Zasada uczciwości (CLAUDE.md 11): bez wygładzania linii, osie z rzeczywistych wartości. Płasko, bez gradientów (D-019).
-import { placeTrades, seriesData, splitWindows } from './candlewin.js';
+import { barStep, placeTrades, seriesData, splitWindows } from './candlewin.js';
 
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const instances = new Set();
@@ -141,7 +141,8 @@ export function candles(el, bars, trades) {
     rightPriceScale: { borderColor: css('--line') },
     crosshair: { mode: LW.CrosshairMode.Normal },
     // czas zawsze w UTC (D1) i bez zależności od języka systemu
-    localization: { locale: 'pl-PL', timeFormatter: (t) => new Date(t * 1000).toISOString().slice(0, 16).replace('T', ' ') + ' UTC',
+    localization: { locale: 'pl-PL', timeFormatter: (t) => (barStep(bars) === 86400 ? new Date((t + 3600) * 1000).toISOString().slice(0, 10)
+      : new Date(t * 1000).toISOString().slice(0, 16).replace('T', ' ') + ' UTC'),
       priceFormatter: (p) => p.toFixed(bars[0]?.close > 20 ? 3 : 5) },
   });
   ch.applyOptions({ timeScale: { tickMarkFormatter: (t, type) => {

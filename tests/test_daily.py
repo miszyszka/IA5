@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
+
 from ia5 import daily, health
 
 LON = ZoneInfo("Europe/London")
@@ -99,3 +100,39 @@ def test_local_cleanup_keeps_d1_copy(tmp_path, monkeypatch):
     removed = cli.enforce_local_data(log=lambda m: None)
     assert [f.name for f in (data / "yahoo_d1").iterdir()] == ["EURUSD.parquet"] and len(removed) == 1
     assert health.local_data(tmp_path, {})["state"] == "ok"
+
+
+def test_clean_d1_rejects_bad_bars_and_marks_long_gaps_d058(tmp_path):
+    """D-058: warstwa czyszczenia D1 — złe OHLC, czas nie o północy, duplikat dnia → odrzucone; weekend i płaskie → poza sesją;
+    1–2 brakujące dni → nic, ≥ 3 → gap_before; close_ts = północ następnego dnia w Londynie (23/25 h przy zmianie czasu)."""
+    from ia5 import ready
+
+    df = d1_frame("2023-01-02", "2024-12-31")
+    bad = df.copy()
+    bad.loc[5, "high"] = bad.loc[5, "low"] - 0.01                                  # złe OHLC
+    bad.loc[10, ["open", "high", "low", "close"]] = 1.1                            # płaska
+    sat = pd.Timestamp("2024-03-02", tz="Europe/London").value // 10**9           # sobota
+    noon = pd.Timestamp("2024-03-05 12:00", tz="Europe/London").value // 10**9    # nie o północy
+    bad = pd.concat([bad, pd.DataFrame({"ts": [sat, noon], "open": 1.1, "high": 1.11, "low": 1.09, "close": 1.1})])
+    lo, hi = (pd.Timestamp(d, tz="Europe/London").value // 10**9 for d in ("2024-05-06", "2024-05-10"))
+    bad = bad[(bad.ts < lo) | (bad.ts >= hi)]                                      # 4 dni robocze bez świecy
+    one = pd.Timestamp("2024-08-14", tz="Europe/London").value // 10**9
+    bad = bad[bad.ts != one]                                                       # 1 brakujący dzień
+    out, info = daily.clean_d1(bad)
+    assert info["rejected"] == 2 and info["flat"] == 1 and info["off_session"] == 1
+    gi = int(out.index[out.gap_before > 0][0])
+    assert info["gaps"] == [[int(out["ts"].iloc[gi - 1]), int(out["ts"].iloc[gi]), 4]]
+    # 7 = 4 + 1 wycięte + świeca odrzucona (OHLC) + płaska — ich dni też są brakujące
+    assert (out["gap_before"] > 0).sum() == 1 and info["missing_days"] == 7 and not out["filled"].any()
+    assert ((out["close_ts"] - out["ts"]) // 3600 == 24).all()   # dni robocze: zmiana czasu zawsze w niedzielę
+    sat, sat2 = (pd.Timestamp(d, tz="Europe/London").value // 10**9 for d in ("2025-03-29", "2025-10-25"))
+    sun, sun2 = sat + 86400, sat2 + 86400                       # niedziele zmiany czasu: 23 h i 25 h
+    assert ((daily.close_ts([sun, sun2]) - [sun, sun2]) // 3600).tolist() == [23, 25]
+    # build_d1: opis z timeframe D1, para z za małą historią pominięta, bez zmian = bez przebudowy
+    short = df.iloc[:100]
+    b = ready.build_d1({"EURUSD": df, "USDJPY": short}, tmp_path / "d1_ready", pairs=("EURUSD", "USDJPY", "GBPUSD"))
+    assert b["EURUSD"]["rebuilt"] and b["EURUSD"]["timeframe"] == "D1" and b["EURUSD"]["source"] == "yahoo"
+    assert b["USDJPY"]["bars"] == 0 and not (tmp_path / "d1_ready" / "USDJPY.parquet").exists()
+    assert (tmp_path / "d1_ready" / "EURUSD.parquet").exists() and "close_ts" in pd.read_parquet(tmp_path / "d1_ready" / "EURUSD.parquet")
+    b2 = ready.build_d1({"EURUSD": df, "USDJPY": short}, tmp_path / "d1_ready", pairs=("EURUSD", "USDJPY", "GBPUSD"))
+    assert not b2["EURUSD"]["rebuilt"]

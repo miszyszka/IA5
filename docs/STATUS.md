@@ -2,6 +2,27 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-11 — przegląd całości; silnik 0.10.0–0.11.0: uczciwszy pomiar i świece dzienne w liczeniu (D-054–D-058)
+
+**Zrobione (na prośbę Michała: „przejrzyj cały projekt, napraw to, co warto, skup się na zyskownych strategiach”)**
+- **D-054 Noce:** każda transakcja ma liczbę nocy (21:00 UTC), walidacja — wynik przy koszcie nocy 0,5 / 1 pips. O5 zostaje 0 w modelu.
+- **D-055 Obsunięcie z MAE:** obok obsunięcia z zamknięć — najgorsza chwila z otwartymi pozycjami (Python = JS, test). Dla strategii bez stopu (RSI 2, Powrót) to jest prawdziwe ryzyko.
+- **D-056 Uczciwy forward test:** zamrożona strategia oceniana na zamrożonym wariancie (wcześniej runner ignorował `frozenVariant`), blok „Forward test od zamrożenia” (n, średnia, t, bootstrap, z wobec oczekiwania) w karcie i raporcie.
+- **D-057 Wyjście `level`:** TP/SL jako ceny z `levels(df, p, ind)` (przez detektor look-ahead) — koniec przybliżania „połowy drogi do bazy” wielokrotnościami ATR. Przykład `powrot_poziom.py`.
+- **D-058 Świece dzienne w liczeniu:** `TIMEFRAME = "D1"` — strategia na ~20 latach D1 × 8 par z tą samą walidacją; w strategiach H1 tło D1 (`ind.d1`, `ind.d1_to_h1`) bez look-ahead (test łapie dzień „podglądany” od otwarcia). Warstwa `daily.clean_d1` → `data/d1_ready/`; inwestorzy i GitHub Actions też. Przykłady `d1_trend_pullback.py`, `h1_z_tlem_d1.py`.
+- **`docs/ROADMAP.md`** — kierunek rozwoju: najpierw sprawdzić D1 (etap A), potem swapy i forward na żywo (B), dopiero potem `ia5 search --d1` / portfel / nowe dane (C); czego świadomie nie robić.
+- CLAUDE.md 0.46, STRATEGIE.md 0.42, `ENGINE_VERSION` 0.11.0 (dashboard oznaczy stare wyniki jako nieaktualne — „Policz ponownie”). Testy: 204 zielone (+12 nowych).
+
+**Następne (Michał)**
+1. Na Macu: `cd ~/IA5 && git pull`, `uv tool install -e runner --force`, restart `ia5 start`. Program zbuduje `data/d1_ready/` (jeśli `backfillD1()` był już uruchomiony w Apps Script — jeśli nie, najpierw on, `docs/SETUP.md`).
+2. „Policz ponownie” RSI 2 i Powrót (silnik 0.11.0) — zobaczysz noce, koszt nocy i obsunięcie z MAE.
+3. Wkleić do dashboardu `strategies/examples/d1_trend_pullback.py` i `h1_z_tlem_d1.py` — pierwsze strategie na długiej historii. Kolejne hipotezy D1 — `docs/ROADMAP.md`, etap A.
+
+**Znane problemy**
+- Kodu D1 nie dało się sprawdzić na prawdziwych świecach dziennych Yahoo z tej sesji (brak dostępu do Firestore) — tylko na danych syntetycznych i EUR/USD z backtesting.py. Pierwszy `ia5 start` pokaże w logu, ile dni odrzuciła warstwa czyszczenia; jeśli dużo (np. setki płaskich dni) — do obejrzenia.
+- Na D1 wejście jest na open dnia = północ w Londynie, czyli tuż po rolowaniu, gdy spread realnie bywa najszerszy; spread z tabeli jest tu optymistyczny. Rozwiązanie („sygnał D1, wykonanie H1 rano”) opisane w ROADMAP, etap B.
+- B5 (TP i SL w tej samej świecy → SL) jest na D1 bardziej pesymistyczne niż na H1.
+
 ## 2026-11-10 — świece dzienne D1 (D-053)
 
 **Zrobione:** Apps Script `backfillD1()` + dopisywanie zamkniętego dnia w `tick()`; Firestore `candles_d1/{PARA}_{RRRR}`, `meta/status.d1`; reguła odczytu dla właściciela; Mac: kopia `~/.ia5/data/yahoo_d1/`, kontrola (`ia5/daily.py`), publikacja `candles_d1/` na gałęzi `data`, kontrola „Świece dzienne (D1)” w przeglądzie zdrowia; testy (`tests/test_daily.py`, publikacja). Logika dnia w JS i Pythonie sprawdzona na tych samych przypadkach; Apps Script przetestowany na symulowanym Yahoo (Node). CLAUDE.md 0.44 (D7, D7a), STRATEGIE.md 0.40.

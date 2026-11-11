@@ -142,7 +142,7 @@ function renderHead() {
           d?.status === 'liczy_sie' ? h('span', { class: 'chip run' }, 'przeliczanie…') : d?.status === 'do_policzenia' ? h('span', { class: 'chip warn' }, 'w kolejce do przeliczenia') : null,
           d?.forwardError ? h('span', { class: 'chip warn', title: d.forwardError.message }, `forward test nieudany ${dateUTC(d.forwardError.at, true)} — ponowi się za 6 h`) : null),
         h('p', { class: 'meta' }, `${m.pairs.map((p) => PAIRS[p]?.label || p).join(', ')} · ${dateUTC(m.data_from)} → ${dateUTC(m.data_to)} · OOS od ${dateUTC(m.oos_cutoff)} · `,
-          `źródło: ${m.data_source} · silnik ${m.engine_version} · kod ${m.code_hash} · dane ${m.data_hash} · policzono ${dateUTC(m.created, true)} UTC`)),
+          `${m.timeframe === 'D1' ? 'świece dzienne (D1)' : m.d1_background ? 'świece H1 + tło D1' : 'świece H1'} · źródło: ${m.data_source} · silnik ${m.engine_version} · kod ${m.code_hash} · dane ${m.data_hash}${m.d1_hash ? ` · D1 ${m.d1_hash}` : ''} · policzono ${dateUTC(m.created, true)} UTC`)),
       h('div', { class: `verdict-badge ${vc}` }, h('small', {}, 'werdykt'), h('b', {}, vl), h('span', {}, v.verdict?.note || ''))),
     m.hypothesis ? h('blockquote', { class: 'hyp' }, m.hypothesis) : h('p', { class: 'hint' }, 'Brak hipotezy.'),
     h('div', { class: 'row wrap actions' },

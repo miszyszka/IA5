@@ -141,7 +141,7 @@ def local_data(home: Path, yahoo: dict) -> dict:
     import json
 
     data = home / "data"
-    foreign = [f.name for f in data.iterdir() if f.name not in ("yahoo", "h1_ready", "yahoo_d1")] if data.exists() else []
+    foreign = [f.name for f in data.iterdir() if f.name not in ("yahoo", "h1_ready", "yahoo_d1", "d1_ready")] if data.exists() else []
     for sub in ("yahoo", "yahoo_d1"):   # D-053: obok H1 także kopia świec dziennych Yahoo
         if (data / sub).exists():
             foreign += [f"{sub}/{f.name}" for f in (data / sub).iterdir() if f.suffix != ".parquet" or f.stem not in PAIRS]

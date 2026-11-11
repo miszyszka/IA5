@@ -25,6 +25,8 @@ DENSE_CUTS = 24
 DENSE_BARS = 2000
 WARMUP = 300
 MIN_WEIGHT, MAX_WEIGHT = 0.1, 10.0   # D-034: |sygnał| = waga pozycji
+TIMEFRAMES = ("H1", "D1")            # D-058: interwał strategii; D1 = świece dzienne Yahoo (cała historia)
+H = 3600
 MAX_PYRAMID = 10
 W_MAX = 480   # D-035: do 20 dni handlu — strategie trendowe trzymają pozycje tygodniami
 
@@ -104,9 +106,18 @@ def _as_levels(lv, df) -> np.ndarray:
     return out
 
 
+def read_timeframe(ns: dict) -> str:
+    tf = ns.get("TIMEFRAME", "H1")
+    if tf not in TIMEFRAMES:
+        raise StrategyError(f"TIMEFRAME: {TIMEFRAMES[0]} (domyślnie) albo {TIMEFRAMES[1]} — świece dzienne (D-058)")
+    return tf
+
+
 def read_settings(ns: dict) -> dict:
-    """Ustawienia modułu strategii poza PARAMS/EXITS/SIZING (D-034): PYRAMID i HOURS."""
-    out = {}
+    """Ustawienia modułu strategii poza PARAMS/EXITS/SIZING (D-034): PYRAMID i HOURS; TIMEFRAME (D-058)."""
+    out = {"timeframe": read_timeframe(ns)}
+    if out["timeframe"] == "D1" and isinstance(ns.get("HOURS"), (list, tuple)):
+        raise StrategyError("HOURS: na świecach dziennych nie ma okna godzin (wejście na open dnia = północ w Londynie, D-058)")
     pyr = ns.get("PYRAMID", 1)
     if not isinstance(pyr, int) or isinstance(pyr, bool) or not 1 <= pyr <= MAX_PYRAMID:
         raise StrategyError(f"PYRAMID musi być liczbą całkowitą 1–{MAX_PYRAMID}")
@@ -120,7 +131,9 @@ def read_settings(ns: dict) -> dict:
         if not isinstance(rank, (list, tuple)) or not all(isinstance(x, str) for x in rank):
             raise StrategyError("PAIR_RANK: lista nazw par, np. [\"USDCHF\", \"AUDUSD\"] — kolejność przy równoczesnych sygnałach")
         out["pair_rank"] = [str(x) for x in rank]
-    if "HOURS" in ns:
+    if out["timeframe"] == "D1":
+        out["hours"] = False   # D-058: B11 nie dotyczy D1 — wejście na open dnia
+    elif "HOURS" in ns:
         h = ns["HOURS"]
         if h is False or h is None:
             out["hours"] = False
@@ -153,11 +166,62 @@ def read_settings(ns: dict) -> dict:
     return out
 
 
+def load_d1_background(d1_dir: Path | None, pair: str) -> pd.DataFrame | None:
+    """D-058: świece dzienne pary do df.attrs["d1"] strategii H1 — indeks = czas otwarcia dnia (UTC), kolumny OHLC + close_ts
+    (koniec dnia w UTC; od tej chwili świeca jest znana). Brak pliku = None (strategia dostaje df bez tła)."""
+    if d1_dir is None:
+        return None
+    f = Path(d1_dir) / f"{pair}.parquet"
+    if not f.exists():
+        return None
+    raw = pd.read_parquet(f)
+    cols = ["open", "high", "low", "close", "close_ts"]
+    if "close_ts" not in raw:
+        raw = raw.assign(close_ts=raw["ts"].astype("int64") + 86400)
+    d = raw.set_index(pd.to_datetime(raw["ts"], unit="s", utc=True))[cols]
+    d.index.name = "ts"
+    return d
+
+
+def known_until(frame: pd.DataFrame) -> int:
+    """Chwila, w której strategia liczy sygnał na ostatniej świecy ramki: jej zamknięcie (H1: open + 1 h)."""
+    return int(frame.index[-1].timestamp()) + H
+
+
+def fresh(frame: pd.DataFrame) -> pd.DataFrame:
+    """Kopia ramki dla kodu strategii (nie zmieni oryginału) bez głębokiej kopii attrs — DataFrame.copy() kopiuje attrs
+    rekurencyjnie, a tło D1 (D-058) ma tysiące wierszy; przy ~30 cięciach × 8 par to sekundy na każdy wariant."""
+    f = pd.DataFrame(frame.to_numpy(copy=True), index=frame.index, columns=frame.columns)
+    f.attrs = dict(frame.attrs)
+    return f
+
+
+def with_d1(frame: pd.DataFrame, d1: pd.DataFrame | None, factor: float | None = None, since: int | None = None) -> pd.DataFrame:
+    """Ramka H1 z tłem D1 ograniczonym do dni zamkniętych przed jej końcem (look-ahead: dzień d widać dopiero po jego zamknięciu).
+    factor/since: zaburzenie przyszłości — dni zamknięte po `since` dostają ceny × factor (test, że sygnały ich nie widzą)."""
+    from . import indicators as ind
+
+    if d1 is None:
+        ind.attach_d1(frame, None)
+        return frame
+    cts = d1["close_ts"].to_numpy()
+    d = d1.iloc[:int(np.searchsorted(cts, known_until(frame), side="right"))]   # close_ts rośnie — jedno cięcie
+    if factor is not None and since is not None:
+        fut = cts[:len(d)] > since
+        if fut.any():
+            vals = d.to_numpy(copy=True)
+            cols = [d.columns.get_loc(c) for c in ("open", "high", "low", "close")]
+            vals[np.ix_(fut, cols)] = vals[np.ix_(fut, cols)] * factor
+            d = pd.DataFrame(vals, index=d.index, columns=d.columns)
+    ind.attach_d1(frame, d)
+    return frame
+
+
 def _lv_equal(a: np.ndarray, b: np.ndarray) -> bool:
     return np.array_equal(np.isnan(a), np.isnan(b)) and np.allclose(np.nan_to_num(a), np.nan_to_num(b), rtol=0, atol=1e-12)
 
 
-def lookahead_cuts(fn, df, p, ind, seed: int = 0, fn_lv=None) -> list[int]:
+def lookahead_cuts(fn, df, p, ind, seed: int = 0, fn_lv=None, d1: pd.DataFrame | None = None) -> list[int]:
     """B2: sygnały na danych obciętych w punkcie c muszą równać się sygnałom z pełnych danych (do c).
 
     Dwa przebiegi:
@@ -172,12 +236,14 @@ def lookahead_cuts(fn, df, p, ind, seed: int = 0, fn_lv=None) -> list[int]:
     rng = np.random.default_rng(seed)
     bad = []
 
-    def ev(frame):
-        """(sygnały, poziomy) na ramce; poziomy liczą się tylko tam, gdzie jest sygnał (D-057)."""
-        sg = _as_signal(fn(frame.copy(), p, ind), frame)
+    def ev(frame, factor=None, since=None):
+        """(sygnały, poziomy) na ramce; poziomy liczą się tylko tam, gdzie jest sygnał (D-057).
+        Tło D1 (D-058) przycięte do dni zamkniętych przed końcem ramki — tak samo przy każdym cięciu."""
+        frame = with_d1(frame, d1, factor, since)
+        sg = _as_signal(fn(fresh(frame), p, ind), frame)
         if fn_lv is None:
             return sg, None
-        lv = _as_levels(fn_lv(frame.copy(), p, ind), frame)
+        lv = _as_levels(fn_lv(fresh(frame), p, ind), frame)
         lv[sg == 0] = np.nan
         return sg, lv
 
@@ -206,15 +272,17 @@ def lookahead_cuts(fn, df, p, ind, seed: int = 0, fn_lv=None) -> list[int]:
         up, dn = seg.copy(), seg.copy()
         up.iloc[cut:, up.columns.get_indexer(cols)] *= 1.3
         dn.iloc[cut:, dn.columns.get_indexer(cols)] *= 0.7
-        if not same(ev(up), ev(dn), cut):
+        since = known_until(part) if d1 is not None else None   # tło D1: dni zamknięte po cięciu też zaburzone
+        if not same(ev(up, 1.3, since), ev(dn, 0.7, since), cut):
             bad.append(a + cut)
             break
     return bad
 
 
-def worker_main(code_path: str, h1_dir: str, out_dir: str, param_ids: list[int] | None = None) -> None:
+def worker_main(code_path: str, h1_dir: str, out_dir: str, param_ids: list[int] | None = None, d1_dir: str | None = None) -> None:
     """Uruchamiane w osobnym procesie. Zapisuje signals.parquet i meta.json w out_dir.
-    param_ids: liczyć tylko te warianty parametrów (inwestorzy, D-045) — reszta pominięta, numeracja bez zmian."""
+    param_ids: liczyć tylko te warianty parametrów (inwestorzy, D-045) — reszta pominięta, numeracja bez zmian.
+    d1_dir (D-058): świece dzienne — dane strategii przy TIMEFRAME = "D1", tło (df.attrs["d1"]) przy H1."""
     from . import indicators as ind
 
     out = Path(out_dir)
@@ -230,32 +298,41 @@ def worker_main(code_path: str, h1_dir: str, out_dir: str, param_ids: list[int] 
         meta["sizing"] = ns.get("SIZING")
         meta["exits"] = ns.get("EXITS")
         meta.update(read_settings(ns))
+        tf = meta["timeframe"]
+        data_dir = Path(d1_dir) if tf == "D1" and d1_dir else Path(h1_dir)
+        if tf == "D1" and (not d1_dir or not any(data_dir.glob("*.parquet"))):
+            raise StrategyError("TIMEFRAME = \"D1\": brak świec dziennych do liczenia — na Macu uruchom ia5 start "
+                                "(po backfillD1 w Apps Script)")
         rows = []
-        for f in sorted(Path(h1_dir).glob("*.parquet")):
+        for f in sorted(data_dir.glob("*.parquet")):
             pair = f.stem
             raw = pd.read_parquet(f)
             df = raw.set_index(pd.to_datetime(raw["ts"], unit="s", utc=True))[["open", "high", "low", "close"]]
             df.attrs["pair"] = pair   # D-037: strategia może zależeć od pary (df.attrs["pair"], np. "EURUSD")
+            df.attrs["timeframe"] = tf
+            d1 = load_d1_background(d1_dir, pair) if tf == "H1" else None   # D-058: tło D1 dla strategii H1
             for pid, p in enumerate(params):
                 if param_ids is not None and pid not in param_ids:
                     continue
-                bad = lookahead_cuts(fn, df, p, ind, fn_lv=fn_lv)
+                bad = lookahead_cuts(fn, df, p, ind, fn_lv=fn_lv, d1=d1)
                 if bad:
                     meta["lookahead"].append({"pair": pair, "param_id": pid, "cuts": [int(raw.ts.iloc[c]) for c in bad]})
                     continue
-                s = _as_signal(fn(df.copy(), p, ind), df)
+                full = with_d1(fresh(df), d1)
+                s = _as_signal(fn(fresh(full), p, ind), full)
                 nz = np.flatnonzero(s)
-                lv = _as_levels(fn_lv(df.copy(), p, ind), df) if fn_lv is not None else np.full((len(df), 2), np.nan)
+                lv = _as_levels(fn_lv(fresh(full), p, ind), full) if fn_lv is not None else np.full((len(df), 2), np.nan)
                 rows.append(pd.DataFrame({"param_id": pid, "pair": pair, "i": nz, "sig": s[nz], "tp": lv[nz, 0], "sl": lv[nz, 1]}))
         sig = pd.concat(rows, ignore_index=True) if rows else pd.DataFrame(columns=["param_id", "pair", "i", "sig", "tp", "sl"])
         meta["levels"] = fn_lv is not None
+        meta["d1_background"] = tf == "H1" and bool(d1_dir) and any(Path(d1_dir).glob("*.parquet"))
         sig.to_parquet(out / "signals.parquet", index=False)
     except Exception as e:  # noqa: BLE001 — każdy błąd strategii trafia do raportu
         meta["errors"].append(f"{type(e).__name__}: {e}")
     (out / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, default=str))
 
 
-def probe_main(code_path: str, h1_dir: str, out_dir: str, param_id: int, moves: list[float]) -> None:
+def probe_main(code_path: str, h1_dir: str, out_dir: str, param_id: int, moves: list[float], d1_dir: str | None = None) -> None:
     """D-051: sygnał na ostatniej świecy po dopisaniu hipotetycznej świecy (open = ostatnie zamknięcie, close = open + k × ATR14).
     Świeca istnieje tylko w pamięci tego procesu — nie trafia do danych, nie ma wpływu na wyniki (D2)."""
     from . import indicators as ind
@@ -277,6 +354,8 @@ def probe_main(code_path: str, h1_dir: str, out_dir: str, param_id: int, moves: 
                 c = o + k * atr
                 x = pd.concat([df, pd.DataFrame({"open": [o], "high": [max(o, c)], "low": [min(o, c)], "close": [c]}, index=[when])])
                 x.attrs["pair"] = f.stem
+                x.attrs["timeframe"] = "H1"
+                x = with_d1(x, load_d1_background(d1_dir, f.stem))   # D-058: tło D1 jak przy liczeniu
                 v = float(_as_signal(ns["signals"](x, p, ind), x)[-1])
                 if v:
                     out["hits"].append({"pair": f.stem, "k": k, "level": c, "dir": int(np.sign(v))})
@@ -285,7 +364,8 @@ def probe_main(code_path: str, h1_dir: str, out_dir: str, param_id: int, moves: 
     (Path(out_dir) / "probe.json").write_text(json.dumps(out))
 
 
-def run_probe(code: str, h1_dir: Path, param_id: int, moves: list[float], timeout: int = 300) -> list[dict]:
+def run_probe(code: str, h1_dir: Path, param_id: int, moves: list[float], timeout: int = 300,
+              d1_dir: Path | None = None) -> list[dict]:
     """Uruchamia probe_main w tym samym odgrodzeniu co strategie (S2)."""
     errs = check_code(code)
     if errs:
@@ -295,7 +375,8 @@ def run_probe(code: str, h1_dir: Path, param_id: int, moves: list[float], timeou
         code_path = Path(tmp) / "strategia.py"
         code_path.write_text(code, encoding="utf-8")
         boot = (f"import sys; sys.path.insert(0, {pkg_parent!r}); from ia5.sandbox import probe_main; "
-                f"probe_main({str(code_path)!r}, {str(h1_dir)!r}, {tmp!r}, {int(param_id)}, {[float(x) for x in moves]!r})")
+                f"probe_main({str(code_path)!r}, {str(h1_dir)!r}, {tmp!r}, {int(param_id)}, {[float(x) for x in moves]!r}, "
+                f"{str(d1_dir) if d1_dir else None!r})")
         env = {"PATH": os.environ.get("PATH", ""), "HOME": tmp, "TMPDIR": tmp, "PYTHONHASHSEED": "0"}
         try:
             r = subprocess.run([sys.executable, "-I", "-c", boot], env=env, cwd=tmp, timeout=timeout,
@@ -333,9 +414,10 @@ def exit_reason(code: int | None) -> str:
 
 
 def run_strategy_code(code: str, h1_dir: Path, timeout: int = 1800,
-                      param_ids: list[int] | None = None) -> tuple[pd.DataFrame, dict]:
+                      param_ids: list[int] | None = None, d1_dir: Path | None = None) -> tuple[pd.DataFrame, dict]:
     """Sprawdza kontrakt, uruchamia kod w osobnym procesie, zwraca (sygnały, meta).
-    param_ids: tylko wybrane warianty parametrów (np. wariant przypisany inwestorowi)."""
+    param_ids: tylko wybrane warianty parametrów (np. wariant przypisany inwestorowi).
+    d1_dir (D-058): katalog świec dziennych do liczenia (data/d1_ready) — dane dla TIMEFRAME = "D1", tło dla H1."""
     errs = check_code(code)
     if errs:
         raise StrategyError("; ".join(errs))
@@ -345,7 +427,7 @@ def run_strategy_code(code: str, h1_dir: Path, timeout: int = 1800,
         code_path.write_text(code, encoding="utf-8")
         boot = (f"import sys; sys.path.insert(0, {pkg_parent!r}); "
                 f"from ia5.sandbox import worker_main; worker_main({str(code_path)!r}, {str(h1_dir)!r}, {tmp!r}, "
-                f"{[int(x) for x in param_ids] if param_ids is not None else None!r})")
+                f"{[int(x) for x in param_ids] if param_ids is not None else None!r}, {str(d1_dir) if d1_dir else None!r})")
         env = {"PATH": os.environ.get("PATH", ""), "HOME": tmp, "TMPDIR": tmp, "PYTHONHASHSEED": "0"}
         if sys.platform == "win32":
             env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT", "")
