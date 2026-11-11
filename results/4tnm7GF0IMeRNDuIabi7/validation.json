@@ -13,10 +13,10 @@
  "benchmark": {
   "sims": 1000,
   "actual_mean_pips": 6.224066,
-  "percentile": 100.0,
-  "p5": -5.736045,
-  "p50": -0.922376,
-  "p95": 3.306924
+  "percentile": 99.9,
+  "p5": -5.551084,
+  "p50": -0.828876,
+  "p95": 3.456304
  },
  "dsr": {
   "dsr": 0.707921,
@@ -160,7 +160,7 @@
    {
     "test": "percentyl benchmarku ≥ 95",
     "ok": true,
-    "value": 100.0
+    "value": 99.9
    },
    {
     "test": "PBO < 0,3",
