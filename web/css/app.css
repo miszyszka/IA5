@@ -460,3 +460,6 @@ ul.plain { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 2px;
 
 .banner.upcoming { margin: 10px 0; color: var(--text); }
 .banner.upcoming .upc-min { color: var(--warn); font-weight: 600; }
+
+/* REV (D-063): nagłówek grupy przewalutowań w tabeli transakcji */
+table.data tr.grp td { background: var(--raised); font-family: inherit; }

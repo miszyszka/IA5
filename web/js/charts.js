@@ -84,6 +84,51 @@ export function equityLines(el, series, marks = []) {
   });
 }
 
+/** REV (D-063): gdzie jest kapitał — słupki pionowe obok siebie (% kapitału), linia limitu `cap` (%). rows: [{label, value, pct}]. */
+export function bars(el, rows, cap = 50) {
+  const b = base();
+  const ax = b.axisDefaults;
+  const accent = css('--accent'), muted = css('--muted');
+  return chart(el, {
+    ...b,
+    grid: { left: 48, right: 16, top: 24, bottom: 56 },
+    tooltip: { ...b.tooltip, trigger: 'item', formatter: (p) => `${p.name}<br>${rows[p.dataIndex].value.toLocaleString('pl-PL', { maximumFractionDigits: 2 })} zł · ${p.value.toLocaleString('pl-PL', { maximumFractionDigits: 1 })}%` },
+    xAxis: { type: 'category', data: rows.map((r) => r.label), ...ax, axisLabel: { ...ax.axisLabel, interval: 0, rotate: rows.length > 8 || el.clientWidth < 560 ? 35 : 0 } },
+    yAxis: { type: 'value', min: 0, max: Math.max(cap + 5, Math.ceil(Math.max(0, ...rows.map((r) => r.pct)) / 10) * 10), ...ax,
+      axisLabel: { ...ax.axisLabel, formatter: (v) => `${v}%` } },
+    series: [{ type: 'bar', barMaxWidth: 44, data: rows.map((r) => +r.pct.toFixed(2)), itemStyle: { color: accent, borderRadius: [3, 3, 0, 0] },
+      label: { show: true, position: 'top', color: css('--text'), fontFamily: 'JetBrains Mono, monospace', fontSize: 11,
+        formatter: (p) => `${p.value.toLocaleString('pl-PL', { maximumFractionDigits: 1 })}%` },
+      markLine: { symbol: 'none', silent: true, label: { color: muted, formatter: `limit ${cap}%`, position: 'insideEndTop' },
+        lineStyle: { color: muted, type: 'dashed' }, data: [{ yAxis: cap }] } }],
+  });
+}
+
+/** REV (D-063): kapitał w złotówkach dzień po dniu. series: [{name, ts, values, color, dash?}], marks: ts przewalutowań. */
+export function plnLines(el, series, rebalances = [], marks = []) {
+  const b = base();
+  const ax = b.axisDefaults;
+  const first = series[0];
+  const valueAt = (t) => { let v = null; for (let i = 0; i < first.ts.length && first.ts[i] <= t; i++) v = first.values[i]; return v; };
+  return chart(el, {
+    ...b,
+    grid: { left: 72, right: 24, top: 36, bottom: 36 },
+    legend: { top: 0, textStyle: { color: ax.axisLabel.color } },
+    tooltip: { ...b.tooltip, trigger: 'axis', valueFormatter: (v) => (v == null ? '—' : `${v.toLocaleString('pl-PL', { maximumFractionDigits: 2 })} zł`) },
+    xAxis: { type: 'time', ...ax, splitLine: { show: false }, axisLabel: { ...ax.axisLabel, formatter: (v) => fmtDate(v) } },
+    yAxis: { type: 'value', scale: true, ...ax, name: 'zł', nameTextStyle: { color: ax.axisLabel.color },
+      axisLabel: { ...ax.axisLabel, formatter: (v) => v.toLocaleString('pl-PL', { maximumFractionDigits: 0 }) } },
+    series: [
+      ...series.map((s, i) => ({ name: s.name, type: 'line', showSymbol: false, data: s.ts.map((t, k) => [t * 1000, s.values[k]]),
+        lineStyle: { color: css(s.color), width: i === 0 ? 1.75 : 1.25, type: s.dash ? 'dashed' : 'solid' }, itemStyle: { color: css(s.color) },
+        markLine: i === 0 && marks.length ? { symbol: 'none', silent: true, label: { color: css('--muted'), formatter: '{b}' },
+          lineStyle: { color: css('--muted'), type: 'dashed' }, data: marks.map((m) => ({ name: m.label, xAxis: m.ts * 1000 })) } : undefined })),
+      ...(rebalances.length ? [{ name: 'przewalutowanie', type: 'scatter', symbolSize: 6, itemStyle: { color: css('--accent'), borderColor: css('--bg'), borderWidth: 1 },
+        data: rebalances.map((t) => [t * 1000, valueAt(t)]).filter((p) => p[1] != null), tooltip: { valueFormatter: () => 'wtorek 08:00' } }] : []),
+    ],
+  });
+}
+
 /** Heatmapa TP × SL. cells: [{x, y, v, n, id}] — v = null gdy za mało transakcji. */
 export function heatmap(el, xs, ys, cells, onPick, label) {
   const b = base();

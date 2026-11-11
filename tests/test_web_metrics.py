@@ -32,3 +32,10 @@ def test_dashboard_js(tmp_path):
     r = subprocess.run(["node", "--test", str(ROOT / "tests" / "web" / "metrics.test.mjs")], capture_output=True, text=True,
                        env={**os.environ, "IA5_EQUITY_FIXTURE": str(fx)})
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="brak Node")
+def test_rev_page_logic():
+    """D-063: zakładka REV — odliczanie do wtorku 08:00 (z czasem letnim), podział, ranking, CSV dziennika."""
+    r = subprocess.run(["node", "--test", str(ROOT / "tests" / "web" / "rev.test.mjs")], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
