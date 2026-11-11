@@ -4,7 +4,6 @@ import json
 import numpy as np
 import pandas as pd
 import pytest
-
 from ia5 import indicators as ind
 from ia5.backtest import run_file
 from ia5.sandbox import StrategyError, check_code, lookahead_cuts, param_grid, run_strategy_code

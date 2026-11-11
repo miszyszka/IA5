@@ -2,7 +2,6 @@
 import numpy as np
 import pandas as pd
 import pytest
-
 from ia5 import engine, search
 from ia5 import indicators as ind
 from ia5 import search_rules as R

@@ -2,7 +2,6 @@
 from pathlib import Path
 
 import pytest
-
 from ia5.check import check_code_on, synthetic_d1, synthetic_h1
 
 EX = sorted((Path(__file__).resolve().parents[1] / "strategies" / "examples").glob("*.py"))

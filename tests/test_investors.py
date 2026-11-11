@@ -2,7 +2,6 @@
 import numpy as np
 import pandas as pd
 import pytest
-
 from ia5 import engine, investors, portfolio
 from ia5.backtest import exits_from
 from ia5.sandbox import run_strategy_code

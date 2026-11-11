@@ -8,7 +8,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-
 from ia5.portfolio import simulate_equity
 
 ROOT = Path(__file__).resolve().parents[1]

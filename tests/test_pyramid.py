@@ -5,7 +5,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-
 from ia5 import ENGINE_VERSION
 from ia5.backtest import run_file
 from ia5.engine import Exit, find_entries, no_overlap, prepare, run, simulate

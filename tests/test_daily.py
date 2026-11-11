@@ -4,7 +4,6 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
-
 from ia5 import daily, health
 
 LON = ZoneInfo("Europe/London")

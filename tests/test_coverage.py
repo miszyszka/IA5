@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 
 import numpy as np
 import pandas as pd
-
 from ia5 import coverage
 from ia5.session import is_expected_bar
 

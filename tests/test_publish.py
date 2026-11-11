@@ -3,7 +3,6 @@ import json
 import subprocess
 
 import pytest
-
 from ia5 import publish
 
 

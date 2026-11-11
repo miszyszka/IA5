@@ -1,7 +1,6 @@
 """D-050: MAX_PAIRS — najwyżej k par z otwartymi pozycjami naraz, PAIR_RANK przy równoczesnych sygnałach."""
 import numpy as np
 import pandas as pd
-
 from ia5 import engine
 
 T0 = 1735545600  # poniedziałek 2024-12-30 08:00 UTC (09:00 czasu polskiego)

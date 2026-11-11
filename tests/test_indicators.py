@@ -2,7 +2,6 @@
 import numpy as np
 import pandas as pd
 import pytest
-
 from ia5 import indicators as ind
 
 talib = pytest.importorskip("talib")
