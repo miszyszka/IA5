@@ -69,7 +69,7 @@
   "candles/EURUSD/2026.parquet": {
    "bars": 5220,
    "from": 1767225600,
-   "hash": "b64f72ddbefd9534",
+   "hash": "0f2a307cfe7fb87e",
    "to": 1794384000
   },
   "candles/GBPUSD/2024.parquet": {
