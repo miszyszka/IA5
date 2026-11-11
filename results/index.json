@@ -1,6 +1,38 @@
 {
  "strategies": [
   {
+   "id": "SFf1uGSBdtjFsbtH5Ycc",
+   "name": "d1",
+   "run_id": "20261111-100235",
+   "created": 1794391357,
+   "verdict": "yellow",
+   "verdict_note": "zaliczone 2 z 5 testów",
+   "n_variants": 1398,
+   "hypothesis": "Na świecach dziennych krótkoterminowe przewartościowanie w kierunku trendu wraca do średniej: po 2–3 dniach\nsilnej korekty (RSI z 2 dni na dnie skali) cena w długim trendzie zwykle odbija, bo korekta to dla trendu szum, a nie zmiana\nkierunku. To dzienny odpowiednik żywej strategii „RSI 2” z H1, ale na ok. 20 latach zamiast 2 — H1 miała za krótką próbę\n(OOS 6 miesięcy), a tu OOS to ok. 5 lat i wiele reżimów rynku.\nWejście (zdarzenie, nie stan): RSI(2) przebija od góry poziom `rsi_level` (5/10/15), gdy zamknięcie jest nad SMA trendu\n(100 albo 200 dni) — long; lustrzanie short: RSI(2) przebija od dołu 100 − poziom, gdy zamknięcie jest pod SMA.\nWyjścia z domyślnej siatki silnika w dniach (ATR dzienny). Do sprawdzenia przy walidacji: koszt nocy (D-054) i to, czy wynik\nnie pochodzi wyłącznie z wariantów bez stopu — poprzednia wersja na H1 oblała DSR właśnie przez brak stopu.\nZapisane PRZED liczeniem; 6 wariantów wejścia.",
+   "pairs": [
+    "AUDUSD",
+    "EURGBP",
+    "EURJPY",
+    "EURUSD",
+    "GBPUSD",
+    "USDCAD",
+    "USDCHF",
+    "USDJPY"
+   ],
+   "data_from": 846633600,
+   "data_to": 1794268800,
+   "source": "yahoo",
+   "engine_version": "0.11.0",
+   "best_exit": "po 72 świecach",
+   "is_mean_r": 0.516826,
+   "oos_mean_r": 0.014868,
+   "oos_mean_pips": 0.974726,
+   "oos_trades": 172,
+   "demo": false,
+   "timeframe": "D1",
+   "d1_background": false
+  },
+  {
    "id": "wSKI1vQ0WgIVXq2m53BL",
    "name": "Powrót",
    "run_id": "20261111-100054",

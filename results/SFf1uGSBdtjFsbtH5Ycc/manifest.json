@@ -1,0 +1,154 @@
+{
+ "id": "SFf1uGSBdtjFsbtH5Ycc",
+ "name": "d1",
+ "run_id": "20261111-100235",
+ "engine_version": "0.11.0",
+ "code_hash": "4d2581768eb31d00",
+ "data_hash": "3197cf8521901cb3",
+ "data_source": "yahoo",
+ "timeframe": "D1",
+ "d1_background": false,
+ "d1_hash": null,
+ "candles": "pełne",
+ "pairs": [
+  "AUDUSD",
+  "EURGBP",
+  "EURJPY",
+  "EURUSD",
+  "GBPUSD",
+  "USDCAD",
+  "USDCHF",
+  "USDJPY"
+ ],
+ "params": [
+  {
+   "rsi_level": 5,
+   "trend": 100
+  },
+  {
+   "rsi_level": 5,
+   "trend": 200
+  },
+  {
+   "rsi_level": 10,
+   "trend": 100
+  },
+  {
+   "rsi_level": 10,
+   "trend": 200
+  },
+  {
+   "rsi_level": 15,
+   "trend": 100
+  },
+  {
+   "rsi_level": 15,
+   "trend": 200
+  }
+ ],
+ "n_variants": 1398,
+ "n_exits": 233,
+ "oos_cutoff": 1557360000,
+ "sizing": [
+  5.0,
+  10.0,
+  15.0,
+  20.0,
+  30.0
+ ],
+ "pyramid": 1,
+ "max_pairs": null,
+ "pair_rank": null,
+ "hours": "D1: open dnia",
+ "data_from": 846633600,
+ "data_to": 1794268800,
+ "data_clean": {
+  "AUDUSD": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 0,
+   "gap_hours": 0,
+   "rejected": 148,
+   "closed_hours": 0
+  },
+  "EURGBP": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 0,
+   "gap_hours": 0,
+   "rejected": 69,
+   "closed_hours": 0
+  },
+  "EURJPY": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 1,
+   "gap_hours": 17,
+   "rejected": 235,
+   "closed_hours": 0
+  },
+  "EURUSD": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 3,
+   "gap_hours": 20,
+   "rejected": 130,
+   "closed_hours": 0
+  },
+  "GBPUSD": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 1,
+   "gap_hours": 3,
+   "rejected": 105,
+   "closed_hours": 0
+  },
+  "USDCAD": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 0,
+   "gap_hours": 0,
+   "rejected": 117,
+   "closed_hours": 0
+  },
+  "USDCHF": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 0,
+   "gap_hours": 0,
+   "rejected": 104,
+   "closed_hours": 0
+  },
+  "USDJPY": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 6,
+   "gap_hours": 29,
+   "rejected": 278,
+   "closed_hours": 0
+  }
+ },
+ "skipped": {
+  "B8": 763034,
+  "brak_danych": 5561,
+  "rozgrzewka": 0,
+  "poza_godzinami": 0,
+  "luka_danych": 5846,
+  "swieca_uzupelniona": 0
+ },
+ "hypothesis": "Na świecach dziennych krótkoterminowe przewartościowanie w kierunku trendu wraca do średniej: po 2–3 dniach\nsilnej korekty (RSI z 2 dni na dnie skali) cena w długim trendzie zwykle odbija, bo korekta to dla trendu szum, a nie zmiana\nkierunku. To dzienny odpowiednik żywej strategii „RSI 2” z H1, ale na ok. 20 latach zamiast 2 — H1 miała za krótką próbę\n(OOS 6 miesięcy), a tu OOS to ok. 5 lat i wiele reżimów rynku.\nWejście (zdarzenie, nie stan): RSI(2) przebija od góry poziom `rsi_level` (5/10/15), gdy zamknięcie jest nad SMA trendu\n(100 albo 200 dni) — long; lustrzanie short: RSI(2) przebija od dołu 100 − poziom, gdy zamknięcie jest pod SMA.\nWyjścia z domyślnej siatki silnika w dniach (ATR dzienny). Do sprawdzenia przy walidacji: koszt nocy (D-054) i to, czy wynik\nnie pochodzi wyłącznie z wariantów bez stopu — poprzednia wersja na H1 oblała DSR właśnie przez brak stopu.\nZapisane PRZED liczeniem; 6 wariantów wejścia.",
+ "trades_rows": 2358477,
+ "created": 1794391357,
+ "seconds": 52.5,
+ "verdict": "yellow",
+ "frozen_at": null,
+ "frozen_variant": null
+}
