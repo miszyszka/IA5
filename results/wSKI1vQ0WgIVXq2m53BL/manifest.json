@@ -1,10 +1,10 @@
 {
  "id": "wSKI1vQ0WgIVXq2m53BL",
  "name": "Powrót",
- "run_id": "20261111-162402",
+ "run_id": "20261111-214443",
  "engine_version": "0.13.0",
  "code_hash": "12864a1b4312df32",
- "data_hash": "593a84e6e3e6e0ba",
+ "data_hash": "ef4e95eb7bd91b4c",
  "data_source": "yahoo",
  "timeframe": "H1",
  "d1_background": true,
@@ -25,7 +25,7 @@
  ],
  "n_variants": 5,
  "n_exits": 5,
- "oos_cutoff": 1778325300,
+ "oos_cutoff": 1778338800,
  "sizing": [
   5.0,
   10.0,
@@ -38,7 +38,7 @@
  "pair_rank": null,
  "hours": "bez okna",
  "data_from": 1730073600,
- "data_to": 1794409200,
+ "data_to": 1794427200,
  "data_clean": {
   "AUDUSD": {
    "version": "6",
@@ -123,8 +123,8 @@
  },
  "hypothesis": "FX-POWRÓT v2 (pomysł z 20.10.2026, reguły z IA4 sekcja 7b). Po gwałtownym impulsie w górę (zamknięcie ≥ 2 × ATR100\nwyżej niż poprzednie) kurs często cofa się w stronę ceny sprzed impulsu. Pierwsza czerwona świeca w ciągu 3 świec\npo impulsie pokazuje, że kupujący się wyczerpali — short z celem w połowie drogi od szczytu do bazy, bez stopu,\nlimit 60 świec.\nRóżnice wobec oryginału (ograniczenia IA5): 8 par zamiast 10; warunek „open wejścia ≥ baza + 0,5 ATR” sprawdzany na\nzamknięciu świecy sygnału (open następnej nie jest znany w chwili sygnału); TP jako poziom ceny P − ½(P − B) silnik\nna razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach ATR14 (patrz EXITS).",
  "trades_rows": 1350,
- "created": 1794414242,
- "seconds": 3.5,
+ "created": 1794433483,
+ "seconds": 3.7,
  "verdict": "yellow",
  "frozen_at": 1794328953,
  "frozen_variant": 2
