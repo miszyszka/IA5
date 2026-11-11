@@ -1,6 +1,6 @@
 # FOREST v2 (D-049) — las bef7f80ca8f2
 
-- Dane do 2026-11-10. Założenia ustalone na świecach do 2026-05-03. HISTORIA = do tej daty, TEST = do budowy (2026-11-03), LIVE = później.
+- Dane do 2026-11-11. Założenia ustalone na świecach do 2026-05-03. HISTORIA = do tej daty, TEST = do budowy (2026-11-03), LIVE = później.
 - Inwestorzy: reguły lustrzane, horyzonty [24, 48] świec. Bramki: t ≥ 2.5, ≥ 30 zdarzeń, 3/4 bloków dodatnich, |ρ| ≤ 0.6. Odświeżenie co 4 tygodnie.
 - Manager: ≥ 5 głosów i ≥ 90% zgody. W lesie teraz 83 inwestorów.
 
