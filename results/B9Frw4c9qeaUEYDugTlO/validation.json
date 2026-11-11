@@ -1,0 +1,7 @@
+{
+ "verdict": {
+  "color": "yellow",
+  "note": "żaden wariant nie ma 30 transakcji IS",
+  "checks": []
+ }
+}

@@ -1,6 +1,38 @@
 {
  "strategies": [
   {
+   "id": "B9Frw4c9qeaUEYDugTlO",
+   "name": "D5",
+   "run_id": "20261111-214455",
+   "created": 1794433495,
+   "verdict": "yellow",
+   "verdict_note": "żaden wariant nie ma 30 transakcji IS",
+   "n_variants": 1,
+   "hypothesis": "Kurs, który spadł o 5% poniżej swojej średniej z ok. 3 lat (756 dni handlu), wraca w jej stronę: parytet siły\nnabywczej, bilanse handlowe i polityka banków centralnych działają wolno, ale w skali lat ciągną kurs z powrotem.\nTylko long, BEZ DŹWIGNI: jedna pozycja naraz w całym portfelu (wszystkie 8 par), wartość pozycji = cały kapitał (1× kapitał,\nnie 30×). Wejście w dniu, w którym cena po raz pierwszy spada o 5% poniżej średniej (zdarzenie, nie stan); sygnały w czasie,\ngdy pozycja jest otwarta, przepadają. Wyjście tylko wtedy, gdy cena dobije do poziomu średniej z dnia otwarcia transakcji\n(stała cena celu, nie ruchoma średnia); bez stop lossa i bez limitu czasu. Cała dostępna historia D1 (średnia 3-letnia\npotrzebuje ok. 3 lat rozgrzewki). Hipoteza zapisana PRZED liczeniem.",
+   "pairs": [
+    "AUDUSD",
+    "EURGBP",
+    "EURJPY",
+    "EURUSD",
+    "GBPUSD",
+    "USDCAD",
+    "USDCHF",
+    "USDJPY"
+   ],
+   "data_from": 846633600,
+   "data_to": 1794268800,
+   "source": "yahoo",
+   "engine_version": "0.13.0",
+   "best_exit": null,
+   "is_mean_r": null,
+   "oos_mean_r": null,
+   "oos_mean_pips": null,
+   "oos_trades": null,
+   "demo": false,
+   "timeframe": "D1",
+   "d1_background": false
+  },
+  {
    "id": "wSKI1vQ0WgIVXq2m53BL",
    "name": "Powrót",
    "run_id": "20261111-214443",

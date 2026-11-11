@@ -1,0 +1,137 @@
+{
+ "id": "B9Frw4c9qeaUEYDugTlO",
+ "name": "D5",
+ "run_id": "20261111-214455",
+ "engine_version": "0.13.0",
+ "code_hash": "d5b214d5d34d7b4f",
+ "data_hash": "3197cf8521901cb3",
+ "data_source": "yahoo",
+ "timeframe": "D1",
+ "d1_background": false,
+ "d1_hash": null,
+ "candles": "pełne",
+ "pairs": [
+  "AUDUSD",
+  "EURGBP",
+  "EURJPY",
+  "EURUSD",
+  "GBPUSD",
+  "USDCAD",
+  "USDCHF",
+  "USDJPY"
+ ],
+ "params": [
+  {}
+ ],
+ "n_variants": 1,
+ "n_exits": 1,
+ "oos_cutoff": 1557360000,
+ "sizing": [
+  3.333333
+ ],
+ "pyramid": 1,
+ "max_pairs": 1,
+ "pair_rank": [
+  "EURUSD",
+  "USDJPY",
+  "GBPUSD",
+  "EURGBP",
+  "AUDUSD",
+  "USDCHF",
+  "USDCAD",
+  "EURJPY"
+ ],
+ "hours": "D1: open dnia",
+ "data_from": 846633600,
+ "data_to": 1794268800,
+ "data_clean": {
+  "AUDUSD": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 0,
+   "gap_hours": 0,
+   "rejected": 148,
+   "closed_hours": 0
+  },
+  "EURGBP": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 0,
+   "gap_hours": 0,
+   "rejected": 69,
+   "closed_hours": 0
+  },
+  "EURJPY": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 1,
+   "gap_hours": 17,
+   "rejected": 235,
+   "closed_hours": 0
+  },
+  "EURUSD": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 3,
+   "gap_hours": 20,
+   "rejected": 130,
+   "closed_hours": 0
+  },
+  "GBPUSD": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 1,
+   "gap_hours": 3,
+   "rejected": 105,
+   "closed_hours": 0
+  },
+  "USDCAD": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 0,
+   "gap_hours": 0,
+   "rejected": 117,
+   "closed_hours": 0
+  },
+  "USDCHF": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 0,
+   "gap_hours": 0,
+   "rejected": 104,
+   "closed_hours": 0
+  },
+  "USDJPY": {
+   "version": "1",
+   "source": "yahoo",
+   "filled": 0,
+   "gaps": 6,
+   "gap_hours": 29,
+   "rejected": 278,
+   "closed_hours": 0
+  }
+ },
+ "skipped": {
+  "B8": 78,
+  "brak_danych": 0,
+  "rozgrzewka": 0,
+  "poza_godzinami": 0,
+  "luka_danych": 14,
+  "swieca_uzupelniona": 0,
+  "limit_par": 188
+ },
+ "hypothesis": "Kurs, który spadł o 5% poniżej swojej średniej z ok. 3 lat (756 dni handlu), wraca w jej stronę: parytet siły\nnabywczej, bilanse handlowe i polityka banków centralnych działają wolno, ale w skali lat ciągną kurs z powrotem.\nTylko long, BEZ DŹWIGNI: jedna pozycja naraz w całym portfelu (wszystkie 8 par), wartość pozycji = cały kapitał (1× kapitał,\nnie 30×). Wejście w dniu, w którym cena po raz pierwszy spada o 5% poniżej średniej (zdarzenie, nie stan); sygnały w czasie,\ngdy pozycja jest otwarta, przepadają. Wyjście tylko wtedy, gdy cena dobije do poziomu średniej z dnia otwarcia transakcji\n(stała cena celu, nie ruchoma średnia); bez stop lossa i bez limitu czasu. Cała dostępna historia D1 (średnia 3-letnia\npotrzebuje ok. 3 lat rozgrzewki). Hipoteza zapisana PRZED liczeniem.",
+ "trades_rows": 9,
+ "created": 1794433495,
+ "seconds": 1.1,
+ "verdict": "yellow",
+ "frozen_at": null,
+ "frozen_variant": null
+}
