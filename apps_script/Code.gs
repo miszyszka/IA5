@@ -54,6 +54,7 @@ function tick() {
   withLock_(() => {
     run_('tick');
     try { tickD1_(); } catch (e) { log_('tickD1', '-', 0, null, 'BŁĄD ' + e.message); } // D1 nigdy nie zatrzymuje H1
+    try { tickPLN_(); } catch (e) { log_('tickPLN', '-', 0, null, 'BŁĄD ' + e.message); } // D-062: kursy PLN nigdy nie zatrzymują H1 ani D1
   });
 }
 
@@ -520,36 +521,112 @@ function parseYahooD1_(j) {
   return { tz: tz, bars: bars };
 }
 
-function loadD1_() {
-  const raw = PropertiesService.getScriptProperties().getProperty('d1');
-  return raw ? JSON.parse(raw) : { pairs: {}, tz: D1_TZ };
+// ---------- serie dzienne: D1 FX (D-053) i kursy złotówkowe REV (D-062) — ta sama droga, inne listy i kolekcje ----------
+
+const PLN_CODES = ['AED', 'AUD', 'CAD', 'CHF', 'CZK', 'DKK', 'EUR', 'GBP', 'HKD', 'HUF', 'ILS', 'JPY',
+  'MXN', 'NOK', 'NZD', 'QAR', 'RON', 'SAR', 'SEK', 'SGD', 'THB', 'TRY', 'USD', 'ZAR'];   // bez RUB (D-062)
+const PLN_CANDIDATES = PLN_CODES.map(c => ({ name: c, yahoo: c + 'PLN=X', pip: 0.0001 }));
+const PLN_MIN_YEARS = 10;    // R1: „rzadki kurs” — krótsza historia odpada
+const PLN_FRESH_WD = 5;      // ostatnia świeca nie starsza niż 5 dni roboczych od oczekiwanej
+const PLN_FLAT_MAX = 0.05;   // < 5% dni bez ruchu (zamknięcie = poprzednie albo O=H=L=C) w ostatnich 5 latach
+const PLN_FLAT_YEARS = 5;
+
+const SERIES_D1 = { prop: 'd1', collection: 'candles_d1', field: 'd1', key: 'pairs', list: PAIRS, admit: null, slim: false };
+// Z4 (D-062): backfill ≈ 20 walut × ~22 lata ≈ 450 zapisów raz; potem ≈ 20 zapisów dziennie + status
+const SERIES_PLN = { prop: 'pln', collection: 'candles_pln', field: 'pln', key: 'currencies', list: PLN_CANDIDATES, admit: plnAdmission_, slim: true };
+
+function loadSeries_(series) {
+  const raw = PropertiesService.getScriptProperties().getProperty(series.prop);
+  const st = raw ? JSON.parse(raw) : { tz: D1_TZ };
+  st[series.key] = st[series.key] || {};
+  if (series.admit) st.rejected = st.rejected || {};
+  return st;
 }
 
-function saveD1_(st) { PropertiesService.getScriptProperties().setProperty('d1', JSON.stringify(st)); }
+/** Script Properties: limit 9 KB na wartość — przy 24 walutach flagi i czas zapisu idą tylko do meta/status (slim). */
+function saveSeries_(series, st) {
+  let out = st;
+  if (series.slim) {
+    out = Object.assign({}, st);
+    out[series.key] = {};
+    Object.keys(st[series.key]).forEach(k => {
+      const v = Object.assign({}, st[series.key][k]);
+      delete v.flags; delete v.savedAt;
+      out[series.key][k] = v;
+    });
+  }
+  PropertiesService.getScriptProperties().setProperty(series.prop, JSON.stringify(out));
+}
+
+function loadD1_() { return loadSeries_(SERIES_D1); }
+function saveD1_(st) { saveSeries_(SERIES_D1, st); }
+
+/** Ręcznie, raz (D-062): cała historia kursów {WALUTA}PLN=X; waluta bez ≥ 10 lat historii, świeżych notowań albo ruchu
+ *  nie jest zapisywana (powód w meta/status.pln.rejected). Można powtórzyć (upsert, reguła liczona od nowa). */
+function backfillPLN() { withLock_(() => runSeriesD1_(SERIES_PLN, 'backfill', PLN_CANDIDATES, loadSeries_(SERIES_PLN), nowSec())); }
 
 /** Z tick(): tanio — bez zapytań, gdy każda para ma świecę oczekiwanego dnia albo ostatnia próba była < 15 min temu. */
-function tickD1_() {
-  const st = loadD1_();
-  if (!st.backfilled) return;            // najpierw backfillD1() — inaczej liczniki świec nie miałyby sensu
+function tickD1_() { tickSeries_(SERIES_D1); }
+
+/** Z tick() (D-062): to samo dla przyjętych walut REV (tylko te z meta/status.pln.currencies). */
+function tickPLN_() { tickSeries_(SERIES_PLN); }
+
+function tickSeries_(series) {
+  const st = loadSeries_(series);
+  if (!st.backfilled) return;            // najpierw backfill — inaczej liczniki świec nie miałyby sensu
   const now = nowSec();
   const exp = expectedDayD1_(now, st.tz || D1_TZ);
-  const todo = PAIRS.filter(p => !(st.pairs[p.name] && st.pairs[p.name].lastDay >= exp));
+  const items = st[series.key];
+  const list = series.admit ? series.list.filter(p => items[p.name]) : series.list;
+  const todo = list.filter(p => !(items[p.name] && items[p.name].lastDay >= exp));
   if (!todo.length || now - (st.triedAt || 0) < D1_RETRY_S) return;
   st.triedAt = now;
-  saveD1_(st);
-  runD1_('tick', todo, st, now);
+  saveSeries_(series, st);
+  runSeriesD1_(series, 'tick', todo, st, now);
 }
 
-function runD1_(mode, todo, st, now) {
+function runD1_(mode, todo, st, now) { runSeriesD1_(SERIES_D1, mode, todo, st, now); }
+
+/** Dni robocze między dwoma dniami 'RRRR-MM-DD' (od a wyłącznie do b włącznie). */
+function workdaysBetween_(a, b) {
+  let n = 0;
+  for (let d = b; d > a && n < 400; d = prevDay_(d)) if (isExpectedDay_(d)) n++;
+  return n;
+}
+
+/** R1 (D-062): czy kurs nie jest „rzadki”. null = przyjęty, inaczej powód po polsku. bars: zamknięte dni (b.day, b.o…b.c). */
+function plnAdmission_(bars, now, tz) {
+  if (!bars.length) return 'Yahoo nie zwraca notowań';
+  const today = localStamp_(now - 60, tz).slice(0, 10);
+  const limit = (Number(today.slice(0, 4)) - PLN_MIN_YEARS) + today.slice(4);
+  const first = bars[0].day, last = bars[bars.length - 1].day;
+  if (first > limit) return 'historia od ' + first + ' — krótsza niż ' + PLN_MIN_YEARS + ' lat';
+  const behind = workdaysBetween_(last, expectedDayD1_(now, tz));
+  if (behind > PLN_FRESH_WD) return 'brak świeżych notowań (ostatni dzień ' + last + ')';
+  const since = (Number(today.slice(0, 4)) - PLN_FLAT_YEARS) + today.slice(4);
+  let n = 0, flat = 0;
+  for (let i = 1; i < bars.length; i++) {
+    if (bars[i].day < since) continue;
+    n++;
+    const b = bars[i];
+    if (b.c === bars[i - 1].c || (b.o === b.h && b.h === b.l && b.l === b.c)) flat++;
+  }
+  if (n && flat / n >= PLN_FLAT_MAX) return 'dni bez ruchu ' + Math.round(100 * flat / n) + '% w ostatnich ' + PLN_FLAT_YEARS + ' latach';
+  return null;
+}
+
+function runSeriesD1_(series, mode, todo, st, now) {
   const errors = [];
   const updated = {};
+  const items = st[series.key];
+  const rejectedBefore = JSON.stringify(st.rejected || {});
   todo.forEach(p => {
     try {
       const params = 'interval=1d&' + (mode === 'backfill' ? 'period1=0&period2=' + now : 'range=10d');
       const got = fetchYahooRaw_(p.yahoo, params, parseYahooD1_);
       const tz = st.tz = got.tz;
       const today = localStamp_(now - 60, tz).slice(0, 10);
-      const ps = mode === 'backfill' ? { lastTs: 0, count: 0, last: [] } : (st.pairs[p.name] || { lastTs: 0, count: 0, last: [] });
+      const ps = mode === 'backfill' ? { lastTs: 0, count: 0, last: [] } : (items[p.name] || { lastTs: 0, count: 0, last: [] });
       const flags = [];
       const bars = [];
       got.bars.forEach(b => {
@@ -559,9 +636,19 @@ function runD1_(mode, todo, st, now) {
         if (loc.slice(11) !== '00:00:00') { flags.push('ts@' + b.day); return; } // nie świeca dnia — flaga, nie cicha naprawa
         bars.push(b);
       });
+      if (series.admit && mode === 'backfill') {                    // D-062: rzadki kurs — bez zapisu, powód w statusie
+        const why = series.admit(bars, now, tz);
+        if (why) {
+          st.rejected[p.name] = why;
+          delete items[p.name];
+          log_('PLN ' + mode, p.name, 0, null, 'odrzucona: ' + why);
+          return;
+        }
+        delete st.rejected[p.name];
+      }
       const from = mode === 'backfill' ? 0 : ps.lastTs - D1_KEEP * 86400;
       const keep = bars.filter(b => b.ts >= from);
-      if (!keep.length) { if (flags.length) log_('D1 ' + mode, p.name, 0, null, flags.slice(0, 5).join(' ')); return; }
+      if (!keep.length) { if (flags.length) log_(series.field + ' ' + mode, p.name, 0, null, flags.slice(0, 5).join(' ')); return; }
       keep.forEach(b => {
         if (!(b.o > 0 && b.h > 0 && b.l > 0 && b.c > 0)) flags.push('cena<=0@' + b.day);
         if (b.h < Math.max(b.o, b.c) || b.l > Math.min(b.o, b.c)) flags.push('ohlc@' + b.day);
@@ -571,7 +658,7 @@ function runD1_(mode, todo, st, now) {
       const fresh = keep.filter(b => b.ts > ps.lastTs);
       // ponowienie bez nowego dnia i bez korekty Yahoo — bez zapisu (Z4)
       if (mode === 'tick' && !fresh.length && !flags.some(f => f.startsWith('revised'))) return;
-      writeBarsD1_(p.name, keep, tz);
+      writeBarsSeries_(series.collection, p.name, keep, tz);
       const newest = keep[keep.length - 1];
       ps.count = mode === 'backfill' ? keep.length : ps.count + fresh.length;
       if (mode === 'backfill' || !ps.firstDay) ps.firstDay = keep[0].day;
@@ -580,27 +667,33 @@ function runD1_(mode, todo, st, now) {
       ps.last = keep.slice(-D1_KEEP).map(b => ({ ts: b.ts, c: b.c }));
       ps.flags = flags.slice(-10);
       ps.savedAt = nowSec();
-      st.pairs[p.name] = ps;
+      items[p.name] = ps;
       updated[p.name] = { firstDay: ps.firstDay, lastTs: ps.lastTs, lastDay: ps.lastDay, count: ps.count, flags: ps.flags, savedAt: ps.savedAt };
-      log_('D1 ' + mode, p.name, fresh.length, null, (ps.firstDay + ' – ' + ps.lastDay + ' ' + flags.slice(0, 5).join(' ')).trim());
+      log_(series.field + ' ' + mode, p.name, fresh.length, null, (ps.firstDay + ' – ' + ps.lastDay + ' ' + flags.slice(0, 5).join(' ')).trim());
     } catch (e) {
       errors.push(p.name + ': ' + e.message);
-      log_('D1 ' + mode, p.name, 0, null, 'BŁĄD ' + e.message);
+      log_(series.field + ' ' + mode, p.name, 0, null, 'BŁĄD ' + e.message);
     }
   });
   if (mode === 'backfill' && !errors.length) st.backfilled = true;
-  saveD1_(st);
+  saveSeries_(series, st);
+  const rejectedChanged = series.admit && JSON.stringify(st.rejected) !== rejectedBefore;
   if (mode === 'tick' && !Object.keys(updated).length && !errors.length) return;
-  const total = PAIRS.reduce((s, p) => s + ((st.pairs[p.name] || {}).count || 0), 0);
+  const total = Object.keys(items).reduce((s, k) => s + ((items[k] || {}).count || 0), 0);
   const fields = { tz: st.tz || D1_TZ, totalBars: total,
-    lastRun: { mode: mode, at: nowSec(), ok: !errors.length, error: errors.join('; ') || null }, pairs: updated };
-  const paths = ['d1.tz', 'd1.totalBars', 'd1.lastRun'].concat(Object.keys(updated).map(p => 'd1.pairs.' + p));
-  commit_([{ update: { name: DB + '/documents/meta/status', fields: { d1: toValue_(fields) } }, updateMask: { fieldPaths: paths } }]);
-  if (errors.length && mode === 'backfill') throw new Error('backfillD1: ' + errors.join('; '));
+    lastRun: { mode: mode, at: nowSec(), ok: !errors.length, error: errors.join('; ') || null } };
+  fields[series.key] = updated;
+  const f = series.field;
+  const paths = [f + '.tz', f + '.totalBars', f + '.lastRun'].concat(Object.keys(updated).map(k => f + '.' + series.key + '.' + k));
+  if (series.admit && (mode === 'backfill' || rejectedChanged)) { fields.rejected = st.rejected; paths.push(f + '.rejected'); }
+  const value = {};
+  value[f] = toValue_(fields);
+  commit_([{ update: { name: DB + '/documents/meta/status', fields: value }, updateMask: { fieldPaths: paths } }]);
+  if (errors.length && mode === 'backfill') throw new Error('backfill ' + f + ': ' + errors.join('; '));
 }
 
-/** candles_d1/{PARA}_{RRRR} (rok wg dnia w strefie Yahoo): pola pair, year, tz, bars { ts: [o, h, l, c] } — upsert (D3). */
-function writeBarsD1_(pair, bars, tz) {
+/** {kolekcja}/{NAZWA}_{RRRR} (rok wg dnia w strefie Yahoo): pola pair, year, tz, bars { ts: [o, h, l, c] } — upsert (D3). */
+function writeBarsSeries_(collection, pair, bars, tz) {
   const groups = {};
   bars.forEach(b => { const y = b.day.slice(0, 4); (groups[y] = groups[y] || []).push(b); });
   commit_(Object.keys(groups).map(y => {
@@ -612,7 +705,7 @@ function writeBarsD1_(pair, bars, tz) {
     });
     return {
       update: {
-        name: DB + '/documents/candles_d1/' + pair + '_' + y,
+        name: DB + '/documents/' + collection + '/' + pair + '_' + y,
         fields: { pair: { stringValue: pair }, year: { stringValue: y }, tz: { stringValue: tz }, bars: { mapValue: { fields: fields } } },
       },
       updateMask: { fieldPaths: paths },
@@ -620,6 +713,8 @@ function writeBarsD1_(pair, bars, tz) {
     };
   }));
 }
+
+function writeBarsD1_(pair, bars, tz) { writeBarsSeries_('candles_d1', pair, bars, tz); }
 
 // ---------- Firestore (REST, upsert przez commit z updateMask — D3, bez odczytów) ----------
 
