@@ -2,6 +2,15 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-11 (późny wieczór) — odporność na pustą próbę IS/OOS (D-066), CLAUDE.md 0.54
+
+**Zrobione**
+- `variant_table`: próba IS albo OOS bez transakcji = puste metryki, nie `KeyError` (D-066). Powód: strategia D1 „bez dźwigni, cały kapitał, jedna pozycja naraz, wyjście tylko na średniej” ma na prawdziwych danych 9 transakcji i zero w OOS. Silnik bez zmian (0.13.0).
+
+**Następne / do uwagi Michała**
+1. Na Macu: `git pull && uv tool install -e runner --force`, restart `ia5 start`; wkleić strategię i policzyć ponownie.
+2. Ta strategia prawie nie handluje (jedna pozycja wisi od 2014) — ewentualny wariant: kapitał dzielony na 8 par (każda 1/8 nominału, nadal bez dźwigni).
+
 ## 2026-11-11 (wieczór) — REV wersja 2 (D-064, D-065), CLAUDE.md 0.53
 
 **Pierwsze badanie na prawdziwych kursach (REV 1):** 8 walut obcych + PLN (AUD, CHF, EUR, GBP, JPY, NZD, SGD, USD); zwycięzca V5-P (przecena 5 lat, proporcjonalnie), 🟡 4/5: nadwyżka OOS +1,5% rocznie nad równym podziałem, percentyl losowych 96,8, PBO 0,29, opóźnienie +1,2%; DSR 0,43. Krzywa spadała w latach umacniania się złotego (2023, 2025) — limit 50% na PLN wymuszał ≥ 50% w walutach obcych.

@@ -5,6 +5,12 @@ Najnowsze na górze.
 
 ---
 
+### D-066 · 2026-11-11 · Liczenie nie pada, gdy IS albo OOS nie ma żadnej transakcji
+- **Decyzja:** `variant_table` (backtest) przy próbie IS lub OOS bez ani jednej transakcji zostawia puste metryki tej próby (NaN) zamiast rzucać `KeyError: variant_id`. Karta strategii pokazuje wtedy to, co jest (np. „żaden wariant nie ma 30 transakcji IS”).
+- **Powód:** strategia na D1 „jedna pozycja naraz w całym portfelu, wyjście tylko na średniej, bez limitu czasu” (bez dźwigni, cały kapitał) na prawdziwych danych dała 9 transakcji, z których ostatnia (AUD/USD od 2014) wisi otwarta do dziś i blokuje resztę — OOS (od 2019) nie ma żadnej transakcji, a liczenie kończyło się błędem zamiast raportem.
+- **Zakres:** tylko odporność na pustą próbę; logika transakcji i wyniki bez zmian (`ENGINE_VERSION` 0.13.0). Test: `test_variant_table_with_empty_oos_sample_d066`.
+- **Odrzucone:** wymuszanie minimalnej liczby transakcji w próbie przed liczeniem (ukrywałoby właśnie ten wynik, który mówi, że strategia prawie nie handluje).
+
 ### D-065 · 2026-11-11 · REV wersja 2: zawór złotówkowy, hamulec zmienności, „nie sprzedawaj na stracie”, PLN do 75%, wybór po Sharpe w PLN
 - **Decyzja (Michał: „Chciałbym metodę, która konsekwentnie będzie iść w górę … wymyśl coś”; na pytanie o limit PLN: „B”):** nowy turniej REV (`REV_VERSION` 2) — 12 metod podstawowych × 5 odmian (bez nakładki, zawór 26 tyg., zawór 52 tyg., hamulec zmienności, „nie sprzedawaj na stracie”) + przełącznik = 61 wariantów. Przy zaworze albo hamulcu PLN może mieć do 75% (zmiana R4); waluty obce i bloki zawsze ≤ 50%. Szczegóły i reguły: projekt REV §10 — spisane przed liczeniem.
 - **Kryterium wyboru:** Sharpe tygodniowych zwrotów kapitału w PLN na IS (cel: wzrost w złotych z małymi wahaniami), zamiast IR wobec równego podziału; DSR i PBO na tej mierze (61 prób). Werdykt, testy potwierdzające i odcinki bez zmian (te same daty co REV 1).

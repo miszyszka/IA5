@@ -275,3 +275,21 @@ def test_duration_section_d062():
     sb = _duration_section(big)
     assert "OTWARTA" in sb and f"({DURATION_ROWS} z {n})" in sb
     assert _duration_section(pd.DataFrame()) == ""
+
+
+def test_variant_table_with_empty_oos_sample_d066():
+    """D-066: wariant, który ma transakcje tylko w IS (np. jedna pozycja trzymana latami), nie wywala liczenia — OOS = puste metryki."""
+    from ia5.backtest import variant_table
+
+    n = 3
+    outcomes = pd.DataFrame({
+        "variant_id": [0] * n, "sample": ["IS"] * n, "pips_net": [100.0, -50.0, 30.0], "r_net": [1.0, -0.5, 0.3],
+        "ambiguous": [False] * n, "bars": [10, 20, 30], "nights": [1, 2, 3],
+    })
+    res = {"outcomes": outcomes, "variants": pd.DataFrame({"variant_id": [0], "exit": ["x"]})}
+    v = variant_table(res)
+    assert v.loc[0, "is_trades"] == 3 and v.loc[0, "all_trades"] == 3
+    assert pd.isna(v.loc[0, "oos_trades"]) and pd.isna(v.loc[0, "oos_exp_pips"])
+    outcomes["sample"] = "OOS"                                   # i odwrotnie: wszystko w OOS, IS puste
+    v = variant_table(res)
+    assert v.loc[0, "oos_trades"] == 3 and pd.isna(v.loc[0, "is_trades"]) and pd.isna(v.loc[0, "rank_is"])

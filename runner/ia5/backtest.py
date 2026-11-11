@@ -85,8 +85,10 @@ def variant_table(res: dict) -> pd.DataFrame:
     if o.empty:
         v["rank_is"] = np.nan
         return v
+    full = summarize(o).set_index("variant_id")
     for name, part in (("all", o), ("is", o[o["sample"] == "IS"]), ("oos", o[o["sample"] == "OOS"])):
-        s = summarize(part).set_index("variant_id").add_prefix(f"{name}_")
+        # D-066: próba bez ani jednej transakcji (np. jedna pozycja trzymana latami) = puste metryki, nie błąd
+        s = (summarize(part).set_index("variant_id") if len(part) else full.iloc[0:0]).add_prefix(f"{name}_")
         v = v.join(s, on="variant_id")
     ok = v["is_trades"].fillna(0) >= MIN_TRADES
     v["rank_is"] = v["is_exp_r"].where(ok).rank(ascending=False, method="first")
