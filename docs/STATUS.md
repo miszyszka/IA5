@@ -2,6 +2,25 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-11 (popołudnie) — REV: kapitał PLN na przecenione waluty (D-063), CLAUDE.md 0.51
+
+**Zrobione (na prośbę Michała; projekt `docs/superpowers/specs/2026-11-11-rev-design.md` zatwierdzony, plan `docs/superpowers/plans/2026-11-11-rev.md`)**
+- **R0 Dane:** Apps Script `backfillPLN()` (24 kandydatów `{WALUTA}PLN=X`, bez RUB; reguła przyjęcia: ≥ 10 lat, świeże notowania, < 5% dni bez ruchu — odrzucona waluta nie jest zapisywana) i `tickPLN_` (dzień po dniu jak D1) → Firestore `candles_pln/*`, `meta/status.pln`. Mac i Actions: kopia `data/yahoo_pln/`, warstwa czyszczenia tylko zamknięć (`rev_data.clean_pln`: powtórzenia, wyskoki, przeskalowania ×10/×100, bezpiecznik dnia decyzji) → `data/pln_ready/`, publikacja `candles_pln/`. Kontrola zdrowia „Kursy złotówkowe (REV)” (świeżość, kopia = Firestore, test krzyżowy z D1 FX, sztywne kursy bloków).
+- **R1 Badanie metody:** `rev_method` (ceny względem łańcuchowego koszyka z PLN, przecena wobec trendu liniowego 3/5 lat, trend 3/12 mies., kombinacje, podział proporcjonalny / ranking, limit 50% na koszyk i blok, pasmo 2 p.p.), `rev_research` (13 wariantów z przełącznikiem, IS 75% / OOS stałe daty, losowe podziały, DSR, PBO, bootstrap, opóźnienie o dzień, werdykt, raport, dziennik OOS). `ia5 rev badanie|krok|status`; badanie samo przy `ia5 start` (gdy brak albo inna `REV_VERSION`).
+- **R2 Portfel na żywo:** `rev_live.live_step` — wtorek 08:00 po zamknięciu poniedziałku (spóźniona świeca: najpóźniej 20:00), wycena każdego dnia roboczego, dziennik tylko dopisywany, równy podział obok, przeskalowania, nadrabianie = krok po kroku (test). Liczy `ia5 live` w GitHub Actions co godzinę, Mac zapasowo (jak inwestorzy).
+- **R3 Zakładka REV:** kapitał teraz i od startu, odliczanie do wtorku, słupki „gdzie jest kapitał” z linią 50%, kapitał w złotówkach dzień po dniu (z równym podziałem i 10 000 zł), ranking, transakcje + CSV, badanie metody z walidacją i raportem dla Claude. Sprawdzone w przeglądarce na danych przykładowych (`scripts/rev_fixture.py`, kursy zmyślone).
+- Numer decyzji: REV = **D-063** (D-062 zajęła równoległa sesja — czas trwania transakcji).
+
+**Następne — kroki Michała**
+1. Apps Script: wklej nowy `Code.gs`, uruchom raz `backfillPLN()` (kilka minut; w arkuszu `log` przyjęte i odrzucone waluty), potem `installTrigger()`.
+2. Mac: `cd /Users/szyszka/IA5 && git pull && uv tool install -e runner --force`, restart `ia5 start` — kopia kursów PLN, potem badanie REV (ok. minuty), zakładka REV pokaże wynik; portfel startuje w najbliższy wtorek 08:00.
+3. Napisz Claude'owi po pierwszym badaniu: D-064 z listą przyjętych walut, datami odcinków IS/OOS i werdyktem.
+
+**Znane ograniczenia**
+- Badanie i rzadkie kursy sprawdzone tylko na danych syntetycznych i w symulacji Apps Script (Yahoo niedostępne z sesji Claude) — pierwsze prawdziwe pobranie rozstrzygnie, które waluty wejdą.
+- Model wymienia po zamknięciu poniedziałku, Michał we wtorek ok. 08:00 (test opóźnienia o dzień w walidacji); bez odsetek od sald.
+- Przy rankingu wag zmiany udziałów bywają częste (kilka koszyków tygodniowo mimo pasma 2 p.p.) — liczba zmian rocznie jest w raporcie i w zakładce.
+
 ## 2026-11-11 (noc) — czas trwania transakcji i status otwarta/zamknięta (D-062), CLAUDE.md 0.50
 
 **Zrobione (na prośbę Michała)**
