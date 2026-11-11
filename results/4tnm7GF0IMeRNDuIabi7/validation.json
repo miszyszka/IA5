@@ -34,10 +34,10 @@
  "benchmark": {
   "sims": 1000,
   "actual_mean_pips": 5.373324,
-  "percentile": 99.9,
-  "p5": -5.199961,
-  "p50": -0.841249,
-  "p95": 2.980045
+  "percentile": 99.8,
+  "p5": -4.947152,
+  "p50": -0.782163,
+  "p95": 2.727986
  },
  "dsr": {
   "dsr": 0.755567,
@@ -49,7 +49,7 @@
   "kurtosis": 10.488005
  },
  "pbo": {
-  "pbo": 0.15237,
+  "pbo": 0.159984,
   "variants": 24,
   "combinations": 12870,
   "blocks": 16,
@@ -193,12 +193,12 @@
    {
     "test": "percentyl benchmarku ≥ 95",
     "ok": true,
-    "value": 99.9
+    "value": 99.8
    },
    {
     "test": "PBO < 0,3",
     "ok": true,
-    "value": 0.15237
+    "value": 0.159984
    },
    {
     "test": "DSR ≥ 0,95",
