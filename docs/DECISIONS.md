@@ -5,6 +5,13 @@ Najnowsze na górze.
 
 ---
 
+### D-065 · 2026-11-11 · REV wersja 2: zawór złotówkowy, hamulec zmienności, „nie sprzedawaj na stracie”, PLN do 75%, wybór po Sharpe w PLN
+- **Decyzja (Michał: „Chciałbym metodę, która konsekwentnie będzie iść w górę … wymyśl coś”; na pytanie o limit PLN: „B”):** nowy turniej REV (`REV_VERSION` 2) — 12 metod podstawowych × 5 odmian (bez nakładki, zawór 26 tyg., zawór 52 tyg., hamulec zmienności, „nie sprzedawaj na stracie”) + przełącznik = 61 wariantów. Przy zaworze albo hamulcu PLN może mieć do 75% (zmiana R4); waluty obce i bloki zawsze ≤ 50%. Szczegóły i reguły: projekt REV §10 — spisane przed liczeniem.
+- **Kryterium wyboru:** Sharpe tygodniowych zwrotów kapitału w PLN na IS (cel: wzrost w złotych z małymi wahaniami), zamiast IR wobec równego podziału; DSR i PBO na tej mierze (61 prób). Werdykt, testy potwierdzające i odcinki bez zmian (te same daty co REV 1).
+- **Dlaczego:** w REV 1 metoda biła równy podział także na OOS (+1,5% rocznie, percentyl 96,8), ale krzywa spadała, gdy umacniał się złoty — limit 50% na PLN wymuszał ≥ 50% w walutach obcych. Jedyna dźwignia na „równiejszy wzrost” w złotówkach bez odsetek to mniej walut obcych, gdy złoty się umacnia.
+- **Uczciwość:** drugie otwarcie OOS (dziennik OOS); sprawdzian nie jest już czysty — rozstrzyga wynik na żywo. Portfel REV 1 do archiwum, nowy start od razu (D-064).
+- **Odrzucone:** wycena tylko przy przewalutowaniach (zmienia obraz, nie pieniądze); PLN do 100% (wybór Michała: 75%); „nie sprzedawaj na stracie” bez testu (na innych rynkach zwykle obniża wynik — jest wariantem, rozstrzygną dane).
+
 ### D-064 · 2026-11-11 · REV: pierwszy podział od razu po badaniu, nie w najbliższy wtorek
 - **Decyzja (Michał: „A możemy zrobić już pierwszy podział teraz?”):** portfel REV startuje w chwili zamrożenia metody po badaniu (`research.frozen.at`), a nie w najbliższy wtorek 08:00. Pierwszy podział: zamrożoną metodą, po cenie zamknięcia ostatniego zamkniętego dnia przed startem (w środę po południu — wtorek). Potem bez zmian: co wtorek 08:00 po zamknięciu poniedziałku (R2). To samo przy nowym starcie po zmianie metody (R6).
 - **Jak:** pierwszy podział poza wtorkiem liczony na tygodniowej siatce kończącej się w chwili startu (oceny mają te same odstępy tygodniowe co w badaniu); gotowość jak we wtorek (świeca ostatniego dnia roboczego, najpóźniej 12 h). Mac robi pierwszy podział od razu po badaniu, nawet gdy portfel normalnie liczy GitHub Actions — dalej liczy Actions.

@@ -1,6 +1,6 @@
 # REV — kapitał w złotówkach rozłożony na przecenione waluty · projekt
 
-Wersja 0.4 · 2026-11-11 · Status: **zatwierdzony przez Michała 2026-11-11 12:22** („Wszystko super — działaj”) · Plan: `docs/superpowers/plans/2026-11-11-rev.md` · Decyzja: D-063.
+Wersja 0.5 · 2026-11-11 · Status: **zatwierdzony przez Michała 2026-11-11 12:22** („Wszystko super — działaj”) · Plan: `docs/superpowers/plans/2026-11-11-rev.md` · Decyzja: D-063.
 Zmiany 0.2 (po recenzji budującego): własna warstwa czyszczenia kursów PLN (tylko zamknięcia, 6.2), reguła spóźnionej świecy poniedziałku (6.3), odcinki IS / OOS / na żywo z datą graniczną i zasady ponownego badania (6.3), przełącznik na żywo (6.3), okresy dla każdego testu werdyktu (6.3).
 
 ---
@@ -241,3 +241,27 @@ Każdy etap: testy zielone → push → `STATUS.md` → działa na żywej stroni
 12. Odcinki IS / OOS / na żywo z datami ustalonymi przy pierwszym badaniu; ponowne badanie tylko z nową `REV_VERSION`; zamrożenie automatyczne.
 13. Przełącznik na żywo liczy zwroty 12 wariantów z cen (bez portfeli „w cieniu”).
 14. Testy werdyktu: losowe podziały, bootstrap i opóźnienie na OOS, DSR na IS, PBO na całości.
+
+## 10. REV_VERSION 2 — stabilniejszy wzrost (D-065, spisane przed liczeniem)
+
+**Po co (Michał, 15:51):** „Chciałbym metodę, która konsekwentnie będzie iść w górę … wymyśl coś, żeby to było bardziej efektywne.” Pierwsze badanie (REV 1) pokazało, że metoda biła równy podział także na sprawdzianie, ale cała krzywa spadała w latach umacniania się złotego — przy limicie 50% na PLN co najmniej połowa kapitału zawsze jest w walutach obcych. Odpowiedź Michała na pytanie o limit PLN: **„B” — PLN do 75%, ale tylko gdy działa zawór albo hamulec**; poza tym 50% jak dotąd.
+
+**Co się nie zmienia:** dane, koszyki i bloki, rytm (wtorek 08:00; pierwszy podział od razu — D-064), pasmo 2 p.p., limit 50% dla walut obcych i bloków, odcinki IS/OOS (te same daty co w REV 1 — R5), losowe podziały, bootstrap, test opóźnienia, progi werdyktu.
+
+**Nowe nakładki** — każda z 12 metod podstawowych (6 ocen × P/R) w 5 odmianach, razem **60 + przełącznik = 61 wariantów**:
+
+| Kod | Nazwa | Reguła (tylko z przeszłych cen) |
+|---|---|---|
+| — | bez nakładki | jak w REV 1 |
+| `+Z26` | zawór złotówkowy, 6 mies. | indeks walut obcych wobec PLN (łańcuchowa średnia tygodniowych zmian ln kursu koszyków poza PLN) spadł przez ostatnie 26 tygodni (złoty się umacnia) → PLN co najmniej 75%, reszta proporcjonalnie |
+| `+Z52` | zawór złotówkowy, 12 mies. | to samo dla 52 tygodni |
+| `+H` | hamulec zmienności | odchylenie tygodniowych zmian indeksu z 13 tygodni > 1,5 × mediana tego odchylenia z 260 tygodni → PLN co najmniej 75% |
+| `+S` | nie sprzedawaj na stracie (pomysł Michała) | koszyk, którego kurs jest poniżej średniej ceny zakupu, nie jest sprzedawany (można go dokupić); wyjątek: udział ponad limit 50% — wtedy sprzedaż do limitu |
+
+Przy włączonym zaworze albo hamulcu limit PLN = 75% (R4 po zmianie); poza nimi 50%. Waluty obce i bloki zawsze ≤ 50%.
+
+**Kryterium wyboru (zmiana):** zamiast IR wobec równego podziału — **Sharpe tygodniowych zwrotów kapitału w PLN na IS** (średnia / odchylenie × √52). To mierzy dokładnie cel Michała: wzrost w złotówkach przy możliwie małych wahaniach. DSR i PBO liczone na tej samej mierze (61 prób). Przełącznik wybiera co 13 tygodni wariant o najwyższym Sharpe z ostatnich 156 tygodni. W raporcie i w zakładce dochodzą: Sharpe, % okien 52 tyg. ze wzrostem, największy spadek z wyceny dziennej.
+
+**Uczciwość:** REV 1 otworzył już OOS, a wykres historii widzieliśmy — nowy turniej to drugie otwarcie (wpis w dzienniku OOS) i jego sprawdzian nie jest już czysty. Dlatego reguły i parametry nakładek są spisane tu, zanim cokolwiek policzymy, a rozstrzygnie wynik na żywo. Portfel REV 1 trafia do archiwum, nowy startuje od razu po badaniu (D-064).
+
+**Odrzucone:** liczenie wartości tylko przy przewalutowaniach (zmienia wykres, nie pieniądze — zasada uczciwości wykresów); PLN do 100% (Michał wybrał 75%); dobieranie parametrów nakładek pod wynik sprawdzianu.
