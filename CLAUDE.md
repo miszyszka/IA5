@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.50 · 2026-11-11 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku; `ia5 search` (D-044); zakładka Inwestorzy (D-045); eksperyment FOREST (D-048, v2: D-049); świece dzienne D1 (D-053); silnik 0.10.0: noce, obsunięcie z MAE, uczciwy forward, wyjście „level” (D-054–D-057); silnik 0.11.0: strategie na D1 i tło D1 dla H1 (D-058); przegląd D1 bez fałszywego alarmu o OHLC Yahoo (D-059); samonaprawa danych i prosty „Stan systemu”, silnik 0.12.0 (D-060); silnik 0.13.0: wyjście bez limitu czasu — wyjątek od B7 (D-061); czas trwania transakcji i status „otwarta/zamknięta” w raporcie i tabeli transakcji (D-062) — `docs/STATUS.md`
+Wersja 0.51 · 2026-11-11 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku; `ia5 search` (D-044); zakładka Inwestorzy (D-045); eksperyment FOREST (D-048, v2: D-049); świece dzienne D1 (D-053); silnik 0.10.0: noce, obsunięcie z MAE, uczciwy forward, wyjście „level” (D-054–D-057); silnik 0.11.0: strategie na D1 i tło D1 dla H1 (D-058); przegląd D1 bez fałszywego alarmu o OHLC Yahoo (D-059); samonaprawa danych i prosty „Stan systemu”, silnik 0.12.0 (D-060); silnik 0.13.0: wyjście bez limitu czasu — wyjątek od B7 (D-061); czas trwania transakcji i status „otwarta/zamknięta” w raporcie i tabeli transakcji (D-062); REV — kapitał PLN na przecenione waluty, kursy walut do PLN (D-063) — `docs/STATUS.md`
 
 ---
 
@@ -12,9 +12,10 @@ Wersja 0.50 · 2026-11-11 · Status: E0–E5 zbudowane (kod); uruchomienie na Ma
 IA5 to laboratorium do **szukania i weryfikowania** strategii FX na świecach godzinowych (H1) i dziennych (D1, cała historia Yahoo — D-058).
 Dashboard ma odpowiadać na dwa pytania naraz: *ile strategia by zarobiła* i *czy to nie przypadek*.
 
-Zakres teraz: system świec + program na Macu (`ia5`) + dashboard (zakładki **Strategie**, **Stats**, **Inwestorzy**, **FOREST**).
+Zakres teraz: system świec + program na Macu (`ia5`) + dashboard (zakładki **Strategie**, **Stats**, **Inwestorzy**, **FOREST**, **REV**).
 Zakładka **Inwestorzy** (D-045): wirtualni inwestorzy — paper trading wybranymi strategiami od chwili dodania, na żywych świecach Yahoo.
 Zakładka **FOREST** (D-048, v2: D-049): demokratyczny eksperyment — do 1000 reguł mówi tylko wtedy, gdy ma co powiedzieć, Manager wchodzi przy szerokiej zgodzie, a las odświeża się co 4 tygodnie.
+Zakładka **REV** (D-063): wirtualne 10 000 zł rozkładane co wtorek o 08:00 na waluty względnie tanie wobec złotego (limit 50% na koszyk), metodą wybraną w uczciwym turnieju na ~20 latach kursów walut do PLN; bez spreadów i opłat.
 
 ---
 
@@ -27,7 +28,7 @@ Zakładka **FOREST** (D-048, v2: D-049): demokratyczny eksperyment — do 1000 r
 - **D4.** Dane surowe są niezmienne. Czyszczenie (weekendowe świece, odrzucone błędy) to osobna, jawna i wersjonowana warstwa.
 - **D5.** Każda świeca przechodzi kontrolę jakości (kalendarz sesji bez weekendów i świąt 24/25.12 i 31.12/1.01 — D-028): `high ≥ max(open, close)`, `low ≤ min(open, close)`, ceny > 0, `ts % 3600 == 0`, brak luk w sesji (tydzień FX: niedziela ~21/22:00 → piątek ~21/22:00 UTC, zależnie od czasu letniego w USA), test krzyżowy par (EUR/JPY ≈ EUR/USD × USD/JPY; EUR/GBP ≈ EUR/USD ÷ GBP/USD). Naruszenie = flaga w statusie. Od D-060 system **sam naprawia** to, co da się naprawić (samonaprawa Apps Script co 6 h, uzupełnianie średnią na Macu), a flagi są sprawdzane na danych — naprawione znikają; każda naprawa jest policzona i widoczna w „Szczegółach” Stats.
 - **D6.** Każdy wynik backtestu zapisuje hash danych, hash kodu strategii i `ENGINE_VERSION`. Wynik bez tych trzech pól nie istnieje.
-- **D7.** **Jedno źródło cen: Yahoo** (Apps Script → Firestore → kopia na Macu) — do backtestów, forward testów, skanera i monitoringu (D-039). Innych źródeł nie używamy ani nie doklejamy; dane z `research/` służą tylko do szukania hipotez, nigdy do liczenia wyników. Dwie serie: **świece H1** — historia ok. 730 dni wstecz (tyle udostępnia Yahoo), rośnie z każdą godziną; **świece dzienne D1** (D-053) — cała historia, jaką Yahoo ma (dla par FX od ok. 2003), rośnie o każdy dzień. Silnik i inwestorzy liczą na H1 albo — gdy strategia ustawi `TIMEFRAME = "D1"` — na D1; strategia H1 może też czytać zamknięte świece dzienne jako tło (`ind.d1`, `ind.d1_to_h1`) (D-058). Skaner, `ia5 search` i las liczą tylko na H1. **Lokalnie na Macu tylko świece Yahoo** (`data/yahoo/` H1 i `data/yahoo_d1/` D1 — po 8 par) i dane do liczenia zbudowane z nich (`data/h1_ready/`, `data/d1_ready/`); wszystko inne w `~/.ia5/data` `ia5 start` usuwa przy każdym starcie i synchronizacji, a silnik odmawia liczenia na danych, których opis nie mówi „yahoo” (D-041).
+- **D7.** **Jedno źródło cen: Yahoo** (Apps Script → Firestore → kopia na Macu) — do backtestów, forward testów, skanera i monitoringu (D-039). Innych źródeł nie używamy ani nie doklejamy; dane z `research/` służą tylko do szukania hipotez, nigdy do liczenia wyników. Trzy serie: **świece H1** — historia ok. 730 dni wstecz (tyle udostępnia Yahoo), rośnie z każdą godziną; **świece dzienne D1** (D-053) — cała historia, jaką Yahoo ma (dla par FX od ok. 2003), rośnie o każdy dzień; **kursy złotówkowe D1** (D-063) — `{WALUTA}PLN=X`, cała historia Yahoo, tylko do REV (sekcja R). Silnik i inwestorzy liczą na H1 albo — gdy strategia ustawi `TIMEFRAME = "D1"` — na D1; strategia H1 może też czytać zamknięte świece dzienne jako tło (`ind.d1`, `ind.d1_to_h1`) (D-058). Skaner, `ia5 search` i las liczą tylko na H1. **Lokalnie na Macu tylko świece Yahoo** (`data/yahoo/` H1 i `data/yahoo_d1/` D1 — po 8 par; `data/yahoo_pln/` — kursy PLN przyjętych walut) i dane do liczenia zbudowane z nich (`data/h1_ready/`, `data/d1_ready/`, `data/pln_ready/`); wszystko inne w `~/.ia5/data` `ia5 start` usuwa przy każdym starcie i synchronizacji, a silnik odmawia liczenia na danych, których opis nie mówi „yahoo” (D-041).
 - **D7a.** Świeca D1 (D-053): znacznik = czas otwarcia = **północ dnia w strefie Yahoo** (dla par FX `Europe/London`: zimą 00:00 UTC, latem 23:00 UTC dnia poprzedniego). Zapisujemy tylko dni zamknięte (w tej strefie zaczął się już następny dzień, + 60 s). Wpis nie o północy, zły OHLC, cena ≤ 0 = flaga, nigdy cicha naprawa (D5). Oczekiwane dni: poniedziałek–piątek bez 25.12 i 1.01; luki, płaskie świece i świece weekendowe w starej historii Yahoo są pokazywane w kontroli. **Do liczenia** (D-058, `daily.clean_d1` → `data/d1_ready/`): świeca łamiąca D5 odrzucona; weekend/święto i świeca płaska (O=H=L=C) odrzucone; 1–2 brakujące dni robocze — nic; ≥ 3 — przerwa w danych (`gap_before`, B12); bez uzupełniania; `close_ts` = północ następnego dnia w Londynie (czas zamknięcia świecy).
 - **D8.** Backtest liczy na kopii świec Yahoo po **warstwie czyszczenia** (`ia5/clean.py`, dane w `data/h1_ready/`, wersja w raporcie): świeca łamiąca D5 jest odrzucana; świeca poza sesją jest odrzucana, gdy to sobota/święto albo świeca płaska (Yahoo powtarza wtedy starą cenę); brak **≤ 3 godzin** przy weekendzie/święcie to **granica tygodnia** (Yahoo zaczyna i kończy tydzień inaczej niż kalendarz) — nic; **każdy inny brak → uzupełniony liniowo** od zamknięcia przed nim do otwarcia po nim, znacznik `filled` (D-060); brak > 3 h ma dodatkowo znacznik **przerwy w danych** (`gap_before`), także gdy brakuje we wszystkich parach naraz — transakcje przez nią są anulowane (B12). Liczymy wszystkie pary z `COMPUTE_PAIRS` (8); para z mniej niż ~4 tygodniami świec jest pomijana. Surowa kopia (`data/yahoo/`) zostaje nietknięta; liczby odrzuconych, uzupełnionych i przerw są w raporcie.
 
@@ -78,6 +79,17 @@ Zakładka **FOREST** (D-048, v2: D-049): demokratyczny eksperyment — do 1000 r
 - **F8. Liczy tylko Mac, przy `ia5 start`.** Stan leży na dysku; po przerwie świece są nadrabiane po kolei, wynik jest ten sam (test). Firestore: 0 odczytów i zapisów.
 - **F9. Ocena:** zawsze obok Kontroli i danych bez przewagi (wspólny losowy znak dla par na blok 24 h). Raport liczy też noce: model silnika ich nie uwzględnia (O5), a pozycja trwa 2–3 noce. Rozstrzyga LIVE. Zmiana logiki = podbicie `FOREST_VERSION`.
 
+### REV (R) — kapitał PLN na przecenione waluty (D-063; zgoda Michała z 2026-11-11)
+- **R0. Dane:** kursy złotówkowe D1 z Yahoo (`{WALUTA}PLN=X`), znacznik jak D7a. Do liczenia własna, wersjonowana warstwa tylko zamknięć (`CLEAN_PLN_VERSION`, `ia5/rev_data.py`): dni robocze, powtórzone zamknięcie = brak notowania, wyskok > 10 σ cofnięty następnego dnia oznaczony, zmiana skali ×10/×100 przeskalowana; bezpiecznik w dniu decyzji (ruch > 10 σ → waluta „bez notowań” w tym tygodniu) ten sam w historii i na żywo. Surowa kopia nietknięta, liczby napraw w opisie.
+- **R1. Waluty i koszyki:** kandydaci: AED, AUD, CAD, CHF, CZK, DKK, EUR, GBP, HKD, HUF, ILS, JPY, MXN, NOK, NZD, QAR, RON, SAR, SEK, SGD, THB, TRY, USD, ZAR (bez RUB). Przyjęcie przy `backfillPLN()`: ≥ 10 lat historii, świeże notowania, < 5% dni bez ruchu w ostatnich 5 latach; odrzucona waluta nie jest zapisywana; zbiór koszyków zamrażany przy pierwszym badaniu (`rev/research.json`). Bloki o sztywnym kursie — USD (USD, HKD, AED, SAR, QAR) i EUR (EUR, DKK) — to jeden koszyk, trzymany w kotwicy. PLN jest koszykiem. Zmiana listy lub bloków = wpis w `DECISIONS.md`.
+- **R2. Rytm:** przeliczenie we wtorek 08:00 Europe/Warsaw po cenie zamknięcia ostatniej zamkniętej świecy D1 (poniedziałek; w święto wcześniejszy dzień, nie starszy niż 5 dni roboczych); spóźniona świeca — czekamy najpóźniej do wtorku 20:00. Wycena codziennie na zamknięciu.
+- **R3. Bez kosztów:** bez spreadów, opłat, odsetek i podatków — wyjątek od B3 tylko dla REV. Bez dźwigni i krótkiej sprzedaży. Pasmo 2 p.p.: mniejsza zmiana udziału koszyka — bez transakcji.
+- **R4. Limit:** żaden koszyk (waluta, blok, PLN) nie ma więcej niż 50% kapitału po żadnym przeliczeniu.
+- **R5. Uczciwość:** oceny tylko z przeszłości (test obcięcia danych). Metoda wybierana w turnieju 13 wariantów na pierwszych 75% tygodni (IS), reszta do dnia pierwszego badania to OOS — daty stałe; potem wynik na żywo. OOS otwierany tylko przy nowej `REV_VERSION`, każde otwarcie w dzienniku OOS. Testy potwierdzające (≥ 1000 losowych podziałów, bootstrap, opóźnienie o dzień) na OOS, DSR na IS z liczbą prób; PBO na całości; porównanie z równym podziałem i PLN. Werdykt jak w sekcji 9 (progi w `rev_config.VERDICT`).
+- **R6. Zamrożenie:** na żywo działa zwycięzca zamrożony automatycznie po badaniu (hash kodu + wariant + `REV_VERSION` + data), także przy werdykcie 🔴 — wtedy zakładka mówi to wprost i pokazuje obok równy podział. Zmiana = nowa `REV_VERSION`, nowy start portfela, wpis w `DECISIONS.md`. Historia i wynik na żywo pokazywane osobno.
+- **R7. Dziennik:** każde przewalutowanie zapisane; rozliczonych wierszy dziennika i wyceny się nie zmienia; po przerwie nadrabianie po kolei z tym samym wynikiem (test).
+- **R8. Budżet:** dashboard 0 odczytów Firestore dla REV (wszystko z `rev/` na gałęzi `data`); Mac i Actions czytają tylko waluty z nową świecą.
+
 ### Praca w repo (Claude)
 - **G1.** Start sesji: `git pull`, przeczytaj ten plik, `docs/STATUS.md`, `docs/DECISIONS.md`.
 - **G2.** Małe commity, każdy działający. **Claude sam robi push** do `origin` po każdym ukończonym kroku, bez pytania.
@@ -126,7 +138,7 @@ flowchart LR
 
 | Miejsce | Rola | Pisze do | Czyta z |
 |---|---|---|---|
-| Google Apps Script (+ arkusz) | Pobiera świece H1 i D1, prowadzi log uruchomień | Firestore `candles/*`, `candles_d1/*`, `meta/status`; arkusz `log` | Yahoo |
+| Google Apps Script (+ arkusz) | Pobiera świece H1, D1 i kursy PLN (D-063), prowadzi log uruchomień | Firestore `candles/*`, `candles_d1/*`, `candles_pln/*`, `meta/status`; arkusz `log` | Yahoo |
 | Firestore | Baza świec Yahoo (jedyne źródło cen), status, heartbeat, kolejka strategii | — | — |
 | Mac (`ia5`) | Kopia świec, kontrola jakości, czyszczenie, liczenie, publikacja | Firestore `runner/heartbeat`, `strategies/*`; GitHub gałąź `data` | Firestore |
 | GitHub | `main`: kod + strona (Pages). `data`: zimna kopia świec i wyniki | — | — |
@@ -167,6 +179,7 @@ meta/status
   totalBars, latency24h[], dataSha
   health:  { at, state, summary, facts[], checks: [{ id, name, state, text, detail[], fix }] }   # przegląd zdrowia z Maca (D-023)
   d1:      { tz, totalBars, lastRun: { mode, at, ok, error }, pairs: { EURUSD: { firstDay, lastTs, lastDay, count, flags[] } } }   # D-053
+  pln:     { tz, totalBars, lastRun, currencies: { EUR: { firstDay, lastTs, lastDay, count, flags[] } }, rejected: { QAR: "powód" } }   # D-063
 
 runner/heartbeat
   lastSeen, state: idle|syncing|computing|offline,
@@ -175,6 +188,8 @@ runner/heartbeat
 strategies/{id}
   name, hypothesis, code, status, createdAt, createdBy,
   engineVersion, frozenAt?, result?: { sha, path, summary }, error?
+
+candles_pln/{WALUTA}_{RRRR}         # D-063: kursy złotówkowe D1 (REV), pola jak candles_d1 (pair = kod waluty)
 
 candles_d1/{PARA}_{RRRR}            # D-053: świece dzienne, 1 dokument = 1 para × 1 rok (rok wg dnia w strefie tz)
   pair, year, tz: "Europe/London", bars: { "<ts północy>": [o, h, l, c], ... }, updatedAt
@@ -204,6 +219,7 @@ candles/{PARA}/{RRRR}.parquet        # H1 z Yahoo (surowa kopia): ts, open, high
 candles/manifest.json                # hash, liczba świec, zakres per para
 candles_d1/{PARA}.parquet            # D-053: świece dzienne Yahoo, cała historia pary (ts = północ w strefie tz)
 candles_d1/manifest.json             # hash, liczba świec, pierwszy i ostatni dzień per para, tz
+candles_pln/{WALUTA}.parquet         # D-063: kursy złotówkowe D1 przyjętych walut (cała historia) + manifest.json
 coverage/coverage.json               # mapa pokrycia (D-022): para × miesiąc, luki jako zakresy, kalendarz dzień po dniu (D-040) — bez cen
 results/index.json                   # lista policzonych strategii (dashboard)
 results/{strategyId}/                # ostatni run strategii (poprzedni jest w historii gita)
@@ -223,6 +239,9 @@ forest/state.json                    # FOREST (D-049): decyzje teraz, księgi, p
 forest/investors.json                # inwestorzy: reguła, horyzont, w lesie od, czy aktywny
 forest/journal/{RRRR-MM}.parquet     # dziennik decyzji z listą głosujących (zmienia się tylko bieżący miesiąc)
 forest/report.md                     # raport dla Claude
+rev/research.json                    # REV (D-063): turniej 13 wariantów, odcinki IS/OOS, walidacja, werdykt, zamrożona metoda
+rev/state.json                       # REV: portfel na żywo — koszyki, dziennik przewalutowań, wycena dzień po dniu, równy podział
+rev/report.md                        # REV: raport dla Claude
 ```
 
 ### Lokalnie na Macu (poza repo)
@@ -237,6 +256,9 @@ forest/report.md                     # raport dla Claude
   data/yahoo_d1/{PARA}.parquet             # D-053: surowa kopia świec dziennych z Firestore — niezmieniana (D4); 8 par
   data/h1_ready/{PARA}.parquet + .json     # po warstwie czyszczenia (filled, gap_before) + opis — wejście silnika (H1) i skanera (D8)
   data/d1_ready/{PARA}.parquet + .json     # D-058: D1 po warstwie czyszczenia (gap_before, close_ts) — wejście silnika przy TIMEFRAME = "D1" i tło D1
+  data/yahoo_pln/{WALUTA}.parquet          # D-063: surowa kopia kursów złotówkowych D1 z Firestore (D4)
+  data/pln_ready/{WALUTA}.parquet + .json  # D-063: kursy PLN po warstwie REV (tylko zamknięcia: spike, big) — wejście REV
+  rev/research/{run}/                      # D-063: badania REV (research.json, report.md)
   data-repo/                               # lokalny klon gałęzi data
   results/{id}/{run}/  scans/{run}/        # wyniki liczenia i skanów (to samo trafia na gałąź data)
   searches/{run}/                          # głębokie poszukiwanie (D-044); all_is.parquet tylko lokalnie
@@ -255,6 +277,7 @@ forest/report.md                     # raport dla Claude
   - `tick()` — wyzwalacz **co 1 min** (D-033). Gdy wszystko jest — koniec bez zapytań. Tuż po pełnej godzinie czeka na zamknięcie świecy (D2) i ponawia brakujące pary co 15 s przez 10 min (najwyżej 100 s na uruchomienie); status zapisuje po każdej rundzie z nową świecą. Po wklejeniu nowej wersji uruchom raz `installTrigger()`.
   - Po komplecie świec `tick` uruchamia GitHub Actions (`dispatchLive_`, D-052; token w Script Properties `GITHUB_TOKEN`).
   - `backfillD1()` (D-053) — ręcznie, raz: cała historia świec dziennych Yahoo (`interval=1d`, od 1970 — Yahoo zwraca od pierwszej notowanej daty) → `candles_d1/*` i `meta/status.d1`. Ponowne uruchomienie = upsert. Dopiero po nim `tick` dopisuje kolejne dni (ostatnie 4 dni nadpisywane — Yahoo je koryguje; zapis tylko, gdy przybył dzień albo korekta > 0,5 pipsa).
+  - `backfillPLN()` (D-063) — ręcznie, raz: cała historia `{WALUTA}PLN=X` dla 24 kandydatów; waluta, która nie spełnia reguły przyjęcia (R1), nie jest zapisywana, a powód trafia do `meta/status.pln.rejected`. Potem `tick` (`tickPLN_`) dopisuje kolejne dni tak jak D1. Zużycie: ≈ 450 zapisów raz, ≈ 20 dziennie.
   - `healthcheck()` — ręczna diagnostyka.
   - **Samonaprawa (D-060):** `tick` co 6 h (poza pierwszymi 10 min godziny) pobiera ponownie ostatnie 30 dni i nadpisuje świece — dziury i korekty Yahoo trafiają do bazy, flagi liczą się od nowa; ręcznie: `repair()`.
   - `removeOffGrid()` — ręcznie: usuwa z `candles/*` wpisy z czasem nie na pełnej godzinie (notowania Yahoo, nie świece; D-042). `tick` takich wpisów już nie zapisuje.
@@ -280,10 +303,12 @@ forest/report.md                     # raport dla Claude
   8. Co godzinę (5 min po pełnej godzinie) kroki 2–5 od nowa; co 6 h ponowne liczenie zamrożonych strategii (forward test, W4).
   8a. **Inwestorzy (D-045, D-052):** liczy GitHub Actions (`ia5 live`), uruchamiane przez Apps Script po komplecie świec. Mac robi to tylko, gdy `alerts/run.json` z gałęzi `data` jest starszy niż 2 h: po każdej kopii świec i po każdej zmianie listy `investors` — przeliczenie wszystkich aktywnych inwestorów właściciela (`ia5/investors.py`) i publikacja `investors/` na gałęzi `data`; inwestorzy `do_usuniecia` znikają z gałęzi i z Firestore.
   8b. **FOREST (D-049):** po każdej kopii świec: brak lasu albo starsza wersja → budowa (kilka minut); jest las → nowe świece po kolei, co 4 tygodnie odświeżenie lasu, publikacja `forest/` na gałęzi `data`.
+  8c. **REV (D-063):** po każdej kopii świec: brak badania albo inna `REV_VERSION` → badanie (`ia5 rev badanie`), potem krok portfela na żywo — tylko gdy GitHub Actions nie działało od 2 h (jak 8a); normalnie portfel liczy `ia5 live` w Actions.
   9. `Ctrl+C` → heartbeat `offline`, czyste wyjście.
 - `ia5 scan [--duzy] [--pary …]` — **skaner hipotez** (D-037): tysiące–miliony prostych reguł na wszystkich parach, FDR 5% w odkryciu (pierwsze 50%), potwierdzenie (50–75%), ostatnie 25% pominięte; wynik `~/.ia5/scans/{run}/` i gałąź `data` `scans/{run}/`. To hipotezy do zbudowania strategii, nie werdykt.
 - `ia5 search [--rozmiar szybki|duzy|gigant] [--zero N] [--top K] [--bez-oos]` — **głębokie poszukiwanie** (D-044): 7 tys. / 0,71 mln / 3,1 mln konfiguracji (wyzwalacz × tryb × wyjście silnika × filtry), jedna konfiguracja = te same zasady na 8 parach. IS-A (FDR 5%) → IS-B (t ≥ 2) → ≥ 5/8 par → płaskowyż; K (domyślnie 20) wybranych **tylko po IS** otwartych raz na OOS i zapisanych w `oos_ledger.json`; `--zero N` = N przebiegów na danych bez przewagi (test szczęścia, liczony przed OOS). Ten sam model co silnik (test zgodności transakcji). Wynik `~/.ia5/searches/{run}/` + `strategy.py` (≤ 12 konfiguracji) do dashboardu.
 - `ia5 forest build|krok|status [--zero N] [--nasiono S] [--lokalnie]` — ręczne sterowanie FOREST (D-049), przy wyłączonym `ia5 start`. Normalnie niepotrzebne: `ia5 start` robi to sam. `build` liczy las od nowa (poprzedni idzie do `forest/archive/`) i zapisuje wpis w dzienniku OOS.
+- `ia5 rev badanie|krok|status [--lokalnie]` — REV (D-063): `badanie` = turniej metod (tylko przy nowej `REV_VERSION` — OOS otwiera się raz), `krok` = portfel na żywo do bieżącej chwili, `status` = werdykt, metoda, odcinki, ostatni dzień. Normalnie niepotrzebne: robią to `ia5 start` i `ia5 live`.
 - Pozostałe komendy (pomocnicze, na kopii lokalnej): `ia5 health` (opisowy raport zdrowia w terminalu + zapis na dashboard), `ia5 status`, `ia5 run <plik.py>` (liczenie lokalne, bez dashboardu; wyniki w `~/.ia5/results/{nazwa}/{run}/`), `ia5 check <plik.py>`.
 - Dashboard pokazuje „połączony", gdy `teraz − lastSeen < 90 s`.
 
@@ -387,7 +412,9 @@ Przy jednym wariancie PBO „nie dotyczy” (nie liczy się ani za, ani przeciw)
 - Bez kafli KPI. Liczby (świece w bazie, latencja, flagi, pary) są w zakładce **Stats**.
 
 ### 10.2 Zakładki
-**Strategie** | **Stats** | **Inwestorzy** (D-045) | **FOREST** (D-048).
+**Strategie** | **Stats** | **Inwestorzy** (D-045) | **FOREST** (D-048) | **REV** (D-063).
+
+**REV** (0 odczytów Firestore, wszystko z `rev/` na gałęzi `data`): nagłówek — metoda i werdykt, kapitał teraz w złotych i zmiana od startu, obok równy podział, odliczanie do wtorku 08:00; **Gdzie jest kapitał dziś** — słupki obok siebie (zł i %, linia 50%, blok jako jeden słupek); **Kapitał w złotówkach** dzień po dniu (REV, równy podział, 10 000 zł; znaczniki przewalutowań); **Ranking dziś** (przecena, trend, cel, teraz); **Transakcje** z eksportem CSV; **Badanie metody** (historia, nie wynik na żywo: 13 wariantów IS | OOS, walidacja, wykres z granicą IS/OOS, raport dla Claude).
 
 **FOREST** (0 odczytów Firestore, wszystko z `forest/` na gałęzi `data`): stan lasu i jedno zdanie, jak to działa; **Teraz** (8 par: ilu głosuje, BUY, SELL, zgoda, decyzja i jej powód po ludzku, otwarta pozycja); **Co wiadomo** (wnioski liczone automatycznie); **Wynik** (kapitał Managera i Kontroli, tabela odcinków z wynikiem po nocach); **Dziennik** (klik = kto głosował, eksport CSV); **Czego się uczy** (odświeżenia: ile doszło, ile odpadło); **Co znaczy zgoda**; rozwijane **Szczegóły** (inwestorzy, cała tabela progów, dane bez przewagi, raport dla Claude).
 
@@ -448,7 +475,7 @@ IA5/
 │  ├─ STRATEGIE.md           # jak pisać strategie + reguła „zrób mi strategię” (K1–K3)
 │  └─ SETUP.md               # kroki do kliknięcia
 ├─ web/                      # dashboard (GitHub Pages): index.html, css/, js/ (app, list, card, charts, editor,
-│                            #   status, stats, session, coverage, health, data, fb, metrics, util, config, investors, forest), vendor/
+│                            #   status, stats, session, coverage, health, data, fb, metrics, util, config, investors, forest, rev, revlogic), vendor/
 ├─ scripts/                  # check_strategy.py (kontrola kodu bez danych Michała), demo.py
 ├─ research/                 # badania hipotez na niezależnych danych, przed strategią (D-036)
 ├─ apps_script/              # Code.gs + appsscript.json (clasp)
@@ -463,6 +490,7 @@ IA5/
 │           search.py  search_rules.py                                    # głębokie poszukiwanie (D-044)
 │           investors.py                                                  # wirtualni inwestorzy — paper trading (D-045)
 │           forest_rules.py  forest.py  forest_manager.py  forest_report.py  forest_run.py   # FOREST (D-049): cechy, reguły i las, Manager, statystyki, budowa i krok
+│           rev_config.py  rev_data.py  rev_method.py  rev_research.py  rev_live.py   # REV (D-063): stałe, kursy PLN, oceny i portfele, turniej, portfel na żywo
 ├─ tests/                    # wskaźniki vs TA-Lib, złote scenariusze, zgodność z backtesting.py, walidacja,
 │                            #   strategie, publikacja, przykłady, web/ (Node)
 ├─ strategies/examples/
@@ -486,6 +514,7 @@ Gałąź `data` — osobna, tylko dane (sekcja 4).
 | **E5** Walidacja | OOS, walk-forward, benchmark losowy, DSR, PBO, zamrażanie + forward | Werdykt w karcie |
 | **E6** Inwestorzy | Wirtualni inwestorzy (paper trading): dodawanie/usuwanie, kapitał, % na wejście, wiele strategii naraz, wykres kapitału, lista transakcji (D-045) | Pierwszy inwestor liczony na Macu i widoczny na stronie |
 | **E7** FOREST | Las reguł z progami Managera, odświeżenie co 4 tygodnie, dziennik, zakładka (D-048, D-049) | Las zbudowany na Macu, LIVE liczony co godzinę, widoczny na stronie |
+| **E8** REV | R0 kursy PLN (Apps Script, kopia, czyszczenie, kontrola) → R1 turniej metod i werdykt → R2 portfel na żywo (wtorek 08:00, wycena dzienna, dziennik) → R3 zakładka (D-063; plan: `docs/superpowers/plans/2026-11-11-rev.md`) | Lista przyjętych walut w `DECISIONS.md`, kontrola „Kursy złotówkowe” zielona, badanie z werdyktem na stronie, pierwszy wtorek przeliczony sam, zakładka na żywej stronie |
 
 Każdy etap: testy zielone → push → `STATUS.md` zaktualizowany → działa na żywej stronie. Aktualny stan etapów: `docs/STATUS.md`.
 

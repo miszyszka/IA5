@@ -1,6 +1,6 @@
 # REV — kapitał w złotówkach rozłożony na przecenione waluty · projekt
 
-Wersja 0.2 · 2026-11-11 · Status: **do zatwierdzenia przez Michała** · Po zatwierdzeniu: plan wykonania (`writing-plans`), potem etapy R0–R3.
+Wersja 0.3 · 2026-11-11 · Status: **zatwierdzony przez Michała 2026-11-11 12:22** („Wszystko super — działaj”) · Plan: `docs/superpowers/plans/2026-11-11-rev.md` · Decyzja: D-062.
 Zmiany 0.2 (po recenzji budującego): własna warstwa czyszczenia kursów PLN (tylko zamknięcia, 6.2), reguła spóźnionej świecy poniedziałku (6.3), odcinki IS / OOS / na żywo z datą graniczną i zasady ponownego badania (6.3), przełącznik na żywo (6.3), okresy dla każdego testu werdyktu (6.3).
 
 ---

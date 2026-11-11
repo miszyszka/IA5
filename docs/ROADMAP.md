@@ -1,6 +1,6 @@
 # ROADMAP — jak IA5 ma się dalej rozwijać
 
-Wersja 0.1 · 2026-11-11 · Spisane po przeglądzie całego projektu (D-054–D-058). Aktualizować, gdy zmienia się kierunek.
+Wersja 0.2 · 2026-11-11 · Spisane po przeglądzie całego projektu (D-054–D-058); REV (D-062). Aktualizować, gdy zmienia się kierunek.
 
 ## Zasada nadrzędna
 
@@ -43,6 +43,18 @@ Najtańszy krok o największej szansie. Nic nowego w kodzie — tylko używanie 
 1. **`ia5 search --d1`** — ta sama maszyna przeszukiwania (FDR, test zerowy, raz OOS), ale na świecach dziennych. Mało kodu (silnik już działa na D1), dużo nowej próby. Zrobić dopiero po etapie A, żeby nie zmarnować OOS D1 przeszukaniem przed sprawdzeniem prostych hipotez.
 2. **Portfel zamiast pojedynczej strategii** — kilka słabych (🟡), mało skorelowanych strategii na wspólnym kapitale. Inwestor już to umie (wspólny kapitał, wiele strategii); brakuje tylko raportu korelacji dziennych wyników między strategiami.
 3. **Inne dane (zmiana D7 — tylko za zgodą Michała):** stopy procentowe (różnica stóp = carry), kalendarz danych makro (unikanie / granie publikacji). To nowe źródło informacji, nie nowa kombinacja tych samych świec — jedyna droga, jeśli ceny same nie wystarczą.
+
+## REV — osobny tor (D-062)
+
+REV nie zmienia etapów A–C: to portfel walut wobec złotego, bez dźwigni i kosztów, liczony obok strategii FX.
+
+| Etap | Zakres | Gotowe, gdy |
+|---|---|---|
+| **R0 Dane** | kursy `{WALUTA}PLN=X` (Apps Script `backfillPLN` + `tickPLN_`), kopia i czyszczenie (tylko zamknięcia), kontrola „Kursy złotówkowe (REV)” | lista przyjętych walut w `DECISIONS.md`, kontrola zielona, nowe dni dopisują się same |
+| **R1 Badanie metody** | turniej 13 wariantów (przecena, trend, połączenie × 2 podziały + przełącznik), walidacja, werdykt, zamrożenie | raport z werdyktem na stronie |
+| **R2 Portfel na żywo** | wtorek 08:00, wycena dzienna, dziennik, równy podział obok; Actions + Mac zapasowo | pierwszy wtorek przeliczony sam |
+| **R3 Zakładka REV** | słupki, linia, ranking, transakcje, badanie | wszystko na żywej stronie |
+| **R4 Później (na życzenie)** | mail we wtorek z listą przewalutowań; inflacja i stopy procentowe (zmiana D7) | decyzja Michała |
 
 ## Czego NIE robić (świadomie)
 
