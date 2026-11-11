@@ -1,4 +1,4 @@
-"""REV (D-062) — kursy walut do PLN: warstwa czyszczenia (tylko zamknięcia, R0) i serie decyzji.
+"""REV (D-063) — kursy walut do PLN: warstwa czyszczenia (tylko zamknięcia, R0) i serie decyzji.
 
 Surowa kopia `data/yahoo_pln/{WALUTA}.parquet` (ts, open, high, low, close; ts = północ w strefie Yahoo, D7a) zostaje
 nietknięta (D4). Do liczenia `clean_pln` buduje serię zamknięć:

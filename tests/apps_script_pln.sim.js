@@ -1,4 +1,4 @@
-// Symulacja serii kursów PLN w Apps Script (D-062) w Node — atrapy usług Google i Yahoo (interval=1d).
+// Symulacja serii kursów PLN w Apps Script (D-063) w Node — atrapy usług Google i Yahoo (interval=1d).
 // Uruchamia tests/test_apps_script.py. Sprawdza: regułę przyjęcia przy backfillPLN(), zapis candles_pln/*,
 // meta/status.pln, tickPLN_ tylko dla przyjętych walut, oraz że backfillD1() działa jak dotąd.
 const fs = require('fs'), vm = require('vm'), assert = require('assert');

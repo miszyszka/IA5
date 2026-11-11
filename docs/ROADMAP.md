@@ -1,6 +1,6 @@
 # ROADMAP — jak IA5 ma się dalej rozwijać
 
-Wersja 0.2 · 2026-11-11 · Spisane po przeglądzie całego projektu (D-054–D-058); REV (D-062). Aktualizować, gdy zmienia się kierunek.
+Wersja 0.2 · 2026-11-11 · Spisane po przeglądzie całego projektu (D-054–D-058); REV (D-063). Aktualizować, gdy zmienia się kierunek.
 
 ## Zasada nadrzędna
 
@@ -44,7 +44,7 @@ Najtańszy krok o największej szansie. Nic nowego w kodzie — tylko używanie 
 2. **Portfel zamiast pojedynczej strategii** — kilka słabych (🟡), mało skorelowanych strategii na wspólnym kapitale. Inwestor już to umie (wspólny kapitał, wiele strategii); brakuje tylko raportu korelacji dziennych wyników między strategiami.
 3. **Inne dane (zmiana D7 — tylko za zgodą Michała):** stopy procentowe (różnica stóp = carry), kalendarz danych makro (unikanie / granie publikacji). To nowe źródło informacji, nie nowa kombinacja tych samych świec — jedyna droga, jeśli ceny same nie wystarczą.
 
-## REV — osobny tor (D-062)
+## REV — osobny tor (D-063)
 
 REV nie zmienia etapów A–C: to portfel walut wobec złotego, bez dźwigni i kosztów, liczony obok strategii FX.
 

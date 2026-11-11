@@ -80,7 +80,7 @@ def enforce_local_data(log=print) -> list[str]:
                 removed.append(str(f))
     pairs = {f"{p}.parquet" for p in PAIRS}
     pln = {f"{c}.parquet" for c in CANDIDATES}
-    # D-053: obok H1 także świece dzienne Yahoo, tylko 8 par; D-062: kursy PLN tylko kandydatów REV
+    # D-053: obok H1 także świece dzienne Yahoo, tylko 8 par; D-063: kursy PLN tylko kandydatów REV
     for folder, allowed in ((store.YAHOO, pairs), (store.YAHOO_D1, pairs), (store.YAHOO_PLN, pln)):
         if not folder.exists():
             continue
@@ -151,7 +151,7 @@ def do_prepare(progress=None) -> dict:
         from .store import D1_READY
 
         ready.build_d1(d1, D1_READY, tz=d1_tz, log=log)
-    if pln:  # D-062: kursy PLN do liczenia REV (warstwa tylko zamknięć)
+    if pln:  # D-063: kursy PLN do liczenia REV (warstwa tylko zamknięć)
         from .store import PLN_READY
 
         ready.build_pln(pln, PLN_READY, tz=pln_tz, log=log)
@@ -204,7 +204,7 @@ def sync_d1(cloud, st: dict) -> tuple[dict, str]:
 
 
 def sync_pln(cloud, st: dict) -> tuple[dict, str]:
-    """D-062: kopia kursów złotówkowych D1 z Firestore (REV). Błąd nie zatrzymuje synchronizacji H1 i D1."""
+    """D-063: kopia kursów złotówkowych D1 z Firestore (REV). Błąd nie zatrzymuje synchronizacji H1 i D1."""
     from . import daily
     from .store import YAHOO_PLN
 
@@ -599,7 +599,7 @@ def cmd_live(_args) -> None:
     YAHOO.mkdir(parents=True, exist_ok=True)
     YAHOO_D1.mkdir(parents=True, exist_ok=True)
     YAHOO_PLN.mkdir(parents=True, exist_ok=True)
-    for c in CANDIDATES:   # D-062: kursy PLN z gałęzi data (REV), najnowsze dni z Firestore
+    for c in CANDIDATES:   # D-063: kursy PLN z gałęzi data (REV), najnowsze dni z Firestore
         fp = DATA_REPO / "candles_pln" / f"{c}.parquet"
         if fp.exists():
             pd.read_parquet(fp).to_parquet(YAHOO_PLN / f"{c}.parquet", index=False)

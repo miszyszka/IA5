@@ -127,11 +127,11 @@ def build_d1(d1: dict[str, pd.DataFrame], out_dir: Path, tz: str | None = None, 
                         describe, log)
 
 
-MIN_BARS_PLN = 260   # D-062: waluta z mniej niż ~rokiem kursów nie trafia do REV
+MIN_BARS_PLN = 260   # D-063: waluta z mniej niż ~rokiem kursów nie trafia do REV
 
 
 def build_pln(pln: dict[str, pd.DataFrame], out_dir: Path, tz: str | None = None, log=print) -> dict:
-    """D-062: kursy złotówkowe do liczenia REV (data/pln_ready/{WALUTA}.parquet + .json) — warstwa tylko zamknięć
+    """D-063: kursy złotówkowe do liczenia REV (data/pln_ready/{WALUTA}.parquet + .json) — warstwa tylko zamknięć
     (rev_data.clean_pln). Waluty spoza `pln` znikają z katalogu."""
     from .daily import D1_TZ
     from .rev_config import CLEAN_PLN_VERSION

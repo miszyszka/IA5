@@ -1,6 +1,6 @@
 # REV — kapitał w złotówkach rozłożony na przecenione waluty · projekt
 
-Wersja 0.3 · 2026-11-11 · Status: **zatwierdzony przez Michała 2026-11-11 12:22** („Wszystko super — działaj”) · Plan: `docs/superpowers/plans/2026-11-11-rev.md` · Decyzja: D-062.
+Wersja 0.3 · 2026-11-11 · Status: **zatwierdzony przez Michała 2026-11-11 12:22** („Wszystko super — działaj”) · Plan: `docs/superpowers/plans/2026-11-11-rev.md` · Decyzja: D-063.
 Zmiany 0.2 (po recenzji budującego): własna warstwa czyszczenia kursów PLN (tylko zamknięcia, 6.2), reguła spóźnionej świecy poniedziałku (6.3), odcinki IS / OOS / na żywo z datą graniczną i zasady ponownego badania (6.3), przełącznik na żywo (6.3), okresy dla każdego testu werdyktu (6.3).
 
 ---
@@ -192,7 +192,7 @@ Badanie metody (historia, nie wynik na żywo): turniej 13 wariantów (IS | OOS),
 
 ### 6.6 Proponowana nowa sekcja żelaznych zasad „REV (R)” w CLAUDE.md
 
-> Do wpisania w etapie R0 razem z D-062; zatwierdzenie tego dokumentu przez Michała = zgoda na tę treść.
+> Do wpisania w etapie R0 razem z D-063; zatwierdzenie tego dokumentu przez Michała = zgoda na tę treść.
 
 - **R0. Dane:** kursy złotówkowe D1 z Yahoo (`{WALUTA}PLN=X`), znacznik jak D7a. Do liczenia własna, wersjonowana warstwa tylko zamknięć (`CLEAN_PLN_VERSION`): dni robocze, powtórzone zamknięcie = brak notowania, wyskok cofnięty następnego dnia odrzucony, zmiana skali przeskalowana; bezpiecznik w dniu decyzji ten sam w historii i na żywo. Surowa kopia nietknięta, liczby napraw w opisie.
 - **R1. Waluty i koszyki:** lista przyjętych walut zamrożona w konfiguracji (reguła przyjęcia przy pierwszym pobraniu). Bloki o sztywnym kursie — USD (USD, HKD, AED, SAR, QAR) i EUR (EUR, DKK) — to jeden koszyk, trzymany w kotwicy. PLN jest koszykiem. Zmiana listy lub bloków = wpis w `DECISIONS.md`.
@@ -210,7 +210,7 @@ Każdy etap: testy zielone → push → `STATUS.md` → działa na żywej stroni
 
 | Etap | Zakres | Gotowe, gdy | Krok Michała |
 |---|---|---|---|
-| **R0 Dane** | Apps Script `backfillPLN` + `tickPLN_`, Firestore, kopia i czyszczenie na Macu i w Actions, gałąź `data`, kontrola zdrowia, Stats; D-062 + CLAUDE.md (D7, sekcja R) | lista przyjętych walut w `DECISIONS.md`, kontrola „Kursy złotówkowe” zielona, nowe dni dopisują się same | wkleić Code.gs, uruchomić raz `backfillPLN()`, `git pull` + `uv tool install … --force` + restart |
+| **R0 Dane** | Apps Script `backfillPLN` + `tickPLN_`, Firestore, kopia i czyszczenie na Macu i w Actions, gałąź `data`, kontrola zdrowia, Stats; D-063 + CLAUDE.md (D7, sekcja R) | lista przyjętych walut w `DECISIONS.md`, kontrola „Kursy złotówkowe” zielona, nowe dni dopisują się same | wkleić Code.gs, uruchomić raz `backfillPLN()`, `git pull` + `uv tool install … --force` + restart |
 | **R1 Badanie metody** | `ia5 rev badanie`: oceny, podziały, limit, pasmo, 13 wariantów, walidacja, werdykt, raport, zamrożenie; zakładka REV w wersji „Badanie metody” | raport z werdyktem widoczny na stronie, metoda zamrożona | uruchomić `ia5 rev badanie` (albo samo przy `ia5 start`) |
 | **R2 Portfel na żywo** | stan, wtorkowe przeliczenie, wycena dzienna, dziennik, równy podział na żywo; `ia5 live` + Mac zapasowo | pierwszy wtorek przeliczony automatycznie, wycena dopisuje się dzień po dniu | — |
 | **R3 Zakładka REV** | słupki, linia, ranking, transakcje + CSV, odliczanie do wtorku, badanie metody | wszystko z 6.5 na żywej stronie | — |

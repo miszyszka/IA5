@@ -1,4 +1,4 @@
-"""REV (D-062) — kapitał w złotówkach rozłożony na przecenione waluty. Stałe projektu: jedno źródło prawdy.
+"""REV (D-063) — kapitał w złotówkach rozłożony na przecenione waluty. Stałe projektu: jedno źródło prawdy.
 
 Projekt: docs/superpowers/specs/2026-11-11-rev-design.md; zasady: CLAUDE.md, sekcja „REV (R)”.
 Zmiana logiki liczenia = podbicie REV_VERSION; zmiana warstwy czyszczenia = podbicie CLEAN_PLN_VERSION (R6).

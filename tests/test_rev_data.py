@@ -1,4 +1,4 @@
-"""REV (D-062): warstwa czyszczenia kursów PLN (tylko zamknięcia) i seria tygodniowa decyzji."""
+"""REV (D-063): warstwa czyszczenia kursów PLN (tylko zamknięcia) i seria tygodniowa decyzji."""
 import numpy as np
 import pandas as pd
 from ia5.rev_data import clean_pln, daily_panel, decision_times, next_decision, stale_wd, weekly_panel

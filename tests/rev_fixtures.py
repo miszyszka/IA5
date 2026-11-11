@@ -1,4 +1,4 @@
-"""Syntetyczne kursy walut do PLN dla testów REV (D-062): dni robocze, znacznik = północ w Londynie (jak D1 Yahoo)."""
+"""Syntetyczne kursy walut do PLN dla testów REV (D-063): dni robocze, znacznik = północ w Londynie (jak D1 Yahoo)."""
 from __future__ import annotations
 
 import numpy as np

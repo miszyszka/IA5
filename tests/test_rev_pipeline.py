@@ -1,4 +1,4 @@
-"""REV (D-062): kursy PLN — dane do liczenia (pln_ready), sprzątanie lokalne, publikacja na gałąź data."""
+"""REV (D-063): kursy PLN — dane do liczenia (pln_ready), sprzątanie lokalne, publikacja na gałąź data."""
 import json
 
 import pandas as pd

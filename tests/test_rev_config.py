@@ -1,4 +1,4 @@
-"""REV (D-062): waluty, bloki o sztywnym kursie, koszyki."""
+"""REV (D-063): waluty, bloki o sztywnym kursie, koszyki."""
 from ia5.rev_config import BLOCS, CANDIDATES, baskets, bloc_of
 
 

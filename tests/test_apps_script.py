@@ -18,7 +18,7 @@ def test_repair_rewrites_window_clears_flags_and_keeps_real_gaps():
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="brak Node")
 def test_pln_series_admission_and_tick():
-    """D-062: backfillPLN() przyjmuje tylko waluty z długą, świeżą i ruchomą historią; tickPLN_ dopisuje dni."""
+    """D-063: backfillPLN() przyjmuje tylko waluty z długą, świeżą i ruchomą historią; tickPLN_ dopisuje dni."""
     r = subprocess.run(["node", str(ROOT / "tests" / "apps_script_pln.sim.js"), str(ROOT / "apps_script" / "Code.gs")],
                        capture_output=True, text=True, timeout=180)
     assert r.returncode == 0, r.stdout + r.stderr

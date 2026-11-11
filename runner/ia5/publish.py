@@ -107,7 +107,7 @@ def publish_candles_d1(d1: dict[str, pd.DataFrame], tz: str, log=print, folder: 
                        meta: dict | None = None) -> str | None:
     """D-053: candles_d1/{PARA}.parquet (cała historia pary w jednym pliku, ok. 6 tys. świec) + candles_d1/manifest.json.
     Plik pary zapisywany tylko, gdy się zmienił (zwykle raz na dobę). Zwraca SHA lub None.
-    D-062: ta sama funkcja publikuje kursy PLN (folder="candles_pln") — publish_candles_pln."""
+    D-063: ta sama funkcja publikuje kursy PLN (folder="candles_pln") — publish_candles_pln."""
     from .daily import day_of
 
     ensure_repo()
@@ -145,7 +145,7 @@ def publish_candles_d1(d1: dict[str, pd.DataFrame], tz: str, log=print, folder: 
 
 
 def publish_candles_pln(pln: dict[str, pd.DataFrame], tz: str, log=print) -> str | None:
-    """D-062: candles_pln/{WALUTA}.parquet + candles_pln/manifest.json — kursy złotówkowe D1 przyjętych walut (REV)."""
+    """D-063: candles_pln/{WALUTA}.parquet + candles_pln/manifest.json — kursy złotówkowe D1 przyjętych walut (REV)."""
     from .rev_config import TICKER
 
     return publish_candles_d1(pln, tz, log=log, folder="candles_pln", label="PLN", meta={"series": "pln", "ticker": TICKER})

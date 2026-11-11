@@ -54,7 +54,7 @@ function tick() {
   withLock_(() => {
     run_('tick');
     try { tickD1_(); } catch (e) { log_('tickD1', '-', 0, null, 'BŁĄD ' + e.message); } // D1 nigdy nie zatrzymuje H1
-    try { tickPLN_(); } catch (e) { log_('tickPLN', '-', 0, null, 'BŁĄD ' + e.message); } // D-062: kursy PLN nigdy nie zatrzymują H1 ani D1
+    try { tickPLN_(); } catch (e) { log_('tickPLN', '-', 0, null, 'BŁĄD ' + e.message); } // D-063: kursy PLN nigdy nie zatrzymują H1 ani D1
   });
 }
 
@@ -521,10 +521,10 @@ function parseYahooD1_(j) {
   return { tz: tz, bars: bars };
 }
 
-// ---------- serie dzienne: D1 FX (D-053) i kursy złotówkowe REV (D-062) — ta sama droga, inne listy i kolekcje ----------
+// ---------- serie dzienne: D1 FX (D-053) i kursy złotówkowe REV (D-063) — ta sama droga, inne listy i kolekcje ----------
 
 const PLN_CODES = ['AED', 'AUD', 'CAD', 'CHF', 'CZK', 'DKK', 'EUR', 'GBP', 'HKD', 'HUF', 'ILS', 'JPY',
-  'MXN', 'NOK', 'NZD', 'QAR', 'RON', 'SAR', 'SEK', 'SGD', 'THB', 'TRY', 'USD', 'ZAR'];   // bez RUB (D-062)
+  'MXN', 'NOK', 'NZD', 'QAR', 'RON', 'SAR', 'SEK', 'SGD', 'THB', 'TRY', 'USD', 'ZAR'];   // bez RUB (D-063)
 const PLN_CANDIDATES = PLN_CODES.map(c => ({ name: c, yahoo: c + 'PLN=X', pip: 0.0001 }));
 const PLN_MIN_YEARS = 10;    // R1: „rzadki kurs” — krótsza historia odpada
 const PLN_FRESH_WD = 5;      // ostatnia świeca nie starsza niż 5 dni roboczych od oczekiwanej
@@ -532,7 +532,7 @@ const PLN_FLAT_MAX = 0.05;   // < 5% dni bez ruchu (zamknięcie = poprzednie alb
 const PLN_FLAT_YEARS = 5;
 
 const SERIES_D1 = { prop: 'd1', collection: 'candles_d1', field: 'd1', key: 'pairs', list: PAIRS, admit: null, slim: false };
-// Z4 (D-062): backfill ≈ 20 walut × ~22 lata ≈ 450 zapisów raz; potem ≈ 20 zapisów dziennie + status
+// Z4 (D-063): backfill ≈ 20 walut × ~22 lata ≈ 450 zapisów raz; potem ≈ 20 zapisów dziennie + status
 const SERIES_PLN = { prop: 'pln', collection: 'candles_pln', field: 'pln', key: 'currencies', list: PLN_CANDIDATES, admit: plnAdmission_, slim: true };
 
 function loadSeries_(series) {
@@ -561,14 +561,14 @@ function saveSeries_(series, st) {
 function loadD1_() { return loadSeries_(SERIES_D1); }
 function saveD1_(st) { saveSeries_(SERIES_D1, st); }
 
-/** Ręcznie, raz (D-062): cała historia kursów {WALUTA}PLN=X; waluta bez ≥ 10 lat historii, świeżych notowań albo ruchu
+/** Ręcznie, raz (D-063): cała historia kursów {WALUTA}PLN=X; waluta bez ≥ 10 lat historii, świeżych notowań albo ruchu
  *  nie jest zapisywana (powód w meta/status.pln.rejected). Można powtórzyć (upsert, reguła liczona od nowa). */
 function backfillPLN() { withLock_(() => runSeriesD1_(SERIES_PLN, 'backfill', PLN_CANDIDATES, loadSeries_(SERIES_PLN), nowSec())); }
 
 /** Z tick(): tanio — bez zapytań, gdy każda para ma świecę oczekiwanego dnia albo ostatnia próba była < 15 min temu. */
 function tickD1_() { tickSeries_(SERIES_D1); }
 
-/** Z tick() (D-062): to samo dla przyjętych walut REV (tylko te z meta/status.pln.currencies). */
+/** Z tick() (D-063): to samo dla przyjętych walut REV (tylko te z meta/status.pln.currencies). */
 function tickPLN_() { tickSeries_(SERIES_PLN); }
 
 function tickSeries_(series) {
@@ -594,7 +594,7 @@ function workdaysBetween_(a, b) {
   return n;
 }
 
-/** R1 (D-062): czy kurs nie jest „rzadki”. null = przyjęty, inaczej powód po polsku. bars: zamknięte dni (b.day, b.o…b.c). */
+/** R1 (D-063): czy kurs nie jest „rzadki”. null = przyjęty, inaczej powód po polsku. bars: zamknięte dni (b.day, b.o…b.c). */
 function plnAdmission_(bars, now, tz) {
   if (!bars.length) return 'Yahoo nie zwraca notowań';
   const today = localStamp_(now - 60, tz).slice(0, 10);
@@ -636,7 +636,7 @@ function runSeriesD1_(series, mode, todo, st, now) {
         if (loc.slice(11) !== '00:00:00') { flags.push('ts@' + b.day); return; } // nie świeca dnia — flaga, nie cicha naprawa
         bars.push(b);
       });
-      if (series.admit && mode === 'backfill') {                    // D-062: rzadki kurs — bez zapisu, powód w statusie
+      if (series.admit && mode === 'backfill') {                    // D-063: rzadki kurs — bez zapisu, powód w statusie
         const why = series.admit(bars, now, tz);
         if (why) {
           st.rejected[p.name] = why;

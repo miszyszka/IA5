@@ -151,7 +151,7 @@ def sync_yahoo_d1(folder, status: dict | None = None, log=print, names=None, col
 
 
 def admitted_pln(status: dict | None) -> list[str]:
-    """D-062: waluty przyjęte przez Apps Script (meta/status.pln.currencies) spośród kandydatów REV."""
+    """D-063: waluty przyjęte przez Apps Script (meta/status.pln.currencies) spośród kandydatów REV."""
     from .rev_config import CANDIDATES
 
     cur = (((status or {}).get("pln") or {}).get("currencies")) or {}
@@ -159,7 +159,7 @@ def admitted_pln(status: dict | None) -> list[str]:
 
 
 def sync_yahoo_pln(folder, status: dict | None, log=print) -> dict[str, pd.DataFrame]:
-    """D-062: kopia kursów złotówkowych D1 (`candles_pln/{WALUTA}_{RRRR}`) — ta sama logika i budżet co D1
+    """D-063: kopia kursów złotówkowych D1 (`candles_pln/{WALUTA}_{RRRR}`) — ta sama logika i budżet co D1
     (waluta pomijana, gdy kopia = status; inaczej tylko lata od ostatniej świecy)."""
     return sync_yahoo_d1(folder, status, log=log, names=admitted_pln(status), collection="candles_pln", field="pln",
                          key="currencies", label="PLN")
