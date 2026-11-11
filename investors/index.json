@@ -1,15 +1,32 @@
 {
  "investors": [
   {
+   "id": "TpECl6SclcGcCkGhzZMT",
+   "name": "D4 Inwestor",
+   "capital": 10000.0,
+   "pct": 5.0,
+   "start": 1794406672,
+   "computedAt": 1794409331,
+   "dataTo": 1794409200,
+   "equity": 10000.0,
+   "return_pct": 0.0,
+   "closed": 0,
+   "open": 0,
+   "strategies": [
+    "D4"
+   ],
+   "errors": 0
+  },
+  {
    "id": "Zed3yb2lC8KLH5LgwOuF",
    "name": "Combined",
    "capital": 10000.0,
    "pct": 10.0,
    "start": 1794328948,
-   "computedAt": 1794405709,
-   "dataTo": 1794405600,
-   "equity": 9905.76,
-   "return_pct": -0.942,
+   "computedAt": 1794409333,
+   "dataTo": 1794409200,
+   "equity": 9901.95,
+   "return_pct": -0.98,
    "closed": 0,
    "open": 1,
    "strategies": [
