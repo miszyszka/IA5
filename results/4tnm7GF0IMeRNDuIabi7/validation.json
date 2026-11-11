@@ -7,178 +7,178 @@
   "szok": 0
  },
  "oos_trades": 158,
- "oos_mean_pips": 5.488041,
- "oos_mean_r": 0.382257,
- "is_mean_r": 0.389606,
+ "oos_mean_pips": 4.025911,
+ "oos_mean_r": 0.187029,
+ "is_mean_r": 0.390716,
  "pinned_variant": true,
  "rank_is": 2,
  "forward": {
   "since": 1793447191,
-  "trades": 7,
+  "trades": 4,
   "pre_trades": 599,
-  "expected_pips": 5.814842,
-  "expected_r": 0.386634,
-  "mean_pips": 12.470387,
-  "mean_r": 0.478004,
-  "sum_pips": 87.292709,
-  "win_rate": 0.714286,
-  "t_stat": 1.576819,
-  "z_vs_expected": 0.546229,
+  "expected_pips": 5.427376,
+  "expected_r": 0.341041,
+  "mean_pips": -2.721001,
+  "mean_r": -0.21613,
+  "sum_pips": -10.884005,
+  "win_rate": 0.5,
+  "t_stat": -0.436435,
+  "z_vs_expected": -0.505369,
   "bootstrap": {
-   "low": -1.448146,
-   "high": 25.632802,
-   "n": 7
+   "low": null,
+   "high": null,
+   "n": 4
   },
-  "nights_mean": 1.714286
+  "nights_mean": 0.0
  },
  "benchmark": {
   "sims": 1000,
-  "actual_mean_pips": 5.891721,
-  "percentile": 99.9,
-  "p5": -5.007495,
-  "p50": -1.09248,
-  "p95": 3.039392
+  "actual_mean_pips": 5.373324,
+  "percentile": 99.6,
+  "p5": -4.90445,
+  "p50": -0.917146,
+  "p95": 2.999366
  },
  "dsr": {
-  "dsr": 0.740384,
-  "sharpe": 0.227492,
-  "sharpe0": 0.188366,
+  "dsr": 0.755567,
+  "sharpe": 0.227325,
+  "sharpe0": 0.185207,
   "trials": 24,
-  "trades": 448,
-  "skew": -2.301619,
-  "kurtosis": 10.55797
+  "trades": 445,
+  "skew": -2.294642,
+  "kurtosis": 10.488005
  },
  "pbo": {
-  "pbo": 0.030536,
+  "pbo": 0.150583,
   "variants": 24,
   "combinations": 12870,
   "blocks": 16,
-  "logit_median": 1.386294
+  "logit_median": 1.15268
  },
  "walk_forward": {
   "windows": [
    {
-    "from": 1755865440,
-    "to": 1768563360,
+    "from": 1756012320,
+    "to": 1768783680,
     "variant_id": 12,
-    "train_r": 0.208003,
-    "test_trades": 115,
-    "test_r": 0.754152,
-    "test_pips": 11.547793
+    "train_r": 0.239822,
+    "test_trades": 105,
+    "test_r": 0.721316,
+    "test_pips": 10.187714
    },
    {
-    "from": 1768563360,
-    "to": 1781261280,
+    "from": 1768783680,
+    "to": 1781555040,
     "variant_id": 12,
     "train_r": 0.371138,
-    "test_trades": 103,
-    "test_r": 0.446548,
-    "test_pips": 5.75904
+    "test_trades": 101,
+    "test_r": 0.423169,
+    "test_pips": 4.759693
    },
    {
-    "from": 1781261280,
-    "to": 1793959201,
+    "from": 1781555040,
+    "to": 1794326401,
     "variant_id": 15,
-    "train_r": 0.411069,
-    "test_trades": 102,
-    "test_r": 0.376424,
-    "test_pips": 5.405686
+    "train_r": 0.404896,
+    "test_trades": 94,
+    "test_r": 0.292254,
+    "test_pips": 4.209762
    }
   ],
-  "trades": 320,
-  "mean_r": 0.534742,
-  "mean_pips": 7.726742
+  "trades": 300,
+  "mean_r": 0.4865,
+  "mean_pips": 6.487189
  },
  "bootstrap": {
   "all": {
-   "low": 3.32843,
-   "high": 8.382084,
-   "n": 606
+   "low": 2.645057,
+   "high": 8.020742,
+   "n": 603
   },
   "oos": {
-   "low": 1.864775,
-   "high": 8.993284,
+   "low": 0.412676,
+   "high": 7.529884,
    "n": 158
   }
  },
  "spread": {
-  "x1": 5.891721,
-  "x1_5": 5.07819,
-  "x2": 4.264659
+  "x1": 5.373324,
+  "x1_5": 4.561052,
+  "x2": 3.74878
  },
  "swap": {
-  "nights_mean": 0.833333,
-  "nights_total": 505.0,
-  "overnight_pct": 41.089109,
-  "x0_5": 5.475055,
-  "x1": 5.058388
+  "nights_mean": 0.804312,
+  "nights_total": 485.0,
+  "overnight_pct": 40.13267,
+  "x0_5": 4.971168,
+  "x1": 4.569012
  },
  "ambiguous_pct": 0.0,
  "equity": {
   "5.0": {
-   "final": 22872.881316,
-   "return_pct": 128.728813,
-   "cagr_pct": 51.173675,
+   "final": 21225.128906,
+   "return_pct": 112.251289,
+   "cagr_pct": 45.889465,
    "max_dd_pct": -10.02362,
    "max_dd_mae_pct": -15.72484,
-   "calmar": 5.105309,
-   "sharpe": 1.960975,
-   "sortino": 1.166302,
-   "longest_underwater_days": 83.416667,
-   "taken": 601,
+   "calmar": 4.578133,
+   "sharpe": 1.790736,
+   "sortino": 1.084317,
+   "longest_underwater_days": 89.708333,
+   "taken": 598,
    "skipped_margin": 5
   },
   "10.0": {
-   "final": 36027.505804,
-   "return_pct": 260.275058,
-   "cagr_pct": 89.684413,
+   "final": 31099.460065,
+   "return_pct": 210.994601,
+   "cagr_pct": 76.717317,
    "max_dd_pct": -16.598404,
    "max_dd_mae_pct": -29.414968,
-   "calmar": 5.403195,
-   "sharpe": 1.875821,
-   "sortino": 1.093415,
+   "calmar": 4.621969,
+   "sharpe": 1.67651,
+   "sortino": 0.983388,
    "longest_underwater_days": 105.041667,
-   "taken": 536,
-   "skipped_margin": 70
+   "taken": 532,
+   "skipped_margin": 71
   },
   "15.0": {
-   "final": 32081.444748,
-   "return_pct": 220.814447,
-   "cagr_pct": 79.005898,
+   "final": 27683.200721,
+   "return_pct": 176.832007,
+   "cagr_pct": 66.693343,
    "max_dd_pct": -23.827976,
    "max_dd_mae_pct": -31.831557,
-   "calmar": 3.315678,
-   "sharpe": 1.452366,
-   "sortino": 0.834649,
+   "calmar": 2.798951,
+   "sharpe": 1.288433,
+   "sortino": 0.748128,
    "longest_underwater_days": 140.875,
-   "taken": 436,
-   "skipped_margin": 170
+   "taken": 437,
+   "skipped_margin": 166
   },
   "20.0": {
-   "final": 27705.519932,
-   "return_pct": 177.055199,
-   "cagr_pct": 66.36279,
+   "final": 22759.248685,
+   "return_pct": 127.592487,
+   "cagr_pct": 51.089139,
    "max_dd_pct": -28.873558,
    "max_dd_mae_pct": -35.622507,
-   "calmar": 2.298393,
-   "sharpe": 1.166668,
-   "sortino": 0.624252,
+   "calmar": 1.769409,
+   "sharpe": 0.975835,
+   "sortino": 0.528838,
    "longest_underwater_days": 180.708333,
-   "taken": 363,
-   "skipped_margin": 243
+   "taken": 362,
+   "skipped_margin": 241
   },
   "30.0": {
-   "final": 18033.368586,
-   "return_pct": 80.333686,
-   "cagr_pct": 34.247779,
+   "final": 15489.815036,
+   "return_pct": 54.89815,
+   "cagr_pct": 24.557897,
    "max_dd_pct": -37.318797,
    "max_dd_mae_pct": -46.354676,
-   "calmar": 0.917709,
-   "sharpe": 0.699383,
-   "sortino": 0.32886,
+   "calmar": 0.658057,
+   "sharpe": 0.580688,
+   "sortino": 0.278847,
    "longest_underwater_days": 235.833333,
-   "taken": 262,
-   "skipped_margin": 344
+   "taken": 265,
+   "skipped_margin": 338
   }
  },
  "verdict": {
@@ -188,27 +188,27 @@
    {
     "test": "expectancy netto OOS > 0",
     "ok": true,
-    "value": 5.488041
+    "value": 4.025911
    },
    {
     "test": "percentyl benchmarku ≥ 95",
     "ok": true,
-    "value": 99.9
+    "value": 99.6
    },
    {
     "test": "PBO < 0,3",
     "ok": true,
-    "value": 0.030536
+    "value": 0.150583
    },
    {
     "test": "DSR ≥ 0,95",
     "ok": false,
-    "value": 0.740384
+    "value": 0.755567
    },
    {
     "test": "dodatni przy spreadzie ×1,5",
     "ok": true,
-    "value": 5.07819
+    "value": 4.561052
    }
   ]
  }
