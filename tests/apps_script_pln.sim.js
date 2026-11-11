@@ -58,7 +58,7 @@ const ctx = {
   LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
 };
 vm.createContext(ctx);
-vm.runInContext(fs.readFileSync(process.argv[2], 'utf8') + '\nthis.__ = { backfillPLN, tickPLN_, backfillD1, PLN_CANDIDATES, nowSec };', ctx);
+vm.runInContext(fs.readFileSync(process.argv[2], 'utf8') + '\nthis.__ = { backfillPLN, tickPLN_, backfillD1, diagnosePLN, PLN_CANDIDATES, nowSec };', ctx);
 const G = ctx.__;
 ctx.Date.now = () => NOW * 1000;   // nowSec() z atrapą zegara
 
@@ -102,6 +102,9 @@ const newest = Math.max(...nd.flatMap(w => Object.keys(w.update.fields.bars.mapV
 assert.strictEqual(stamp(newest, 'Europe/London').slice(0, 10), '2026-11-11');
 // drugi tick od razu: bez zapytań (wszystko jest)
 urls.length = 0; G.tickPLN_(); assert.strictEqual(urls.length, 0);
+
+// 2b) diagnoza odrzuconych: tylko odczyt, bez zapisu do Firestore
+writes.length = 0; G.diagnosePLN(); assert.strictEqual(writes.length, 0);
 
 // 3) D1 FX bez zmian
 writes.length = 0;

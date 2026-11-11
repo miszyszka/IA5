@@ -571,6 +571,43 @@ function saveD1_(st) { saveSeries_(SERIES_D1, st); }
  *  nie jest zapisywana (powód w meta/status.pln.rejected). Można powtórzyć (upsert, reguła liczona od nowa). */
 function backfillPLN() { withLock_(() => runSeriesD1_(SERIES_PLN, 'backfill', PLN_CANDIDATES, loadSeries_(SERIES_PLN), nowSec())); }
 
+/** Ręcznie (D-063), tylko odczyt: dlaczego waluta wyszła „Yahoo nie zwraca notowań”. Dla każdej odrzuconej waluty zapisuje w
+ *  arkuszu `log` (tryb „PLN diagnoza”): kod HTTP, strefę, liczbę dni, ile ma zamknięcie, ile pełne OHLC, ile o północy,
+ *  pierwszy i ostatni dzień oraz godzinę trzech ostatnich znaczników. Bez zapisu do Firestore. */
+function diagnosePLN() {
+  const st = loadSeries_(SERIES_PLN);
+  const names = Object.keys(st.rejected || {});
+  const list = PLN_CANDIDATES.filter(p => !names.length || names.indexOf(p.name) >= 0);
+  list.forEach(p => {
+    let msg;
+    try {
+      const url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(p.yahoo) + '?interval=1d&range=20y';
+      const r = UrlFetchApp.fetch(url, { muteHttpExceptions: true, headers: { 'User-Agent': 'Mozilla/5.0' } });
+      if (r.getResponseCode() !== 200) {
+        msg = 'HTTP ' + r.getResponseCode();
+      } else {
+        const res = JSON.parse(r.getContentText()).chart.result[0];
+        const tz = (res.meta || {}).exchangeTimezoneName || D1_TZ;
+        const ts = res.timestamp || [];
+        const q = (res.indicators && res.indicators.quote && res.indicators.quote[0]) || {};
+        const has = (a, i) => a && a[i] !== null && a[i] !== undefined;
+        let close = 0, full = 0, midnight = 0;
+        ts.forEach((t, i) => {
+          if (has(q.close, i)) close++;
+          if (has(q.open, i) && has(q.high, i) && has(q.low, i) && has(q.close, i)) full++;
+          if (localStamp_(t, tz).slice(11) === '00:00:00') midnight++;
+        });
+        const tail = ts.slice(-3).map(t => localStamp_(t, tz).slice(0, 16)).join(', ');
+        msg = 'tz ' + tz + ' · dni ' + ts.length + ' · z zamknięciem ' + close + ' · pełne OHLC ' + full + ' · o północy ' + midnight +
+          (ts.length ? ' · od ' + localStamp_(ts[0], tz).slice(0, 10) + ' · ostatnie: ' + tail : '') + ' · powód: ' + ((st.rejected || {})[p.name] || '—');
+      }
+    } catch (e) {
+      msg = 'BŁĄD ' + e.message;
+    }
+    log_('PLN diagnoza', p.name, 0, null, msg);
+  });
+}
+
 /** Z tick(): tanio — bez zapytań, gdy każda para ma świecę oczekiwanego dnia albo ostatnia próba była < 15 min temu. */
 function tickD1_() { tickSeries_(SERIES_D1); }
 
