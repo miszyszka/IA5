@@ -1,0 +1,138 @@
+{
+ "best_variant_id": 0,
+ "best_exit": "poziomy TP/SL ze strategii, max 480",
+ "best_params": {},
+ "oos_trades": 272,
+ "oos_mean_pips": 108.628632,
+ "oos_mean_r": 1.263509,
+ "is_mean_r": 6.383611,
+ "pinned_variant": false,
+ "rank_is": 1,
+ "benchmark": {
+  "sims": 1000,
+  "actual_mean_pips": 275.759705,
+  "percentile": 100.0,
+  "p5": -83.822243,
+  "p50": 14.904109,
+  "p95": 121.015479
+ },
+ "dsr": {
+  "dsr": 1.0,
+  "sharpe": 1.596324,
+  "sharpe0": 0.0,
+  "trials": 1,
+  "trades": 127,
+  "skew": -0.728866,
+  "kurtosis": 3.744693
+ },
+ "pbo": {
+  "pbo": null,
+  "variants": 1
+ },
+ "walk_forward": {
+  "windows": [
+   {
+    "from": 1585317600,
+    "to": 1638435600,
+    "variant_id": 0,
+    "train_r": 6.635131,
+    "test_trades": 90,
+    "test_r": 5.299421,
+    "test_pips": 520.475403
+   },
+   {
+    "from": 1638435600,
+    "to": 1691553600,
+    "variant_id": 0,
+    "train_r": 6.154276,
+    "test_trades": 92,
+    "test_r": -3.369311,
+    "test_pips": -306.108643
+   },
+   {
+    "from": 1691553600,
+    "to": 1744671601,
+    "variant_id": 0,
+    "train_r": 3.592375,
+    "test_trades": 57,
+    "test_r": -1.301742,
+    "test_pips": -245.890213
+   }
+  ],
+  "trades": 239,
+  "mean_r": 0.388168,
+  "mean_pips": 19.519024
+ },
+ "bootstrap": {
+  "all": {
+   "low": 175.628817,
+   "high": 369.155182,
+   "n": 399
+  },
+  "oos": {
+   "low": -28.367563,
+   "high": 238.118478,
+   "n": 272
+  }
+ },
+ "spread": {
+  "x1": 275.759709,
+  "x1_5": 274.927504,
+  "x2": 274.095298
+ },
+ "swap": {
+  "nights_mean": 359.035088,
+  "nights_total": 143255.0,
+  "overnight_pct": 100.0,
+  "x0_5": 96.242163,
+  "x1": -83.275381
+ },
+ "ambiguous_pct": 0.0,
+ "equity": {
+  "1.0": {
+   "final": 13385.069289,
+   "return_pct": 33.850693,
+   "cagr_pct": 2.96712,
+   "max_dd_pct": -97.000391,
+   "max_dd_mae_pct": -204.002169,
+   "calmar": 0.030589,
+   "sharpe": 0.215306,
+   "sortino": 0.056189,
+   "longest_underwater_days": 1208.041667,
+   "taken": 399,
+   "skipped_margin": 0
+  }
+ },
+ "verdict": {
+  "color": "green",
+  "note": "wszystkie testy zaliczone",
+  "checks": [
+   {
+    "test": "expectancy netto OOS > 0",
+    "ok": true,
+    "value": 108.628632
+   },
+   {
+    "test": "percentyl benchmarku ≥ 95",
+    "ok": true,
+    "value": 100.0
+   },
+   {
+    "test": "PBO < 0,3",
+    "ok": null,
+    "na": true,
+    "value": null
+   },
+   {
+    "test": "DSR ≥ 0,95",
+    "ok": true,
+    "value": 1.0
+   },
+   {
+    "test": "dodatni przy spreadzie ×1,5",
+    "ok": true,
+    "value": 274.927504
+   }
+  ]
+ }
+}
