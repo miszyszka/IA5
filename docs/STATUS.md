@@ -11,8 +11,10 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 - **R3 Zakładka REV:** kapitał teraz i od startu, odliczanie do wtorku, słupki „gdzie jest kapitał” z linią 50%, kapitał w złotówkach dzień po dniu (z równym podziałem i 10 000 zł), ranking, transakcje + CSV, badanie metody z walidacją i raportem dla Claude. Sprawdzone w przeglądarce na danych przykładowych (`scripts/rev_fixture.py`, kursy zmyślone).
 - Numer decyzji: REV = **D-063** (D-062 zajęła równoległa sesja — czas trwania transakcji).
 
+**Poprawka po pierwszym uruchomieniu (15:37):** Yahoo nie ma kursów AEDPLN, HUFPLN, MXNPLN, QARPLN, RONPLN, SARPLN, THBPLN (HTTP 404) — `backfillPLN()` przerywał się błędem. Teraz 404 przy przyjmowaniu waluty = waluta odrzucona jak rzadki kurs (powód „Yahoo nie ma kursu …” w `meta/status.pln.rejected`), bez ponawiania; reszta walut zapisuje się normalnie, a `tickPLN_` rusza.
+
 **Następne — kroki Michała**
-1. Apps Script: wklej nowy `Code.gs`, uruchom raz `backfillPLN()` (kilka minut; w arkuszu `log` przyjęte i odrzucone waluty), potem `installTrigger()`.
+1. Apps Script: wklej nowy `Code.gs`, uruchom raz `backfillPLN()` (ponowne uruchomienie jest bezpieczne — upsert) (kilka minut; w arkuszu `log` przyjęte i odrzucone waluty), potem `installTrigger()`.
 2. Mac: `cd /Users/szyszka/IA5 && git pull && uv tool install -e runner --force`, restart `ia5 start` — kopia kursów PLN, potem badanie REV (ok. minuty), zakładka REV pokaże wynik; portfel startuje w najbliższy wtorek 08:00.
 3. Napisz Claude'owi po pierwszym badaniu: D-064 z listą przyjętych walut, datami odcinków IS/OOS i werdyktem.
 

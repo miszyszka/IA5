@@ -457,8 +457,14 @@ function fetchYahooRaw_(ticker, params, parse) {
     try {
       const r = UrlFetchApp.fetch(url, { muteHttpExceptions: true, headers: { 'User-Agent': 'Mozilla/5.0' } });
       if (r.getResponseCode() === 200) return parse(JSON.parse(r.getContentText()));
+      if (r.getResponseCode() === 404) {                 // D-063: Yahoo nie zna tego tickera — ponawianie nic nie da
+        const nf = new Error('Yahoo ' + ticker + ': HTTP 404');
+        nf.notFound = true;
+        throw nf;
+      }
       lastErr = 'HTTP ' + r.getResponseCode();
     } catch (e) {
+      if (e.notFound) throw e;
       lastErr = e.message;
     }
     if (i < 2) Utilities.sleep(1000 * Math.pow(2, i + 1));
@@ -673,6 +679,13 @@ function runSeriesD1_(series, mode, todo, st, now) {
       updated[p.name] = { firstDay: ps.firstDay, lastTs: ps.lastTs, lastDay: ps.lastDay, count: ps.count, flags: ps.flags, savedAt: ps.savedAt };
       log_(series.field + ' ' + mode, p.name, fresh.length, null, (ps.firstDay + ' – ' + ps.lastDay + ' ' + flags.slice(0, 5).join(' ')).trim());
     } catch (e) {
+      if (e.notFound && series.admit && mode === 'backfill') {   // D-063: Yahoo nie ma kursu do PLN — odrzucona jak rzadki kurs
+        st.rejected[p.name] = 'Yahoo nie ma kursu ' + p.yahoo;
+        if (items[p.name]) dropped.push(p.name);
+        delete items[p.name];
+        log_(series.field + ' ' + mode, p.name, 0, null, 'odrzucona: ' + st.rejected[p.name]);
+        return;
+      }
       errors.push(p.name + ': ' + e.message);
       log_(series.field + ' ' + mode, p.name, 0, null, 'BŁĄD ' + e.message);
     }
