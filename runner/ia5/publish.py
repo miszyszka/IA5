@@ -349,6 +349,42 @@ def publish_forest(folder: Path, log=print) -> str | None:
     return sha
 
 
+def publish_rev(files: dict[str, str], log=print) -> str | None:
+    """D-063: rev/{nazwa} na gałęzi data (research.json, report.md, state.json). Zapis tylko plików, które się zmieniły;
+    sam nowy czas liczenia (`computedAt` w JSON) nie jest zmianą. Zwraca SHA lub None."""
+    ensure_repo()
+    dst = DATA_REPO / "rev"
+    dst.mkdir(parents=True, exist_ok=True)
+
+    def same(name: str, text: str) -> bool:
+        t = dst / name
+        if not t.exists():
+            return False
+        old = t.read_text(encoding="utf-8")
+        if name.endswith(".json"):
+            try:
+                a, b = json.loads(old), json.loads(text)
+            except ValueError:
+                return False
+            a.pop("computedAt", None)
+            b.pop("computedAt", None)
+            return a == b
+        return old == text
+
+    changed = [n for n, text in files.items() if not same(n, text)]
+    if not changed:
+        log("  REV: bez zmian")
+        return None
+    for n in changed:
+        (dst / n).write_text(files[n], encoding="utf-8")
+    _git("add", "-A")
+    _git("commit", "-q", "-m", f"REV: {', '.join(changed)}")
+    _push()
+    sha = _git("rev-parse", "HEAD")
+    log(f"  REV: opublikowane ({', '.join(changed)}), {sha[:7]}")
+    return sha
+
+
 def delete_result(strategy_id: str, log=print) -> str | None:
     """Usuwa wynik strategii z gałęzi data i z indeksu (historia gita zostaje — G4)."""
     import shutil

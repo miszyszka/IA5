@@ -370,6 +370,7 @@ def cmd_start(_args) -> int:
     beat_now()
     enqueue_frozen(jobs, owner)
     jobs.put((FOREST_JOB, None))                                   # D-048: las zbuduje się sam przy pierwszym starcie
+    jobs.put((REV_JOB, None))                                      # D-063: badanie REV przy pierwszym starcie, potem portfel
     log("Połączony. Czekam na strategie (Ctrl+C kończy).")
     next_sync, last_forward = next_sync_time(), time.time()
     while True:
@@ -391,6 +392,7 @@ def cmd_start(_args) -> int:
                     last_forward = time.time()
                 queue_investors()                                  # nowe świece → paper trading inwestorów (D-045)
                 jobs.put((FOREST_JOB, None))                       # nowe świece → FOREST (D-048)
+                jobs.put((REV_JOB, None))                          # nowe kursy PLN → REV (D-063)
             continue
         if sid == INVESTORS_JOB:
             inv_seen["queued"] = False
@@ -398,6 +400,9 @@ def cmd_start(_args) -> int:
             continue
         if sid == FOREST_JOB:
             handle_forest(state)
+            continue
+        if sid == REV_JOB:
+            handle_rev(state)
             continue
         if data.get("status") == "do_usuniecia":
             handle_delete(sid)
@@ -437,6 +442,7 @@ def requeue_after_source_change(owner: str | None) -> bool:
 FORWARD_SECONDS = 6 * 3600   # W4: forward test zamrożonych strategii
 INVESTORS_JOB = "__inwestorzy__"
 FOREST_JOB = "__forest__"
+REV_JOB = "__rev__"
 SYNC_OFFSET = 300            # kopia świec 5 min po pełnej godzinie
 
 
@@ -635,6 +641,7 @@ def cmd_live(_args) -> None:
     if pln:
         ready.build_pln(pln, PLN_READY, tz=pln_tz, log=log)
     handle_investors(cloud.list_investors(), config().get("owner_uid"), {}, source="actions")
+    handle_rev({}, source="actions")    # D-063: portfel REV (wtorek 08:00, wycena dzienna)
 
 
 def handle_forest(state: dict) -> None:
@@ -671,6 +678,137 @@ def handle_forest(state: dict) -> None:
         state["now"] = "idle"
         state["job"] = None
         cloud.heartbeat("idle")
+
+
+def _read_json(path: Path) -> dict | None:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def rev_research_run(pln: dict, prior: dict | None, now: int, paths: int | None = None, log_fn=None,
+                     publish_it: bool = True) -> dict:
+    """D-063: turniej REV (otwiera OOS — tylko przy nowej REV_VERSION, R5): zapis ~/.ia5/rev/research/{run}/, dziennik OOS,
+    publikacja rev/research.json i rev/report.md."""
+    from . import cloud, publish, rev_research
+    from .rev_config import RANDOM_PATHS
+    from .store import REV
+
+    log_fn = log_fn or log
+    try:
+        rejected = (cloud.read_status().get("pln") or {}).get("rejected") or {}   # 1 odczyt, raz na REV_VERSION
+    except Exception:  # noqa: BLE001
+        rejected = (prior or {}).get("rejected") or {}
+    res = rev_research.run_research(pln, sorted(pln), prior, now, paths=paths or RANDOM_PATHS, log=log_fn, rejected=rejected)
+    run_id = time.strftime("%Y%m%d-%H%M%S", time.gmtime(now))
+    res["oos_openings"] = rev_research.ledger_add(HOME, res, run_id)
+    md = rev_research.report_md(res)
+    out = REV / "research" / run_id
+    out.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(res, ensure_ascii=False, indent=1, allow_nan=False)
+    (out / "research.json").write_text(text, encoding="utf-8")
+    (out / "report.md").write_text(md, encoding="utf-8")
+    if publish_it:
+        publish.publish_rev({"research.json": text, "report.md": md}, log=log_fn)
+    return res
+
+
+def handle_rev(state: dict, source: str = "mac") -> None:
+    """D-063: REV. Mac: brak badania albo inna REV_VERSION → badanie (turniej). Potem portfel na żywo (`rev_live`) —
+    normalnie w GitHub Actions; Mac tylko, gdy Actions nie działało od 2 h (jak inwestorzy). Błąd nie zatrzymuje programu
+    (w Actions idzie dalej); poprzedni stan na gałęzi data zostaje."""
+    from . import cloud, publish, ready, rev_live
+    from .rev_config import REV_VERSION
+    from .store import DATA_REPO, PLN_READY
+
+    beat = cloud.heartbeat if source == "mac" else (lambda *a, **k: None)
+    now = int(time.time())
+    try:
+        publish.ensure_repo()
+        pln = ready.load_pln(PLN_READY)
+        if not pln:
+            log("REV: brak kursów PLN — uruchom raz backfillPLN() w Apps Script (docs/SETUP.md, „Kursy złotówkowe”).")
+            return
+        infos = {c: df.attrs.get("info", {}) for c, df in pln.items()}
+        research = _read_json(DATA_REPO / "rev" / "research.json")
+        if source == "mac" and (research is None or research.get("rev_version") != REV_VERSION):
+            job = {"id": "rev", "name": "REV: badanie metody", "progress": 0, "phase": "turniej 13 wariantów"}
+            state["now"], state["job"] = "computing", job
+            beat("computing", job)
+            log("REV: badanie metody (turniej 13 wariantów, ≥ 1000 losowych podziałów)…")
+            research = rev_research_run(pln, research, now)
+        if research is None:
+            log("REV: badania jeszcze nie ma — policzy je Mac (ia5 start).")
+            return
+        if source == "mac" and cloud_active(DATA_REPO, now):
+            log("REV: portfel liczy GitHub Actions — Mac pomija.")
+            return
+        prev = _read_json(DATA_REPO / "rev" / "state.json")
+        st = rev_live.live_step(prev, research, pln, now, infos)
+        st["source"] = source
+        v = st.get("today", {}).get("total")
+        log(f"REV: {st['method']['id']} · start {time.strftime('%Y-%m-%d', time.gmtime(st['start_ts']))} · "
+            + (f"kapitał {v:,.2f} zł" if v else "czeka na pierwszy wtorek 08:00")
+            + f" · przewalutowań {len(st['rebalances'])}")
+        sha = publish.publish_rev({"state.json": json.dumps(st, ensure_ascii=False, separators=(",", ":"), allow_nan=False)},
+                                  log=log)
+        if sha and source == "mac":
+            cloud.set_data_sha(sha)
+    except Exception as e:  # noqa: BLE001 — błąd REV nie może zatrzymać programu
+        log(f"REV: błąd — {type(e).__name__}: {e}")
+        if source != "mac":
+            raise
+    finally:
+        if source == "mac":
+            state["now"], state["job"] = "idle", None
+            beat("idle")
+
+
+def cmd_rev(args) -> int:
+    """REV ręcznie (D-063). Normalnie niepotrzebne: badanie liczy ia5 start, portfel — ia5 live w GitHub Actions."""
+    from . import publish, ready, rev_live
+    from .rev_config import REV_VERSION
+    from .store import DATA_REPO, PLN_READY
+
+    if not args.lokalnie:
+        publish.ensure_repo()
+    research = _read_json(DATA_REPO / "rev" / "research.json")
+    state = _read_json(DATA_REPO / "rev" / "state.json")
+    if args.co == "status":
+        if not research:
+            print("Badania REV jeszcze nie ma — policzy je ia5 start (po backfillPLN() w Apps Script).")
+            return 0
+        p, ver = research["periods"], research["verdict"]
+        d = lambda t: time.strftime("%Y-%m-%d", time.gmtime(t))  # noqa: E731
+        print(f"REV {research['rev_version']} · zwycięzca {research['winner']} ({research['frozen']['label']}) · "
+              f"werdykt {ver['color']} {ver['passed']}/{ver['of']}")
+        print(f"  IS {d(p['start_ts'])} – {d(p['is_end_ts'])} · OOS do {d(p['oos_end_ts'])} · koszyki: {', '.join(research['universe'])}")
+        if state:
+            nxt = time.strftime("%Y-%m-%d %H:%M", time.gmtime(state["next_rebalance"]))
+            print(f"  portfel od {d(state['start_ts'])}: {state.get('today', {}).get('total', state['capital0']):,.2f} zł, "
+                  f"przewalutowań {len(state['rebalances'])}, następne {nxt} UTC")
+        return 0
+    pln = ready.load_pln(PLN_READY)
+    if not pln:
+        print("Brak kursów PLN na Macu — najpierw backfillPLN() w Apps Script i ia5 start.")
+        return 1
+    now = int(time.time())
+    if args.co == "badanie":
+        if research and research.get("rev_version") == REV_VERSION:
+            print("Badanie dla tej wersji już jest — OOS otwiera się tylko przy nowej REV_VERSION (R5).")
+            return 1
+        res = rev_research_run(pln, research, now, paths=args.sciezki, publish_it=not args.lokalnie)
+        print(f"Zwycięzca: {res['winner']} · werdykt {res['verdict']['color']} {res['verdict']['passed']}/5")
+        return 0
+    if not research:
+        print("Najpierw badanie: ia5 rev badanie.")
+        return 1
+    st = rev_live.live_step(state, research, pln, now, {c: df.attrs.get("info", {}) for c, df in pln.items()})
+    print(f"Portfel: {st.get('today', {}).get('total', st['capital0']):,.2f} zł · przewalutowań {len(st['rebalances'])}")
+    if not args.lokalnie:
+        publish.publish_rev({"state.json": json.dumps(st, ensure_ascii=False, separators=(",", ":"), allow_nan=False)}, log=log)
+    return 0
 
 
 def handle_delete(sid: str) -> None:
@@ -910,6 +1048,11 @@ def main(argv=None) -> int:
     p_fr.add_argument("--nasiono", type=int, default=5)
     p_fr.add_argument("--lokalnie", action="store_true", help="bez publikacji na gałąź data")
     p_fr.set_defaults(func=cmd_forest)
+    p_rev = sub.add_parser("rev", help="REV: badanie metody i portfel PLN (D-063); ia5 start i ia5 live robią to same")
+    p_rev.add_argument("co", choices=["badanie", "krok", "status"])
+    p_rev.add_argument("--lokalnie", action="store_true", help="bez publikacji na gałęzi data")
+    p_rev.add_argument("--sciezki", type=int, default=None, help="liczba losowych podziałów (domyślnie 1000)")
+    p_rev.set_defaults(func=cmd_rev)
     sub.add_parser("live", help="jeden przebieg inwestorów i maili w GitHub Actions (D-052)").set_defaults(func=cmd_live)
     sub.add_parser("status").set_defaults(func=cmd_status)
     sub.add_parser("health", help="opisowy przegląd zdrowia danych i projektu").set_defaults(func=cmd_health)
