@@ -191,38 +191,6 @@
    "demo": false,
    "timeframe": "D1",
    "d1_background": false
-  },
-  {
-   "id": "DaIZwlcCaYfGs0ZmDI7l",
-   "name": "D1",
-   "run_id": "20261111-101442",
-   "created": 1794392082,
-   "verdict": "red",
-   "verdict_note": "brak przewagi",
-   "n_variants": 324,
-   "hypothesis": "Kurs walutowy, który odjechał daleko od swojej średniej z ok. 3 lat (756 dni handlu), ma tendencję wracać\nw stronę tej średniej: parytet siły nabywczej, bilanse handlowe i polityka banków centralnych działają wolno, ale\nw skali lat ciągną kurs z powrotem. Cena poniżej średniej = long, powyżej = short (lustrzanie, więc jednostronny dryf\npary nie udaje przewagi). Odchylenie mierzymy trzema sposobami (w %, w ATR14 dziennym, w odchyleniach standardowych\nceny z 756 dni), każdym na 4 progach; wchodzimy trzema sposobami (pierwszy dzień przekroczenia / co najwyżej jedna\npozycja na tydzień dopóki odchylenie trwa — piramidowanie / jak poprzednie, ale tylko w dniu, gdy cena zawraca\nw stronę średniej). Bez stop lossa: pozycję zamyka powrót do średniej, TP w ATR albo upływ czasu (20–480 dni).\nHipoteza zapisana PRZED liczeniem.",
-   "pairs": [
-    "AUDUSD",
-    "EURGBP",
-    "EURJPY",
-    "EURUSD",
-    "GBPUSD",
-    "USDCAD",
-    "USDCHF",
-    "USDJPY"
-   ],
-   "data_from": 846633600,
-   "data_to": 1794268800,
-   "source": "yahoo",
-   "engine_version": "0.11.0",
-   "best_exit": "po 480 świecach",
-   "is_mean_r": 4.885104,
-   "oos_mean_r": 1.755866,
-   "oos_mean_pips": -25.865852,
-   "oos_trades": 118,
-   "demo": false,
-   "timeframe": "D1",
-   "d1_background": false
   }
  ]
 }
