@@ -298,6 +298,22 @@ def equal_targets(elig: pd.DataFrame) -> pd.DataFrame:
     return e.div(e.sum(axis=1).replace(0, np.nan), axis=0).fillna(0.0)
 
 
+def trade(units: np.ndarray, raw_px: np.ndarray, last_px: np.ndarray, target: np.ndarray, order: np.ndarray,
+          band: float = BAND, cap: float = CAP) -> tuple[np.ndarray, float, np.ndarray, np.ndarray]:
+    """Jedno przeliczenie (to samo w badaniu i na żywo): wycena jednostek po ostatnich znanych cenach, koszyk bez ceny
+    w dniu decyzji zamrożony, `rebalance` do celu; zmieniają się tylko koszyki, którym zmienia się udział.
+    Zwraca (nowe jednostki, wartość, zamrożone, zmienione)."""
+    px = np.where(np.isfinite(last_px), last_px, 0.0)
+    V = float(units @ px)
+    frozen = ~np.isfinite(raw_px)
+    cur = units * px / V if V > 0 else np.zeros(len(units))
+    new = rebalance(cur, target, order, frozen, band, cap)
+    chg = ~frozen & (px > 0) & (np.abs(new - cur) > 1e-12)
+    nu = units.copy()
+    nu[chg] = new[chg] * V / px[chg]
+    return nu, V, frozen, chg
+
+
 def simulate(exe: pd.DataFrame, targets: pd.DataFrame, orders: np.ndarray | None = None, band: float = BAND,
              cap: float = CAP, v0: float = START_PLN, start: int = 0, end: int | None = None) -> Sim:
     """Portfel tygodniowy od wiersza `start`: w t wycena jednostek po `exe` (brak ceny → ostatnia znana), koszyk bez ceny
@@ -315,19 +331,12 @@ def simulate(exe: pd.DataFrame, targets: pd.DataFrame, orders: np.ndarray | None
     Wt = np.zeros((len(P), N))
     trades = 0
     for t in range(start, T):
-        px = np.where(np.isfinite(last[t]), last[t], 0.0)
-        V = float(units @ px)
-        vals[t] = V
-        frozen = ~np.isfinite(P[t])
-        cur = units * px / V if V > 0 else np.zeros(N)
         o = orders[t] if orders is not None else _order(Tg[t])
-        new = rebalance(cur, Tg[t], o, frozen, band, cap)
-        nu = units.copy()
-        live = ~frozen & (px > 0)
-        nu[live] = new[live] * V / px[live]
-        trades += int((np.abs(nu - units) > 1e-9 * max(V, 1)).sum())
-        units = nu
-        U[t], Wt[t] = units, units * px / V if V > 0 else 0
+        units, V, _, chg = trade(units, P[t], last[t], Tg[t], o, band, cap)
+        vals[t] = V
+        trades += int(chg.sum())
+        px = np.where(np.isfinite(last[t]), last[t], 0.0)
+        U[t], Wt[t] = units, (units * px / V if V > 0 else 0)
     idx = exe.index
     value = pd.Series(vals, index=idx)
     nxt = np.full(len(P), np.nan)
