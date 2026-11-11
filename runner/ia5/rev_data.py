@@ -90,7 +90,8 @@ def clean_pln(raw: pd.DataFrame | None, tz: str = D1_TZ) -> tuple[pd.DataFrame, 
         ok = np.isfinite(c) & (c > 0)
     info["rejected"] = int((~ok).sum())
     df, days, c = df[ok].reset_index(drop=True), days[ok], c[ok]
-    if len(c):
+    if len(c):   # ostatnia świeca, którą Yahoo dało (także z powtórzonym zamknięciem) — gotowość dnia i wtorku na żywo
+        info["last_cts"] = int(close_ts(df["ts"].to_numpy("int64")[-1:], tz)[0])
         rep = np.r_[False, c[1:] == c[:-1]]
         info["repeated"] = int(rep.sum())
         df, days, c = df[~rep].reset_index(drop=True), days[~rep], c[~rep]

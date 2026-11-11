@@ -56,7 +56,7 @@ Otwarcia OOS REV: 1.
 
 ## Werdykt
 
-🟢 5/5 — zwycięzca: V3M3-R (Tania i przestała tanieć (3 lata), ranking), zamrożony 2026-09-30, hash kodu `45571efe01ad64b1`.
+🟢 5/5 — zwycięzca: V3M3-R (Tania i przestała tanieć (3 lata), ranking), zamrożony 2026-09-30, hash kodu `3e1696e13a3fbcd6`.
 
 ## Lata
 

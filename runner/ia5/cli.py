@@ -687,6 +687,23 @@ def _read_json(path: Path) -> dict | None:
         return None
 
 
+def _local_research(version: str) -> dict | None:
+    """Najnowsze badanie tej wersji zapisane na Macu (~/.ia5/rev/research/{run}/research.json)."""
+    from .store import REV
+
+    for f in sorted((REV / "research").glob("*/research.json"), reverse=True):
+        r = _read_json(f)
+        if r and r.get("rev_version") == version:
+            return r
+    return None
+
+
+def _local_report(res: dict) -> str:
+    from . import rev_research
+
+    return rev_research.report_md(res)
+
+
 def rev_research_run(pln: dict, prior: dict | None, now: int, paths: int | None = None, log_fn=None,
                      publish_it: bool = True) -> dict:
     """D-063: turniej REV (otwiera OOS — tylko przy nowej REV_VERSION, R5): zapis ~/.ia5/rev/research/{run}/, dziennik OOS,
@@ -733,6 +750,13 @@ def handle_rev(state: dict, source: str = "mac") -> None:
         infos = {c: df.attrs.get("info", {}) for c, df in pln.items()}
         research = _read_json(DATA_REPO / "rev" / "research.json")
         if source == "mac" and (research is None or research.get("rev_version") != REV_VERSION):
+            local = _local_research(REV_VERSION)   # badanie policzone, ale publikacja się nie udała — bez drugiego otwarcia OOS
+            if local is not None:
+                log("REV: badanie tej wersji jest na Macu, a nie na gałęzi data — publikuję ponownie (OOS bez nowego otwarcia).")
+                publish.publish_rev({"research.json": json.dumps(local, ensure_ascii=False, indent=1, allow_nan=False),
+                                     "report.md": _local_report(local)}, log=log)
+                research = local
+        if source == "mac" and (research is None or research.get("rev_version") != REV_VERSION):
             job = {"id": "rev", "name": "REV: badanie metody", "progress": 0, "phase": "turniej 13 wariantów"}
             state["now"], state["job"] = "computing", job
             beat("computing", job)
@@ -741,6 +765,13 @@ def handle_rev(state: dict, source: str = "mac") -> None:
         if research is None:
             log("REV: badania jeszcze nie ma — policzy je Mac (ia5 start).")
             return
+        if research.get("rev_version") != REV_VERSION:   # R6: kod w innej wersji niż zamrożona metoda — portfel czeka
+            log(f"REV: kod w wersji {REV_VERSION}, badanie w {research.get('rev_version')} — portfel czeka na nowe badanie (Mac).")
+            return
+        from .rev_research import code_hash
+
+        if code_hash() != (research.get("frozen") or {}).get("code_hash"):
+            log("REV: uwaga — kod REV zmienił się od badania bez nowej REV_VERSION (liczę dalej zamrożoną metodą).")
         if source == "mac" and cloud_active(DATA_REPO, now):
             log("REV: portfel liczy GitHub Actions — Mac pomija.")
             return

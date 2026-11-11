@@ -618,6 +618,7 @@ function plnAdmission_(bars, now, tz) {
 function runSeriesD1_(series, mode, todo, st, now) {
   const errors = [];
   const updated = {};
+  const dropped = [];
   const items = st[series.key];
   const rejectedBefore = JSON.stringify(st.rejected || {});
   todo.forEach(p => {
@@ -640,6 +641,7 @@ function runSeriesD1_(series, mode, todo, st, now) {
         const why = series.admit(bars, now, tz);
         if (why) {
           st.rejected[p.name] = why;
+          if (items[p.name]) dropped.push(p.name);   // wcześniej przyjęta, teraz odrzucona — znika też z meta/status
           delete items[p.name];
           log_('PLN ' + mode, p.name, 0, null, 'odrzucona: ' + why);
           return;
@@ -678,13 +680,14 @@ function runSeriesD1_(series, mode, todo, st, now) {
   if (mode === 'backfill' && !errors.length) st.backfilled = true;
   saveSeries_(series, st);
   const rejectedChanged = series.admit && JSON.stringify(st.rejected) !== rejectedBefore;
-  if (mode === 'tick' && !Object.keys(updated).length && !errors.length) return;
+  if (mode === 'tick' && !Object.keys(updated).length && !dropped.length && !errors.length) return;
   const total = Object.keys(items).reduce((s, k) => s + ((items[k] || {}).count || 0), 0);
   const fields = { tz: st.tz || D1_TZ, totalBars: total,
     lastRun: { mode: mode, at: nowSec(), ok: !errors.length, error: errors.join('; ') || null } };
   fields[series.key] = updated;
   const f = series.field;
-  const paths = [f + '.tz', f + '.totalBars', f + '.lastRun'].concat(Object.keys(updated).map(k => f + '.' + series.key + '.' + k));
+  const paths = [f + '.tz', f + '.totalBars', f + '.lastRun'].concat(Object.keys(updated).map(k => f + '.' + series.key + '.' + k))
+    .concat(dropped.map(k => f + '.' + series.key + '.' + k));   // pole w masce bez wartości = usunięcie (Firestore)
   if (series.admit && (mode === 'backfill' || rejectedChanged)) { fields.rejected = st.rejected; paths.push(f + '.rejected'); }
   const value = {};
   value[f] = toValue_(fields);

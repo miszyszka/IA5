@@ -64,3 +64,13 @@ def test_properties(seed):   # 200 losowych przypadków (bez biblioteki hypothes
         assert (new >= -1e-12).all()
         assert new.max() <= 0.5 + 1e-9
         assert np.allclose(new[frozen], cur[frozen])
+
+
+def test_all_frozen_but_pln_keeps_capital():
+    """Przegląd: wszystko zamrożone poza PLN, PLN ponad limit — limit przekroczony z konieczności, kapitał nie znika."""
+    cur = np.array([0.2, 0.2, 0.6])                      # A, B zamrożone (bez ceny), PLN 60%
+    new = rm.rebalance(cur, np.array([0.5, 0.5, 0.0]), np.array([0, 1, 2]), np.array([True, True, False]))
+    assert np.isclose(new.sum(), 1.0) and np.allclose(new, cur)
+    units, V, frozen, chg = rm.trade(np.array([200.0, 200.0, 6000.0]), np.array([np.nan, np.nan, 1.0]),
+                                     np.array([10.0, 10.0, 1.0]), np.array([0.5, 0.5, 0.0]), np.array([0, 1, 2]))
+    assert np.isclose(units @ np.array([10.0, 10.0, 1.0]), V) and np.isclose(V, 10_000)

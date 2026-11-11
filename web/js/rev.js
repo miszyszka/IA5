@@ -29,17 +29,20 @@ export async function loadRev() {
 function header(st, res) {
   const b = verdictBadge(res);
   const s = liveSummary(st);
-  const next = nextDecisionMs(Date.now());
+  const now = Date.now();
+  const next = st?.next_rebalance ? st.next_rebalance * 1000 : nextDecisionMs(now);
+  const nextText = !next ? '—' : next <= now ? `${fmtWarsaw(next / 1000).slice(5)} · czeka na kursy z poniedziałku (najpóźniej 20:00)`
+    : `${fmtWarsaw(next / 1000).slice(5)} · ${countdown(next - now)}`;
   const started = st && st.rebalances?.length;
   return h('div', { class: 'ihead panel' }, h('h2', {}, 'REV'),
     h('div', { class: 'istatus', 'data-state': { green: 'ok', yellow: 'warn', red: 'bad' }[b.color] || 'mute' }, h('i', { class: 'dot flat' }),
       h('b', {}, res ? res.frozen.label : 'brak badania'), h('span', {}, res ? `werdykt badania ${b.text}` : ''),
-      st ? h('span', { class: 'muted' }, ` · liczony ${ago(st.computedAt)}`) : ''),
+      st ? h('span', { class: 'muted' }, ` · ostatnia zmiana stanu ${ago(st.computedAt)}`) : ''),
     h('p', { class: 'muted small' }, 'Co wtorek o 08:00 (cena z zamknięcia poniedziałku) cały kapitał jest dzielony na waluty proporcjonalnie do tego, jak bardzo są teraz tanie wobec złotego. Żaden koszyk — waluta, blok o sztywnym kursie ani PLN — nie ma więcej niż 50%. Bez spreadów i opłat.'),
     h('div', { class: 'kpis small' },
       kpi('Kapitał teraz', zl(s.total), cls(s.change)), kpi('Od startu', `${signed(s.change, 2)} zł (${signed(s.pct, 2)}%)`, cls(s.change)),
       kpi('Równy podział', `${zl(s.equal)} (${signed(s.equalPct, 2)}%)`, cls(s.equalPct)),
-      kpi('Następne przeliczenie', next ? `${fmtWarsaw(next / 1000).slice(5)} · ${countdown(next - Date.now())}` : '—'),
+      kpi('Następne przeliczenie', nextText),
       kpi('Przewalutowania', started ? `${st.rebalances.length} wtorków, ${st.ledger.length} zmian` : '—')));
 }
 

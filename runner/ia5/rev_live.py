@@ -50,7 +50,7 @@ def new_state(research: dict, archive: list | None = None) -> dict:
     return {"rev_version": research.get("rev_version"), "method": m, "universe": universe,
             "blocs": research.get("blocs", {}), "start_ts": int(start), "capital0": START_PLN,
             "units": dict(units), "equal_units": dict(units), "ledger": [], "rebalances": [], "valuation": [],
-            "scale_known": [], "scale_applied": [], "last_day": None, "last_decision": None,
+            "scale_known": [], "scale_applied": [], "last_px": {BASE: 1.0}, "last_day": None, "last_decision": None,
             "next_rebalance": int(start), "today": {}, "archive": list(archive or []), "computedAt": None}
 
 
@@ -73,6 +73,8 @@ def _apply_scale_events(st: dict, infos: dict | None, now: int) -> None:
                 st["units"][c] = st["units"][c] / float(f)
                 st["equal_units"][c] = st["equal_units"].get(c, 0.0) / float(f)
                 st["scale_applied"].append([int(now), c, float(f), int(ts)])
+            if c in st.setdefault("last_px", {}):
+                st["last_px"][c] = st["last_px"][c] * float(f)
             st["scale_known"].append([c, int(ts)])
             known.add(key)
 
@@ -110,6 +112,8 @@ def _decision(st: dict, research: dict, ready: dict, D: int, exp_day: str) -> No
     trend_s = rm.score(x, "M3", elig).where(elig).iloc[-1]
     raw = prices.iloc[-1].to_numpy(float)
     last = prices.ffill().iloc[-1].to_numpy(float)
+    known = st.setdefault("last_px", {})
+    last = np.array([x if np.isfinite(x) else known.get(b, np.nan) for b, x in zip(universe, last)], float)
     units = np.array([st["units"][b] for b in universe], float)
     nu, V, frozen, chg = rm.trade(units, raw, last, target, order)
     eu = np.array([st["equal_units"][b] for b in universe], float)
@@ -138,6 +142,7 @@ def _decision(st: dict, research: dict, ready: dict, D: int, exp_day: str) -> No
         "late": late, "frozen": [b for b, f in zip(universe, frozen) if f], "price_day": exp_day})
     st["units"] = {b: float(u) for b, u in zip(universe, nu)}
     st["equal_units"] = {b: float(u) for b, u in zip(universe, enu)}
+    known.update({b: float(x) for b, x in zip(universe, last) if np.isfinite(x)})
     st["last_decision"] = int(D)
 
 
@@ -162,7 +167,7 @@ def live_step(prev: dict | None, research: dict, ready: dict[str, pd.DataFrame],
     frames = {c: ready[c] for c in universe if c != BASE and ready.get(c) is not None and len(ready[c])}
     if frames and now >= start:
         daily = daily_panel(ready, universe, from_ts=start - 40 * 86400).ffill()
-        cts = {c: set(f["close_ts"].to_numpy("int64").tolist()) for c, f in frames.items()}
+        seen = {c: int((infos or {}).get(c, {}).get("last_cts") or f["close_ts"].iloc[-1]) for c, f in frames.items()}
         after = st["last_day"] if st["last_day"] is not None else start
         days = [int(d) for d in daily.index.to_numpy("int64") if after < d <= now]
         last_dec = st["last_decision"]
@@ -170,9 +175,12 @@ def live_step(prev: dict | None, research: dict, ready: dict[str, pd.DataFrame],
         events = sorted([(d, 0) for d in days] + [(D, 1) for D in decs])
         for t, kind in events:
             if kind == 0:
-                if not (all(t in s for s in cts.values()) or now >= t + DAY_GRACE_S):
+                if not (all(x >= t for x in seen.values()) or now >= t + DAY_GRACE_S):
                     break
                 row = daily.loc[t].reindex(universe).to_numpy(float)
+                known = st.setdefault("last_px", {})
+                row = np.array([x if np.isfinite(x) else known.get(b, np.nan) for b, x in zip(universe, row)], float)
+                known.update({b: float(x) for b, x in zip(universe, row) if np.isfinite(x)})
                 px = np.where(np.isfinite(row), row, 0.0)
                 val = sum(st["units"][b] * p for b, p in zip(universe, px))
                 eqv = sum(st["equal_units"][b] * p for b, p in zip(universe, px))
@@ -180,7 +188,8 @@ def live_step(prev: dict | None, research: dict, ready: dict[str, pd.DataFrame],
                 st["last_day"] = int(t)
             else:
                 exp_day = expected_price_day(t)
-                on_time = all(_last_day_before(f, t) == exp_day for f in frames.values())
+                exp_cts = _close_of_day(exp_day)
+                on_time = all(x >= exp_cts for x in seen.values())   # świeca dnia jest (także z tym samym kursem)
                 if not (on_time or now >= t + GRACE_S):
                     break
                 _decision(st, research, ready, t, exp_day)
@@ -193,6 +202,7 @@ def live_step(prev: dict | None, research: dict, ready: dict[str, pd.DataFrame],
         elif st["valuation"]:
             t, _, _ = st["valuation"][-1]
             row = daily.loc[:t].iloc[-1].reindex(universe).to_numpy(float)
+            row = np.array([x if np.isfinite(x) else st["last_px"].get(b, np.nan) for b, x in zip(universe, row)], float)
             px = np.where(np.isfinite(row), row, 0.0)
             vals = {b: float(st["units"][b] * p) for b, p in zip(universe, px)}
             tot = sum(vals.values())
@@ -207,7 +217,9 @@ def live_step(prev: dict | None, research: dict, ready: dict[str, pd.DataFrame],
     return clean_json(st)
 
 
-def _last_day_before(f: pd.DataFrame, t: int) -> str | None:
-    cts = f["close_ts"].to_numpy("int64")
-    i = int(np.searchsorted(cts, t, side="right")) - 1
-    return str(f["day"].iloc[i]) if i >= 0 else None
+def _close_of_day(day: str) -> int:
+    """Czas zamknięcia świecy D1 danego dnia (północ następnego dnia w Londynie)."""
+    from .daily import D1_TZ, close_ts
+
+    open_ts = int(pd.Timestamp(day).tz_localize(D1_TZ).tz_convert("UTC").timestamp())
+    return int(close_ts(np.array([open_ts], dtype="int64"), D1_TZ)[0])

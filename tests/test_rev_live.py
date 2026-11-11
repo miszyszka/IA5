@@ -203,3 +203,34 @@ def test_switcher_live_uses_prices_only(raw):
         ex[v.id] = rm.simulate(prices, tg[v.id], od[v.id], start=start).ret.reindex(prices.index) - eq.ret.reindex(prices.index)
     _, chosen, _ = rm.switcher_targets(pd.DataFrame(ex), tg, eqt, start, od)
     assert st["rebalances"][0]["variant"] == chosen.iloc[-1]
+
+
+def test_missing_currency_file_keeps_last_price(raw):
+    """Przegląd: brak pliku waluty (np. nieudana synchronizacja) — wycena po ostatniej znanej cenie, nie zero."""
+    now = ts("2026-11-17 09:00")
+    r, i = ready_at(raw, now)
+    st = live_step(None, research(), r, now, i)
+    held = max(CODES, key=lambda c: st["units"][c])
+    now2 = ts("2026-11-19 12:00")
+    r2, i2 = ready_at(raw, now2)
+    r2.pop(held)
+    i2.pop(held)
+    st2 = live_step(roundtrip(st), research(), r2, now2, i2)
+    vals = np.array([v for _, v, _ in st2["valuation"]])
+    assert (np.abs(np.diff(np.log(vals))) < 0.05).all()            # bez skoku o wartość brakującej waluty
+    assert st2["today"]["values"][held] > 0
+
+
+def test_unchanged_monday_close_does_not_delay(raw):
+    """Przegląd: zamknięcie poniedziałku = piątku (warstwa czyszczenia je usuwa) — przeliczenie i tak o 08:00, nie o 20:00."""
+    monday, friday = ts("2026-11-16 00:00", "Europe/London"), ts("2026-11-13 00:00", "Europe/London")
+
+    def flat(c, d):
+        if c == "CHF" and (d["ts"] == monday).any():
+            d.loc[d["ts"] == monday, "close"] = float(d.loc[d["ts"] == friday, "close"].iloc[0])
+        return d
+
+    now = ts("2026-11-17 09:00")
+    r, i = ready_at(raw, now, flat)
+    st = live_step(None, research(), r, now, i)
+    assert len(st["rebalances"]) == 1

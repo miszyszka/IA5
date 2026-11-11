@@ -111,3 +111,22 @@ def test_publish_rev_ignores_computed_at(monkeypatch, tmp_path):
     assert publish.publish_rev({"state.json": a}, log=lambda m: None) == "abc1234"
     assert publish.publish_rev({"state.json": b}, log=lambda m: None) is None
     assert publish.publish_rev({"state.json": json.dumps({"x": 2})}, log=lambda m: None) == "abc1234"
+
+
+def test_failed_publish_does_not_reopen_oos(env, monkeypatch):
+    """Przegląd: badanie policzone, publikacja padła — następny przebieg bierze badanie z Maca, bez drugiego otwarcia OOS."""
+    calls, repo, home = env
+    monkeypatch.setattr(cli, "cloud_active", lambda *a: True)
+    cli.handle_rev({})
+    assert calls["research"] == 1
+    cli.handle_rev({})                                   # na gałęzi data nadal brak research.json
+    assert calls["research"] == 1
+    assert len(json.loads((home / "oos_ledger.json").read_text())) == 1
+    assert "research.json" in calls["published"][-1]
+
+
+def test_live_waits_when_code_version_differs(env):
+    calls, repo, home = env
+    (repo / "rev" / "research.json").write_text(json.dumps({"rev_version": "0", "frozen": {"code_hash": "x"}}))
+    cli.handle_rev({}, source="actions")
+    assert calls["live"] == 0 and any("czeka na nowe badanie" in m for m in calls["logs"])

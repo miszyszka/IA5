@@ -351,7 +351,7 @@
  "frozen": {
   "id": "V3M3-R",
   "label": "Tania i przestała tanieć (3 lata), ranking",
-  "code_hash": "45571efe01ad64b1",
+  "code_hash": "3e1696e13a3fbcd6",
   "rev_version": "1",
   "at": 1790769600
  },
@@ -3353,6 +3353,6 @@
   "ZAR": 3.4431675931397185,
   "PLN": 0.0
  },
- "seconds": 3.9,
+ "seconds": 3.8,
  "oos_openings": 1
 }

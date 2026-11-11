@@ -183,7 +183,7 @@ def random_benchmark(exe: pd.DataFrame, elig: pd.DataFrame, start: int, is_end: 
 
 def code_hash() -> str:
     h = hashlib.sha256(f"{REV_VERSION}:{CLEAN_PLN_VERSION}".encode())
-    for name in ("rev_data.py", "rev_method.py", "rev_research.py"):
+    for name in ("rev_config.py", "rev_data.py", "rev_method.py", "rev_research.py", "rev_live.py"):
         h.update((ROOT / name).read_bytes())
     return h.hexdigest()[:16]
 

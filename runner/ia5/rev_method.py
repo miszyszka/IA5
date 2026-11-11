@@ -164,8 +164,15 @@ def _spill(w: np.ndarray, order: np.ndarray, cap: float, groups: list[np.ndarray
     """Ucina wagi powyżej `cap`, a nadwyżkę rozdziela grupami: w grupie najpierw proporcjonalnie do koszyków z wagą
     w (0, cap), potem kolejno według `order` (każdy do `cap`); co się nie zmieści — następna grupa."""
     w = np.asarray(w, float).copy()
+    total = float(w.sum())
+    cut_from = w > cap + EPS
     excess = float(np.maximum(w - cap, 0).sum())
     w = np.minimum(w, cap)
+    return _spill_groups(w, order, cap, groups, excess, total, cut_from)
+
+
+def _spill_groups(w: np.ndarray, order: np.ndarray, cap: float, groups: list[np.ndarray], excess: float, total: float,
+                  cut_from: np.ndarray) -> np.ndarray:
     for g in groups:
         for _ in range(len(w) + 1):
             if excess <= EPS:
@@ -183,6 +190,12 @@ def _spill(w: np.ndarray, order: np.ndarray, cap: float, groups: list[np.ndarray
                 p = min(cap - w[i], excess)
                 w[i] += p
                 excess -= p
+    if excess > EPS:   # nie ma gdzie zmieścić (np. wszystko zamrożone poza PLN) — limit przekroczony z konieczności,
+        back = cut_from & (w > EPS)          # kapitał nigdy nie znika: nadwyżka wraca do koszyków, którym ją ucięto
+        if not back.any():
+            back = w > EPS
+        w[back] += excess * w[back] / w[back].sum() if back.any() else 0.0
+    assert abs(w.sum() - total) < 1e-9, "podział zgubił kapitał"
     return w
 
 
@@ -311,6 +324,7 @@ def trade(units: np.ndarray, raw_px: np.ndarray, last_px: np.ndarray, target: np
     chg = ~frozen & (px > 0) & (np.abs(new - cur) > 1e-12)
     nu = units.copy()
     nu[chg] = new[chg] * V / px[chg]
+    assert V <= 0 or abs(float(nu @ px) - V) <= 1e-7 * V, "przeliczenie zmieniło wartość portfela (bez kosztów musi być ta sama)"
     return nu, V, frozen, chg
 
 
