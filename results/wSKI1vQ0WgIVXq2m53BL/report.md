@@ -1,6 +1,6 @@
 # Raport strategii: Powrót
 
-Run `20261111-065709` · silnik 0.9.0 · kod `12864a1b4312df32` · dane `40b27f728f7febc2`
+Run `20261111-091846` · silnik 0.11.0 · kod `12864a1b4312df32` · dane `7c00789c3bc9d3f7`
 
 ## Werdykt: 🟡 ŻÓŁTY — zaliczone 4 z 5 testów
 
@@ -24,13 +24,13 @@ na razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach 
 
 ## Dane i model wykonania
 
-- Pary: AUDUSD, EURGBP, EURJPY, EURUSD, GBPUSD, USDCAD, USDCHF, USDJPY; świece H1 od 2024-10-28 do 2026-11-11; źródło: yahoo.
+- Pary: AUDUSD, EURGBP, EURJPY, EURUSD, GBPUSD, USDCAD, USDCHF, USDJPY; świece H1 od 2024-10-28 do 2026-11-11; źródło: yahoo; tło D1 (świece dzienne, cała historia Yahoo) w signals() — D-058.
 
 - In-sample do 2026-05-09, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS.
 
 - Wejście na open świecy po sygnale, o dowolnej godzinie (strategia wyłączyła okno handlu, HOURS = False, D-034); wyjście na dowolnej świecy, także po nocy i weekendzie (D-032). TP i SL w tej samej świecy: przyjęty SL (pesymistycznie — świece H1 nie mówią, co padło pierwsze; transakcja z flagą `ambiguous`, B5).
 
-- Spread raz na transakcję (pips): EURUSD 0.9, USDJPY 1.4, GBPUSD 1.5, EURGBP 1.7, AUDUSD 1.7, USDCHF 1.9, USDCAD 2, EURJPY 2.1. Swapy pominięte.
+- Spread raz na transakcję (pips): EURUSD 0.9, USDJPY 1.4, GBPUSD 1.5, EURGBP 1.7, AUDUSD 1.7, USDCHF 1.9, USDCAD 2, EURJPY 2.1. Swapy pominięte (O5) — liczba nocy i stres „koszt nocy” w walidacji (D-054).
 
 - Jedna pozycja na parę naraz (B8).
 
@@ -86,17 +86,17 @@ na razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach 
 
 ### Kapitał
 
-| depozyt | kapitał końcowy | zwrot % | CAGR % | max obsunięcie % | Sharpe | pominięte (depozyt) |
-|---|---|---|---|---|---|---|
-| 5.0% | 14 048 | 40.5 | 18.3 | -6.6 | 2.06 | 0 |
-| 10.0% | 19 544 | 95.4 | 39.2 | -13.1 | 2.06 | 0 |
-| 15.0% | 26 916 | 169.2 | 63.0 | -19.5 | 2.06 | 0 |
-| 20.0% | 36 676 | 266.8 | 89.9 | -25.9 | 2.05 | 0 |
-| 30.0% | 54 218 | 442.2 | 130.4 | -38.3 | 1.89 | 11 |
+| depozyt | kapitał końcowy | zwrot % | CAGR % | max obsunięcie % | obsunięcie z otwartymi (MAE) % | Sharpe | pominięte (depozyt) |
+|---|---|---|---|---|---|---|---|
+| 5.0% | 14 048 | 40.5 | 18.3 | -6.6 | -7.7 | 2.06 | 0 |
+| 10.0% | 19 544 | 95.4 | 39.2 | -13.1 | -15.4 | 2.06 | 0 |
+| 15.0% | 26 916 | 169.2 | 63.0 | -19.5 | -23.0 | 2.06 | 0 |
+| 20.0% | 36 676 | 266.8 | 89.9 | -25.9 | -30.6 | 2.05 | 0 |
+| 30.0% | 54 218 | 442.2 | 130.4 | -38.3 | -45.6 | 1.89 | 11 |
 
 ## Walidacja
 
-- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 10.15 pips/transakcję, percentyl **100.0** (losowe: 5%=-7.39, mediana=-2.11, 95%=2.43).
+- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 10.15 pips/transakcję, percentyl **100.0** (losowe: 5%=-7.13, mediana=-1.97, 95%=2.52).
 
 - **Deflated Sharpe Ratio**: 0.651 (Sharpe na transakcję 0.218, próg przy 5 próbach 0.177).
 
@@ -109,6 +109,13 @@ na razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach 
 - **Spread**: ×1 10.15, ×1,5 9.38, ×2 8.60 pips/transakcję.
 
 - TP i SL w tej samej świecy bez rozstrzygnięcia: 0.00% transakcji.
+
+- **Noce (swap pominięty, O5)**: średnio 1.6 nocy na transakcję, 64% transakcji przez 21:00 UTC; wynik netto przy koszcie nocy 0,5 pipsa: 9.34, 1 pips: 8.54 pips/transakcję.
+
+## Forward test od zamrożenia (W4, D-056)
+
+- Zamrożona 2026-11-10; oceniany wariant: ATR14 TP 1.5× SL 0× max 60 (zamrożony, nie ranking); oczekiwanie sprzed zamrożenia: 10.15 pips / 0.49 R na transakcję (278 transakcji).
+- Jeszcze żadnej transakcji od zamrożenia.
 
 ## Znane ograniczenia
 
