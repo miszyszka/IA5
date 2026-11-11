@@ -7,8 +7,8 @@ Znacznik świecy = czas otwarcia (D1): Yahoo kwotuje dzień FX od północy w st
 Europe/London), więc ts świecy dnia d = północ d w Londynie (zimą 00:00 UTC, latem 23:00 UTC dnia poprzedniego).
 Świeca dnia d jest zamknięta, gdy w Londynie zaczął się dzień d+1 (+60 s, jak D2).
 
-Silnik, skaner, las i inwestorzy nadal liczą wyłącznie na H1 — D1 jest na razie tylko przechowywana, sprawdzana
-i publikowana (D-053). Zgłasza, niczego nie naprawia (D5).
+Silnik i inwestorzy liczą na D1 przez `clean_d1` (D-058); skaner, `ia5 search` i las — tylko na H1.
+Kontrola zgłasza, niczego nie naprawia (D5).
 """
 from __future__ import annotations
 
@@ -69,11 +69,17 @@ def days_behind(last_day: str, exp: str) -> int:
     return n
 
 
-def d1_flags(df: pd.DataFrame, tz: str = D1_TZ) -> dict:
-    """Liczniki na świecach D1. Twarde błędy: ohlc, cena ≤ 0, czas nie o północy, dwa wpisy na ten sam dzień.
+BIG_OHLC_PIPS = 20   # D-059: naruszenie OHLC większe niż tyle pipsów = „duże” (reszta to drobny szum Yahoo, ok. 83% ≤ 3 pipsy)
+RECENT_DAYS = 30     # D-059: „świeże” = z ostatnich 30 dni kalendarzowych danej pary
+
+
+def d1_flags(df: pd.DataFrame, tz: str = D1_TZ, pip: float = 0.0001) -> dict:
+    """Liczniki na świecach D1. Twarde błędy: cena ≤ 0, czas nie o północy, dwa wpisy na ten sam dzień.
+    OHLC (high < max(O,C) albo low > min(O,C)): `ohlc` = wszystkie, `ohlc_big` = większe niż BIG_OHLC_PIPS pipsów,
+    `ohlc_big_recent` = duże z ostatnich RECENT_DAYS dni, `ohlc_max_pips` = największe (D-059: Yahoo robi to stale, ok. 2%).
     Informacyjne (typowe dla starej historii Yahoo): świece w weekend/święto, płaskie (O=H=L=C), brakujące dni robocze."""
-    empty = {"bars": 0, "ohlc": 0, "price": 0, "offgrid": 0, "dup_days": 0, "weekend": 0, "flat": 0,
-             "missing": 0, "missing_list": [], "first_day": None, "last_day": None}
+    empty = {"bars": 0, "ohlc": 0, "ohlc_big": 0, "ohlc_big_recent": 0, "ohlc_max_pips": 0.0, "price": 0, "offgrid": 0,
+             "dup_days": 0, "weekend": 0, "flat": 0, "missing": 0, "missing_list": [], "first_day": None, "last_day": None}
     if df is None or df.empty:
         return empty
     o, h, lo, c = (df[k].to_numpy(float) for k in ("open", "high", "low", "close"))
@@ -83,9 +89,18 @@ def d1_flags(df: pd.DataFrame, tz: str = D1_TZ) -> dict:
     wk = np.array([not is_expected_day(date.fromisoformat(d)) for d in days])
     uniq = sorted(set(days[midnight]))
     miss = missing_days(uniq)
+    with np.errstate(invalid="ignore"):
+        viol = np.maximum(np.maximum(o, c) - h, lo - np.minimum(o, c)) / pip      # rozmiar naruszenia OHLC w pipsach
+    is_ohlc = (h < np.maximum(o, c) - 1e-12) | (lo > np.minimum(o, c) + 1e-12)
+    big = is_ohlc & (viol > BIG_OHLC_PIPS)
+    last_ts = int(df["ts"].max())
+    recent = np.asarray(df["ts"], dtype="int64") > last_ts - RECENT_DAYS * 86400
     return {
         "bars": int(len(df)),
-        "ohlc": int(((h < np.maximum(o, c) - 1e-12) | (lo > np.minimum(o, c) + 1e-12)).sum()),
+        "ohlc": int(is_ohlc.sum()),
+        "ohlc_big": int(big.sum()),
+        "ohlc_big_recent": int((big & recent).sum()),
+        "ohlc_max_pips": float(viol[is_ohlc].max()) if is_ohlc.any() else 0.0,
         "price": int((np.minimum.reduce([o, h, lo, c]) <= 0).sum()),
         "offgrid": int((~midnight).sum()),
         "dup_days": int(len(days) - len(set(days))),

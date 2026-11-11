@@ -162,9 +162,13 @@ def local_data(home: Path, yahoo: dict) -> dict:
 
 
 def daily_candles(status: dict, d1: dict | None, now: int) -> dict:
-    """D-053: świece dzienne Yahoo — czy są dla 8 par, czy są świeże, czy Mac ma kopię zgodną z Firestore, poprawność.
-    Luki, płaskie świece i świece w weekend w starej historii Yahoo to informacja, nie problem (nic nie liczy na D1)."""
-    from .daily import D1_TZ, d1_flags, days_behind, expected_day
+    """D-053/D-059: świece dzienne Yahoo — czy są dla 8 par, czy są świeże, czy Mac ma kopię zgodną z Firestore, poprawność.
+    Yahoo stale (ok. 2% świec, także dziś) podaje high/low niezgodne z open/close — to jego cecha, nie awaria potoku: warstwa
+    czyszczenia D1 (D-058) takie świece odrzuca. Dlatego OHLC jest tylko informacją (✓ z liczbą odrzucanych), a ostrzeżeniem
+    dopiero duże naruszenie (> 20 pipsów) w ostatnich 30 dniach. Czerwone: cena ≤ 0, czas nie o północy, dwa wpisy na dzień,
+    brak pary."""
+    from .config import PAIRS as PAIR_CFG
+    from .daily import BIG_OHLC_PIPS, D1_TZ, RECENT_DAYS, d1_flags, days_behind, expected_day
 
     name = "Świece dzienne (D1)"
     st = status.get("d1") or {}
@@ -173,41 +177,56 @@ def daily_candles(status: dict, d1: dict | None, now: int) -> dict:
         return check("daily", name, "warn", "W bazie nie ma jeszcze świec dziennych.",
                      fix="W Apps Script wklej nowy Code.gs i uruchom raz backfillD1() (docs/SETUP.md, „Świece dzienne”).")
     exp = expected_day(now, tz)
-    state, problems, detail = "ok", [], []
+    state, problems, detail, fixes = "ok", [], [], []
+    ohlc_total = 0
     for p in PAIRS:
         df = (d1 or {}).get(p)
-        f = d1_flags(df, tz)
+        f = d1_flags(df, tz, PAIR_CFG[p].pip)
         r = remote.get(p) or {}
         if not f["bars"]:
             state = "bad"
             problems.append(f"{label(p)}: brak świec D1 na Macu")
+            fixes.append("Brak pary: uruchom ia5 start (kopia D1 z Firestore); gdy Firestore jej nie ma — backfillD1() w Apps Script.")
             continue
         behind = days_behind(f["last_day"], exp)
-        hard = f["ohlc"] + f["price"] + f["offgrid"] + f["dup_days"]
+        hard = f["price"] + f["offgrid"] + f["dup_days"]
+        ohlc_total += f["ohlc"]
         line = (f"{label(p)}: {f['first_day']} – {f['last_day']}, {fmt(f['bars'])} świec; brakujące dni robocze "
-                f"{fmt(f['missing'])}, płaskie {fmt(f['flat'])}, w weekend/święto {fmt(f['weekend'])}")
+                f"{fmt(f['missing'])}, płaskie {fmt(f['flat'])}, w weekend/święto {fmt(f['weekend'])}; "
+                f"złe OHLC {fmt(f['ohlc'])} (największe {f['ohlc_max_pips']:.0f} pips, > {BIG_OHLC_PIPS} pips: {f['ohlc_big']})")
         if hard:
             state = "bad"
-            problems.append(f"{label(p)}: złe OHLC {f['ohlc']}, cena ≤ 0 {f['price']}, czas nie o północy {f['offgrid']}, "
-                            f"dwa wpisy na dzień {f['dup_days']}")
+            problems.append(f"{label(p)}: cena ≤ 0 {f['price']}, czas nie o północy {f['offgrid']}, dwa wpisy na dzień {f['dup_days']}")
+            fixes.append("Błędne wpisy zostają w surowej kopii z flagą (D5), a warstwa czyszczenia D1 je odrzuca. Jeśli to nie "
+                         "przemija — zgłoś Claude'owi z listą powyżej.")
+        if f["ohlc_big_recent"]:
+            state = max(state, "warn", key=RANK.get)
+            problems.append(f"{label(p)}: {f['ohlc_big_recent']} świec z ostatnich {RECENT_DAYS} dni ma OHLC złamane o ponad "
+                            f"{BIG_OHLC_PIPS} pipsów")
+            fixes.append("Yahoo podało świece z high/low daleko od open/close. Warstwa czyszczenia je odrzuca (strategie na D1 "
+                         "tego dnia nie widzą), ale jeśli są to ostatnie dni — poczekaj, Yahoo czasem je poprawia (Apps Script "
+                         "nadpisuje 4 ostatnie dni).")
         if behind > 1:   # jeden dzień zwłoki: Yahoo publikuje świecę dnia po północy, Apps Script ponawia
             state = max(state, "warn", key=RANK.get)
             problems.append(f"{label(p)}: ostatnia świeca {f['last_day']}, oczekiwana {exp}")
+            fixes.append("Zwłoka: Apps Script ponawia co 15 min, ia5 start kopiuje co godzinę; jeśli trwa dłużej niż dzień — sprawdź "
+                         "log Apps Script (tickD1_).")
         if r and int(r.get("lastTs") or 0) > int(df["ts"].max()):
             state = max(state, "warn", key=RANK.get)
             problems.append(f"{label(p)}: na Macu starsza kopia niż w Firestore")
+            fixes.append("Kopia na Macu jest starsza niż Firestore: poczekaj na najbliższą synchronizację albo uruchom ia5 start ponownie.")
         if r.get("flags"):
             detail.append(f"{label(p)} — flagi Apps Script: {', '.join(map(str, r['flags'][-3:]))}")
         detail.append(line)
     if state == "ok":
         n = sum(len(v) for v in (d1 or {}).values() if v is not None)
         first = min(d1_flags(v, tz)["first_day"] for v in d1.values() if v is not None and len(v))
-        return check("daily", name, "ok", f"8 par, {fmt(n)} świec dziennych od {first}; ostatni oczekiwany dzień {exp} jest.",
+        note = (f" Yahoo ma w nich {fmt(ohlc_total)} świec ze złym OHLC (ok. {100 * ohlc_total / max(n, 1):.1f}%) — przy liczeniu "
+                "są odrzucane (D-058), w surowej kopii zostają (D4).") if ohlc_total else ""
+        return check("daily", name, "ok", f"8 par, {fmt(n)} świec dziennych od {first}; ostatni oczekiwany dzień {exp} jest." + note,
                      detail)
     return check("daily", name, state, problems[0] + (f" (i {len(problems) - 1} więcej)" if len(problems) > 1 else "") + ".",
-                 problems + detail,
-                 "Zwłoka: Apps Script ponawia co 15 min, ia5 start kopiuje co godzinę. Błędne świece zostają w surowej "
-                 "kopii z flagą (D5) — nic na nich nie liczymy (D-053).")
+                 problems + detail, " ".join(dict.fromkeys(fixes)))
 
 
 def mac_copy(status: dict, yahoo: dict) -> dict:
@@ -456,7 +475,8 @@ def facts(status: dict, yahoo: dict, cov: dict | None, docs: list[dict] | None, 
     if d1s.get("pairs"):
         first = min((v.get("firstDay") or "9999") for v in d1s["pairs"].values())
         out.append(f"Świece dzienne (D1) Yahoo: {fmt(d1s.get('totalBars') or sum(v.get('count', 0) for v in d1s['pairs'].values()))} "
-                   f"w Firestore, {len(d1s['pairs'])} par, od {first} — przechowywane, liczenie nadal tylko na H1 (D-053).")
+                   f"w Firestore, {len(d1s['pairs'])} par, od {first} — strategie na D1 (TIMEFRAME) liczą na nich po warstwie czyszczenia "
+                   "(data/d1_ready, D-058); skaner, ia5 search i las nadal tylko na H1.")
     if status.get("dataSha"):
         out.append(f"Gałąź data: commit {status['dataSha'][:7]}.")
     return out

@@ -48,7 +48,8 @@ function headline(hv) {
   const n = (st) => hv.checks.filter((c) => c.state === st).length;
   const parts = [n('bad') && `${n('bad')} ${n('bad') === 1 ? 'błąd' : n('bad') < 5 ? 'błędy' : 'błędów'}`,
     n('warn') && `${n('warn')} ${n('warn') === 1 ? 'uwaga' : n('warn') < 5 ? 'uwagi' : 'uwag'}`].filter(Boolean);
-  return `${hv.problems} ${problemWord(hv.problems)}: ${parts.join(', ')} — ${hv.checks.find((c) => c.state === hv.state).name.toLowerCase()} i inne poniżej.`;
+  const first = hv.checks.find((c) => c.state === hv.state).name;
+  return `${hv.problems} ${problemWord(hv.problems)}: ${parts.join(', ')} — ${first}${hv.problems > 1 ? ' i inne' : ''}, szczegóły poniżej.`;
 }
 
 function healthPanel(s) {

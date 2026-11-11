@@ -62,6 +62,18 @@ def test_flags_report_and_do_not_fix():
     assert len(df) == f["bars"]                                # nic nie usunięte
 
 
+def test_ohlc_flags_split_by_size_and_recency_d059():
+    df = d1_frame()
+    top = lambda i: max(df.loc[i, "open"], df.loc[i, "close"])   # noqa: E731
+    df.loc[5, "high"] = top(5) - 0.0003                           # 3 pipsy, dawno
+    df.loc[6, "high"] = top(6) - 0.0050                           # 50 pipsów, dawno
+    df.loc[len(df) - 2, "high"] = top(len(df) - 2) - 0.0030       # 30 pipsów, świeże
+    f = daily.d1_flags(df)
+    assert (f["ohlc"], f["ohlc_big"], f["ohlc_big_recent"]) == (3, 2, 1) and round(f["ohlc_max_pips"]) == 50
+    jpy = daily.d1_flags(df.assign(open=df.open * 100, high=df.high * 100, low=df.low * 100, close=df.close * 100), pip=0.01)
+    assert jpy["ohlc"] == 3 and jpy["ohlc_big"] == 2                                   # rozmiar liczony w pipsach pary
+
+
 def test_merge_replaces_read_years_entirely_and_keeps_others():
     old = d1_frame("2023-01-02", "2024-12-31")
     new = d1_frame("2024-01-01", "2024-06-30", seed=9)          # Firestore: rok 2024 ma teraz mniej świec
@@ -80,8 +92,19 @@ def test_health_daily_check():
     assert health.daily_candles({}, {}, now)["state"] == "warn"                      # przed backfillD1()
     stale = dict(d1, EURUSD=d1["EURUSD"].iloc[:-3])
     assert health.daily_candles(status, stale, now)["state"] == "warn"
-    bad = dict(d1, USDJPY=d1["USDJPY"].assign(high=d1["USDJPY"].low * 0.5))
+    bad = dict(d1, USDJPY=d1["USDJPY"].assign(ts=d1["USDJPY"].ts + 3600))        # czas nie o północy — twarde, czerwone
     assert health.daily_candles(status, bad, now)["state"] == "bad"
+    # D-059: Yahoo stale psuje ok. 2% świec — drobne i stare złe OHLC to informacja (✓), nie awaria
+    quirk = d1["EURUSD"].copy()
+    quirk.loc[40, "high"] = max(quirk.loc[40, "open"], quirk.loc[40, "close"]) - 0.0003        # 3 pipsy, dawno
+    quirk.loc[len(quirk) - 2, "high"] = max(quirk.iloc[-2]["open"], quirk.iloc[-2]["close"]) - 0.0003   # 3 pipsy, świeże
+    quirk.loc[50, "low"] = min(quirk.loc[50, "open"], quirk.loc[50, "close"]) + 0.0100          # 100 pipsów, ale dawno
+    ok = health.daily_candles(status, dict(d1, EURUSD=quirk), now)
+    assert ok["state"] == "ok" and "ze złym OHLC" in ok["text"]
+    big = d1["EURUSD"].copy()
+    big.loc[len(big) - 2, "low"] = min(big.iloc[-2]["open"], big.iloc[-2]["close"]) + 0.0100   # 100 pipsów w ostatnich 30 dniach
+    w = health.daily_candles(status, dict(d1, EURUSD=big), now)
+    assert w["state"] == "warn" and "EUR/USD" in w["text"] and "Yahoo" in w["fix"] and "Zwłoka" not in w["fix"]
     assert health.daily_candles(status, {p: v for p, v in d1.items() if p != "AUDUSD"}, now)["state"] == "bad"
 
 

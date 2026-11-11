@@ -2,6 +2,18 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-11 (później) — przegląd D1 bez fałszywego alarmu (D-059)
+
+**Zrobione (na prośbę Michała: „napraw co trzeba, przy okazji zobacz co mówi system”)**
+- Stats pokazywał czerwone ✕ „Świece dzienne (D1)” z powodu 1 186 świec z Yahoo ze złym OHLC (2,35%, ok. 60–80 rocznie, także dziś). To nie awaria potoku, tylko cecha źródła; warstwa czyszczenia D1 (D-058) takie świece i tak odrzuca. Kontrola jest teraz zielona z liczbą odrzucanych, bursztynowa przy dużym (> 20 pipsów) świeżym naruszeniu, czerwona tylko przy cenie ≤ 0, czasie nie o północy, dublu dnia i braku pary.
+- Podpowiedź „Co zrobić” dopasowana do problemu; „Stan bazy” nie twierdzi już, że D1 jest tylko przechowywane; nagłówek Stats poprawiony („i inne poniżej” tylko przy > 1 problemie, bez „d1” małą literą).
+- CLAUDE.md 0.47, D-059. Dane i silnik bez zmian (ENGINE_VERSION i CLEAN_D1_VERSION bez podbicia).
+
+**Następne / do decyzji Michała**
+1. Czy naprawiać drobne (≤ 3 pips) naruszenia OHLC w `clean_d1` (high/low → max/min z open/close, z jawną flagą i podbiciem `CLEAN_D1_VERSION`)? Dałoby ok. 1 000 świec więcej do liczenia, ale zmienia dane — bez Twojej zgody nie robię.
+2. Przegląd H1 zgłasza dziury z maja/lipca 2026 — w Apps Script uruchom `backfill()` (uzupełni, jeśli Yahoo ma te świece).
+3. Wynik strategii na D1 oceniaj od kosztu nocy (D-054) i obsunięcia z MAE (D-055).
+
 ## 2026-11-11 — przegląd całości; silnik 0.10.0–0.11.0: uczciwszy pomiar i świece dzienne w liczeniu (D-054–D-058)
 
 **Zrobione (na prośbę Michała: „przejrzyj cały projekt, napraw to, co warto, skup się na zyskownych strategiach”)**
