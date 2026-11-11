@@ -17,7 +17,7 @@ import pandas as pd
 
 from .config import PAIRS
 from .engine import Exit, data_cancel, simulate
-from .session import in_trading_hours
+from .session import SWAP_STRESS_PIPS, in_trading_hours
 
 N01 = NormalDist()
 EULER = 0.5772156649
@@ -27,9 +27,18 @@ MIN_TRADES = 30
 # ---------- benchmark losowych wejść (W3) ----------
 
 def random_benchmark(preps: dict, trades: pd.DataFrame, ex: Exit, signals: dict | None = None,
-                     sims: int = 1000, seed: int = 7, max_rows: int = 200_000, hours=None) -> dict:
-    """Rozkład średnich pipsów netto z losowych wejść; percentyl faktycznego wyniku w tym rozkładzie."""
+                     sims: int = 1000, seed: int = 7, max_rows: int = 200_000, hours=None,
+                     level_entries: pd.DataFrame | None = None) -> dict:
+    """Rozkład średnich pipsów netto z losowych wejść; percentyl faktycznego wyniku w tym rozkładzie.
+    level_entries (D-057): dla wyjść „level” losowe wejścia dostają odległości TP/SL (w ATR14, w przestrzeni long)
+    wylosowane spośród odległości, jakie strategia naprawdę ustawiła — te same reguły wyjścia, inne momenty wejścia."""
     rng = np.random.default_rng(seed)
+    lv_pool = None
+    if ex.kind == "level" and level_entries is not None and len(level_entries) and "tp_px" in level_entries:
+        le = level_entries
+        dd, en, a14 = le["dir"].to_numpy(float), le["entry_px"].to_numpy(float), le["atr14"].to_numpy(float)
+        lv_pool = np.column_stack([(le["tp_px"].to_numpy(float) * dd - en * dd) / a14,
+                                   (en * dd - le["sl_px"].to_numpy(float) * dd) / a14])   # NaN zostaje NaN = brak poziomu
     actual = float(trades["pips_net"].mean())
     total = np.zeros(sims)
     count = np.zeros(sims)
@@ -52,6 +61,10 @@ def random_benchmark(preps: dict, trades: pd.DataFrame, ex: Exit, signals: dict 
             e = np.minimum(i + 1, n - 1)
             ent = pd.DataFrame({"entry_i": e, "dir": d.astype(np.int8), "entry_px": P["o"][e],
                                 "atr5": P["atr5"][i], "atr14": P["atr14"][i]})
+            if lv_pool is not None:
+                pick = lv_pool[rng.integers(0, len(lv_pool), len(e))]
+                ent["tp_px"] = (P["o"][e] * d + pick[:, 0] * P["atr14"][i]) * d
+                ent["sl_px"] = (P["o"][e] * d - pick[:, 1] * P["atr14"][i]) * d
             opp = signals.get(pair) if signals else None
             res = simulate(P, ent, ex, pair, opp=opp)
             net = np.array(res["pips_gross"] - spread, dtype=float)
@@ -176,6 +189,50 @@ def spread_stress(t: pd.DataFrame) -> dict:
     sp = t["pair"].map({p: c.spread_pips for p, c in PAIRS.items()}).to_numpy(float)
     g = t["pips_gross"].to_numpy(float)
     return {"x1": float((g - sp).mean()), "x1_5": float((g - 1.5 * sp).mean()), "x2": float((g - 2 * sp).mean())}
+
+
+def swap_stress(t: pd.DataFrame) -> dict:
+    """D-054: noce przez 21:00 UTC (rolowanie) i wynik netto, gdyby każda noc kosztowała 0,5 / 1 pips.
+    Model trzyma O5 (swap = 0); to tylko pokazuje skalę pominiętego kosztu — jak spread ×1,5."""
+    if t.empty or "nights" not in t:
+        return {}
+    n = t["nights"].to_numpy(float)
+    net = t["pips_net"].to_numpy(float)
+    out = {"nights_mean": float(np.nanmean(n)), "nights_total": float(np.nansum(n)),
+           "overnight_pct": float((n > 0).mean() * 100)}
+    for k in SWAP_STRESS_PIPS:
+        out[f"x{k:g}".replace(".", "_")] = float((net - k * n).mean())
+    return out
+
+
+# ---------- forward test (W4, D-056) ----------
+
+def forward_block(bt: pd.DataFrame, frozen_at: int) -> dict:
+    """Transakcje zamrożonego wariantu od daty zamrożenia wobec oczekiwania sprzed niej.
+
+    Oczekiwanie = średnia netto wariantu na wszystkich transakcjach PRZED zamrożeniem (to, co widział Michał, gdy mroził).
+    z = (średnia forward − oczekiwanie) / (odchylenie sprzed zamrożenia / √n) — ile odchyleń błędu forward odbiega od
+    oczekiwania; |z| ≥ 2 to sygnał, że strategia nie zachowuje się jak w backteście. t = czy forward sam w sobie jest > 0."""
+    pre = bt[bt["entry_ts"] < frozen_at]
+    fw = bt[bt["entry_ts"] >= frozen_at]
+    n = int(len(fw))
+    exp_pips = float(pre["pips_net"].mean()) if len(pre) else np.nan
+    sd_pre = float(pre["pips_net"].std(ddof=1)) if len(pre) > 1 else np.nan
+    out = {"since": int(frozen_at), "trades": n, "pre_trades": int(len(pre)), "expected_pips": exp_pips,
+           "expected_r": float(pre["r_net"].mean()) if len(pre) else np.nan}
+    if n == 0:
+        return out
+    m = float(fw["pips_net"].mean())
+    sd = float(fw["pips_net"].std(ddof=1)) if n > 1 else np.nan
+    out.update({
+        "mean_pips": m, "mean_r": float(fw["r_net"].mean()), "sum_pips": float(fw["pips_net"].sum()),
+        "win_rate": float((fw["pips_net"] > 0).mean()),
+        "t_stat": m / (sd / math.sqrt(n)) if n > 1 and sd > 0 else np.nan,
+        "z_vs_expected": (m - exp_pips) / (sd_pre / math.sqrt(n)) if n > 0 and sd_pre and sd_pre > 0 else np.nan,
+        "bootstrap": bootstrap_ci(fw["pips_net"].to_numpy(float)),
+        "nights_mean": float(fw["nights"].mean()) if "nights" in fw else np.nan,
+    })
+    return out
 
 
 # ---------- werdykt ----------

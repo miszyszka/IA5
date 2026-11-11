@@ -24,6 +24,9 @@ def simulate_equity(t: pd.DataFrame, pct: float, capital: float = START_CAPITAL,
         return {"ts": [], "equity": [], "taken": 0, "skipped_margin": 0, "final": capital}
     ret = trade_returns(t)
     wts = t["weight"].to_numpy(float) if "weight" in t else np.ones(len(t))
+    # D-055: najgorsza chwila każdej pozycji (MAE w pipsach) jako zwrot — do pesymistycznego obsunięcia
+    pip = t["pair"].map({p: c.pip for p, c in PAIRS.items()}).to_numpy(float)
+    mae_ret = (np.nan_to_num(t["mae"].to_numpy(float)) * pip / t["entry_px"].to_numpy(float)) if "mae" in t else np.zeros(len(t))
     ev = []  # (czas, typ: 0=wyjście przed 1=wejście w tej samej chwili, indeks)
     for k, (a, b) in enumerate(zip(t["entry_ts"].to_numpy(), t["exit_ts"].to_numpy())):
         ev.append((int(a), 1, k))
@@ -34,6 +37,7 @@ def simulate_equity(t: pd.DataFrame, pct: float, capital: float = START_CAPITAL,
     open_pos: dict[int, float] = {}
     pts_ts, pts_eq = [int(t["entry_ts"].min())], [capital]
     skipped = 0
+    peak, worst = capital, 0.0   # D-055: obsunięcie z wyceną otwartych pozycji w ich najgorszym punkcie
     for ts, kind, k in ev:
         if kind == 1:
             m = eq * pct / 100 * wts[k]  # D-034: waga pozycji mnoży depozyt
@@ -48,7 +52,12 @@ def simulate_equity(t: pd.DataFrame, pct: float, capital: float = START_CAPITAL,
             eq += m * leverage * ret[k]
             pts_ts.append(ts)
             pts_eq.append(eq)
-    return {"ts": pts_ts, "equity": pts_eq, "taken": len(t) - skipped, "skipped_margin": skipped, "final": eq}
+        peak = max(peak, eq)
+        floor = eq - sum(open_pos[j] * leverage * mae_ret[j] for j in open_pos)   # wszystkie otwarte w swoim najgorszym punkcie
+        if peak > 0:
+            worst = min(worst, (floor - peak) / peak)
+    return {"ts": pts_ts, "equity": pts_eq, "taken": len(t) - skipped, "skipped_margin": skipped, "final": eq,
+            "max_dd_mae": worst}
 
 
 def equity_stats(curve: dict, capital: float = START_CAPITAL) -> dict:
@@ -71,6 +80,8 @@ def equity_stats(curve: dict, capital: float = START_CAPITAL) -> dict:
     for k in range(1, len(ts)):
         cur = cur + (ts[k] - ts[k - 1]) if under[k] else 0.0
         longest = max(longest, cur)
+    dd_mae = min(float(curve.get("max_dd_mae", max_dd)), max_dd)   # D-055: nigdy łagodniejsze niż obsunięcie zrealizowane
     return {"final": float(final), "return_pct": float(final / capital - 1) * 100, "cagr_pct": cagr * 100,
-            "max_dd_pct": max_dd * 100, "calmar": (cagr / -max_dd) if max_dd < 0 else np.nan,
+            "max_dd_pct": max_dd * 100, "max_dd_mae_pct": dd_mae * 100,
+            "calmar": (cagr / -max_dd) if max_dd < 0 else np.nan,
             "sharpe": sharpe, "sortino": sortino, "longest_underwater_days": longest / 86400}

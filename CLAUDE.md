@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.44 · 2026-11-10 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku; `ia5 search` (D-044); zakładka Inwestorzy (D-045); eksperyment FOREST (D-048, v2: D-049); świece dzienne D1 (D-053) — `docs/STATUS.md`
+Wersja 0.45 · 2026-11-11 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku; `ia5 search` (D-044); zakładka Inwestorzy (D-045); eksperyment FOREST (D-048, v2: D-049); świece dzienne D1 (D-053); silnik 0.10.0: noce, obsunięcie z MAE, uczciwy forward, wyjście „level” (D-054–D-057) — `docs/STATUS.md`
 
 ---
 
@@ -49,7 +49,7 @@ Zakładka **FOREST** (D-048, v2: D-049): demokratyczny eksperyment — do 1000 r
 - **W1.** Ostatnie **25%** historii to out-of-sample (OOS). Ranking i wybór wariantów tylko na in-sample (IS). OOS pokazujemy obok, nigdy nie służy do wyboru.
 - **W2.** Raport zawsze podaje **liczbę przetestowanych wariantów** i Deflated Sharpe Ratio. Przy setkach wariantów najlepszy jest w dużej mierze szczęściarzem.
 - **W3.** Każda strategia jest porównana z **benchmarkiem losowych wejść** (te same pary, ta sama liczba transakcji, te same zasady wyjścia, ≥ 1000 losowań) → percentyl.
-- **W4.** Zatwierdzoną strategię można **zamrozić** (hash kodu + parametrów + data). Od tej chwili system sam liczy jej wyniki forward na nowych świecach.
+- **W4.** Zatwierdzoną strategię można **zamrozić** (hash kodu + parametrów + data + **wariant**). Od tej chwili system sam liczy jej wyniki forward na nowych świecach: walidacja i werdykt dotyczą **zamrożonego wariantu** (nie bieżącego szczytu rankingu), a blok `forward` podaje wynik od daty zamrożenia wobec oczekiwania sprzed niej (liczba transakcji, średnia, t, bootstrap, z) — D-056.
 
 ### Bezpieczeństwo
 - **S1.** Kod strategii wpisany na stronie wykonuje się na Macu. Dlatego: zapis strategii tylko po zalogowaniu (Firebase Auth, Google) i tylko dla UID właściciela (reguły Firestore), a runner dodatkowo sprawdza `createdBy == OWNER_UID`.
@@ -295,7 +295,7 @@ forest/report.md                     # raport dla Claude
 | Błąd | Mac | `status="blad"`, `error` (kontrakt, look-ahead, wyjątek) | dashboard: komunikat + „Popraw kod” |
 | Popraw / policz ponownie | dashboard | `code, hypothesis, status="do_policzenia"` (tworzy dokument, gdy strategia była tylko na gałęzi `data`) | Mac jak wyżej |
 | Usunięcie | dashboard | `status="do_usuniecia"` — strategia znika z listy od razu | Mac: usuwa `results/{id}/` i wpis z indeksu, potem dokument |
-| Zamrożenie | dashboard | `frozenAt, frozenVariant` | Mac: co 6 h przelicza; karta: filtr „tylko forward” |
+| Zamrożenie | dashboard | `frozenAt, frozenVariant` | Mac: co 6 h przelicza zamrożony wariant z blokiem `forward` (D-056); karta: tabela forward + filtr „tylko forward” |
 
 Reguły Firestore (`firestore.rules`) pozwalają na te zapisy wyłącznie właścicielowi (S1); Mac dodatkowo sprawdza `createdBy == owner_uid` z `~/.ia5/config.json`.
 
@@ -327,14 +327,14 @@ Domyślnie open świecy `t+1`, tylko w oknie 07:00–17:00 czasu polskiego (B11)
 ### 8.2 Domyślna siatka wyjść (~230 wariantów)
 - **Czasowe:** wyjście po N świecach, N ∈ {1, 2, 3, 4, 6, 8, 12, 16, 24, 36, 48, 72, 96, 120}.
 - **ATR:** ATR(n), n ∈ {5, 14}, liczony na świecach przed wejściem; TP ∈ {0,5; 0,75; 1; 1,5; 2; 3; 4} × ATR; SL ∈ {0,5; 1; 1,5; 2; 3} × ATR; limit czasu ∈ {24, 72, 120} świec.
-- **Na życzenie strategii (`EXITS`):** `rsi_streak` — RSI14 przez N zamknięć z rzędu po złej stronie poziomu → wyjście na open następnej (D-034); `trail` — stop kroczący `trail`×ATR od najwyższego high poprzednich świec, ze stopem początkowym (D-035). Limit czasu w `EXITS` do 480 świec.
+- **Na życzenie strategii (`EXITS`):** `rsi_streak` — RSI14 przez N zamknięć z rzędu po złej stronie poziomu → wyjście na open następnej (D-034); `trail` — stop kroczący `trail`×ATR od najwyższego high poprzednich świec, ze stopem początkowym (D-035); `level` — **TP i SL jako ceny ze strategii** z funkcji `levels(df, p, ind)` liczonej na świecy sygnału (przechodzi detektor look-ahead jak sygnały; D-057). Limit czasu w `EXITS` do 480 świec.
 - **Wskaźnikowe:** RSI(14) dochodzi do 50 (long ≥ 50, short ≤ 50); przecięcie SMA; sygnał przeciwny. Każde z SL ∈ {1, 2, 3} × ATR(14) i limitem 120 świec.
 
 ### 8.3 Liczenie
 Wejścia liczone raz; wszystkie wyjścia na tych samych wejściach. numpy wektorowo + numba dla pętli wyjść. Cel: strategia na 8 parach liczy się w minutach, nie godzinach.
 
 ### 8.4 Zapis transakcji
-Pips brutto, pips netto (− spread), R (względem SL; dla wyjść bez SL — względem 1 × ATR(14)), MAE, MFE, liczba świec, powód wyjścia, `ambiguous`, IS/OOS.
+Pips brutto, pips netto (− spread), R (względem SL; dla wyjść bez SL — względem 1 × ATR(14)), MAE, MFE, liczba świec, **noce** (przejścia przez 21:00 UTC, D-054), powód wyjścia, `ambiguous`, IS/OOS.
 
 ### 8.5 Portfel i kapitał
 - Najpierw przewaga transakcji (pips, R) — niezależna od wielkości pozycji. Osobno symulacja kapitału — zależna od wielkości pozycji.
@@ -343,6 +343,7 @@ Pips brutto, pips netto (− spread), R (względem SL; dla wyjść bez SL — wz
 - Wynik w USD: zysk w walucie kwotowanej przeliczany po kursie z zamknięcia świecy wyjścia (sekcja 2).
 - W karcie strategii wielkość pozycji to **przełącznik**, nie kolejne warianty w rankingu. Ranking, DSR i PBO liczymy na przewadze transakcji (R), żeby wielkość pozycji nie mnożyła liczby prób.
 - Kapitał przeliczany także w przeglądarce, gdy wyłączasz pary w filtrach.
+- Obok obsunięcia zrealizowanego (z zamknięć) liczymy **obsunięcie z otwartymi pozycjami**: kapitał pomniejszony o MAE wszystkich otwartych pozycji wobec szczytu — pesymistyczna granica, nigdy łagodniejsza (D-055). Ta sama logika w Pythonie i JS.
 
 ### 8.6 Metryki
 Liczba transakcji, win rate, średni zysk i strata, profit factor, expectancy (pips, R, %), CAGR, maksymalne obsunięcie, czas pod wodą, Sharpe i Sortino (z dziennych zwrotów), Calmar, najdłuższa seria strat, ekspozycja (% czasu w rynku), t-stat średniej transakcji.
@@ -361,8 +362,8 @@ Rozbicia: para, rok, kierunek, sesja (Azja 00–07, Europa 07–13, USA 13–21 
 | Look-ahead | Detektor: sygnały liczone na pełnych danych i na danych obciętych w losowych punktach muszą być identyczne do punktu cięcia | przed każdym liczeniem |
 | Przeuczenie | OOS 25% (W1), walk-forward (okna roczne), Deflated Sharpe Ratio, PBO metodą CSCV (16 bloków), bootstrap 95% CI expectancy | każde liczenie |
 | Przypadek | Benchmark losowych wejść, ≥ 1000 losowań → percentyl (W3) | każde liczenie |
-| Stabilność | Heatmapa TP × SL — szukamy płaskowyżu, nie pojedynczego piku; wynik przy spreadzie × 1,5 i × 2 | każde liczenie |
-| Rzeczywistość | Forward test po zamrożeniu (W4) | automatycznie, z każdą nową świecą |
+| Stabilność | Heatmapa TP × SL — szukamy płaskowyżu, nie pojedynczego piku; wynik przy spreadzie × 1,5 i × 2; wynik przy koszcie nocy 0,5 / 1 pips (swap pominięty w modelu, O5 — D-054) | każde liczenie |
+| Rzeczywistość | Forward test po zamrożeniu (W4): zamrożony wariant, wynik od zamrożenia wobec oczekiwania (D-056) | automatycznie, co 6 h |
 
 **Werdykt w karcie** (progi ustalone z góry, do kalibracji w DECISIONS):
 🟢 gdy jednocześnie: expectancy netto OOS > 0, percentyl benchmarku ≥ 95, PBO < 0,3, DSR ≥ 0,95, wynik dodatni przy spreadzie × 1,5.
@@ -407,7 +408,7 @@ Duże okno: nazwa, hipoteza, kod (pole tekstowe z czcionką o stałej szerokośc
 - **Wykres świecowy ze wszystkimi transakcjami:** markery wejścia i wyjścia, linie TP/SL, kolor wg wyniku, przełączanie par; klik w tabeli transakcji → skok na wykresie.
 - **Tabela transakcji** z filtrami i eksportem CSV.
 - **Rozbicia:** para, rok, sesja, dzień tygodnia.
-- **Walidacja:** DSR, PBO, percentyl benchmarku, przedział bootstrap, test spreadu, % `ambiguous`.
+- **Walidacja:** DSR, PBO, percentyl benchmarku, przedział bootstrap, test spreadu, noce i koszt nocy (D-054), % `ambiguous`; dla zamrożonej — tabela forward testu (D-056).
 - Przyciski: **Kopiuj raport dla Claude**, **Pobierz report.md**, **Zamroź strategię**, **Policz ponownie**.
 
 ### 10.6 Raport dla Claude (`report.md`)
@@ -501,4 +502,4 @@ Otwarte:
 
 | Nr | Pytanie | Domyślnie, do czasu decyzji |
 |---|---|---|
-| O5 | Swapy | 0, pokazywana skala pominięcia |
+| O5 | Swapy | 0 w modelu; w każdej transakcji liczba nocy, a w walidacji wynik przy 0,5 i 1 pips za noc (D-054) |

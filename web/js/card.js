@@ -176,7 +176,7 @@ function renderVerdict() {
       h('div', { class: 'gauge-label row between' }, h('span', {}, 'Benchmark losowych wejść — percentyl wyniku'), h('b', {}, p == null ? '—' : `${num(p, 1)}`)),
       h('div', { class: 'track' }, h('i', { style: { width: `${p ?? 0}%` } }), h('em', { style: { left: '95%' }, title: 'próg 95' })),
       h('p', { class: 'hint' }, `${num(b.sims, 0)} losowań z tymi samymi parami, kierunkami i wyjściem. Losowe wejścia: 5% = ${signed(b.p5)}, mediana = ${signed(b.p50)}, 95% = ${signed(b.p95)} pips/transakcję; strategia: ${signed(b.actual_mean_pips)}.`)));
-  const wf = v.walk_forward || {}, ds = v.dsr || {}, pb = v.pbo || {}, bs = v.bootstrap || {}, sp = v.spread || {};
+  const wf = v.walk_forward || {}, ds = v.dsr || {}, pb = v.pbo || {}, bs = v.bootstrap || {}, sp = v.spread || {}, sw = v.swap || {};
   const rowKV = (k, val, hint) => h('tr', {}, h('th', {}, k), h('td', { class: 'num' }, val), h('td', { class: 'hint' }, hint || ''));
   $('#valid').replaceChildren(
     h('div', { class: 'phead' }, h('h3', {}, `Najlepszy wariant IS: ${v.best_exit || '—'}`), h('span', { class: 'hint' }, paramsLabel(v.best_params))),
@@ -187,7 +187,21 @@ function renderVerdict() {
       rowKV('Walk-forward', `${signed(wf.mean_r)} R`, `${num(wf.trades, 0)} transakcji; wariant wybierany tylko z przeszłości`),
       rowKV('Bootstrap 95% (OOS)', `[${signed(bs.oos?.low)}; ${signed(bs.oos?.high)}]`, 'pips/transakcję'),
       rowKV('Spread ×1 / ×1,5 / ×2', `${signed(sp.x1)} / ${signed(sp.x1_5)} / ${signed(sp.x2)}`, 'pips/transakcję'),
-      rowKV('TP i SL w tej samej świecy', `${num(v.ambiguous_pct)}%`, 'kolejność nieznana → SL (B5)'))));
+      rowKV('TP i SL w tej samej świecy', `${num(v.ambiguous_pct)}%`, 'kolejność nieznana → SL (B5)'),
+      sw.nights_mean != null ? rowKV('Noce (swap pominięty)', `${num(sw.nights_mean, 1)} / transakcję`,
+        `${num(sw.overnight_pct, 0)}% transakcji przez 21:00 UTC; netto przy koszcie nocy 0,5 pipsa: ${signed(sw.x0_5)}, 1 pips: ${signed(sw.x1)} (O5, D-054)`) : null)));
+  const fw = v.forward;
+  if (fw) {   // D-056: forward test od zamrożenia — zamrożony wariant wobec oczekiwania sprzed zamrożenia
+    const bs2 = fw.bootstrap || {};
+    $('#valid').append(h('div', { class: 'phead' }, h('h3', {}, `Forward test od ${dateUTC(fw.since)}`),
+      h('span', { class: 'hint' }, v.pinned_variant ? 'oceniany jest zamrożony wariant, nie szczyt rankingu' : '')),
+      h('table', { class: 'kv' }, h('tbody', {},
+        rowKV('Oczekiwanie sprzed zamrożenia', `${signed(fw.expected_pips)} pips / ${signed(fw.expected_r)} R`, `${num(fw.pre_trades, 0)} transakcji przed zamrożeniem`),
+        fw.trades ? rowKV('Forward', `${signed(fw.mean_pips)} pips / ${signed(fw.mean_r)} R`,
+          `${num(fw.trades, 0)} transakcji, suma ${signed(fw.sum_pips, 0)} pips, win ${pct(fw.win_rate)}, t = ${num(fw.t_stat)}; bootstrap 95% [${signed(bs2.low)}; ${signed(bs2.high)}]`)
+          : rowKV('Forward', '—', 'jeszcze żadnej transakcji od zamrożenia'),
+        fw.trades ? rowKV('Odchylenie od oczekiwania', `z = ${num(fw.z_vs_expected)}`, '|z| ≥ 2: forward nie wygląda jak backtest; przy małym n to głównie szum') : null)));
+  }
   if ((wf.windows || []).length) {
     $('#valid').append(h('table', { class: 'data compact' },
       h('thead', {}, h('tr', {}, ...['okno', 'wybrany wariant', 'R w nauce', 'transakcje', 'R w oknie'].map((x) => h('th', {}, x)))),
@@ -217,7 +231,7 @@ function renderRank() {
   const fam = S.f.family;
   const tools = $('.rank-tools');
   tools.replaceChildren(h('span', { class: 'flabel' }, 'Rodzina wyjść'),
-    h('div', { class: 'seg' }, ...[['all', 'wszystkie'], ['czas', 'czas'], ['ATR', 'ATR'], ['stop kroczący', 'kroczący'], ['wskaźnik', 'wskaźnik']].map(([v, l]) =>
+    h('div', { class: 'seg' }, ...[['all', 'wszystkie'], ['czas', 'czas'], ['ATR', 'ATR'], ['stop kroczący', 'kroczący'], ['poziomy', 'poziomy'], ['wskaźnik', 'wskaźnik']].map(([v, l]) =>
       h('button', { class: fam === v ? 'on' : '', onclick: () => { S.f.family = v; S.rankLimit = PAGE; renderRank(); } }, l))));
   const { key, desc } = S.rankSort;
   const rows = S.variants.filter((v) => fam === 'all' || v.family === fam)
@@ -295,6 +309,7 @@ function renderVariant() {
   $('#eq-kpi').replaceChildren(
     k('kapitał końcowy', st ? `${num(st.final, 0)} USD` : '—'), k('zwrot', st ? `${signed(st.returnPct, 1)}%` : '—', cls(st?.returnPct)),
     k('CAGR', st ? `${signed(st.cagrPct, 1)}%` : '—', cls(st?.cagrPct)), k('max obsunięcie', st ? `${num(st.maxDdPct, 1)}%` : '—', 'neg'),
+    k('obsunięcie z otwartymi (MAE)', st ? `${num(st.maxDdMaePct, 1)}%` : '—', 'neg'),
     k('Sharpe (dzienny)', st?.sharpe == null ? '—' : num(st.sharpe)), k('transakcje', `${num(curve.taken, 0)}${curve.skipped ? ` (+${curve.skipped} bez depozytu)` : ''}`),
     k('win rate', pct(sm.winRate)), k('śr. pips netto', signed(sm.expPips), cls(sm.expPips)), k('profit factor', num(sm.pf)));
   const marks = [{ ts: S.manifest.oos_cutoff, label: 'start OOS' }];

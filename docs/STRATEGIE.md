@@ -1,6 +1,6 @@
 # STRATEGIE — jak pisać kod strategii dla IA5
 
-Wersja 0.40 · 2026-11-10 (dodane: świece dzienne D1 w bazie, jeszcze nie w `signals` — D-053)
+Wersja 0.41 · 2026-11-11 (dodane: `levels()` — TP/SL jako ceny ze strategii, D-057; noce i obsunięcie z MAE w raporcie, D-054/D-055)
 
 > Ten plik jest **regułą dla Claude**. Gdy Michał mówi „zrób mi strategię …”, Claude postępuje dokładnie według sekcji 1 i zwraca kod, który bez zmian wkleja się do okna „Nowa strategia” w dashboardzie i który program `ia5` na Macu zrozumie.
 > Kontrakt jest egzekwowany w kodzie: `runner/ia5/sandbox.py` (wykonanie), `runner/ia5/check.py` (kontrola), `web/js/metrics.js` → `checkStrategyCode` (kontrola w przeglądarce).
@@ -158,12 +158,37 @@ EXITS = [
     # ↑ TP 1,5×ATR14; RSI14 6 zamknięć z rzędu > 70 (short) / < 30 (long) → wyjście na open następnej (D-034)
     {"kind": "trail", "n": 14, "sl": 2.0, "trail": 3.0, "cap": 480},
     # ↑ stop początkowy 2×ATR14, potem 3×ATR14 od najwyższego high poprzednich świec (long); bez TP (D-035)
+    {"kind": "level", "cap": 60},
+    # ↑ TP/SL jako CENY ze strategii — wymaga funkcji levels(df, p, ind) (poniżej); bez poziomu = tylko limit czasu (D-057)
 ]
 
 Limit czasu `cap`: 1–480 świec (B7).
 ```
 
 Każde wyjście musi mieć SL albo limit czasu (B7).
+
+### Poziomy w cenie: `levels(df, p, ind)` (D-057)
+
+Gdy reguła mówi „cel w połowie drogi do bazy”, „stop pod dołkiem układu”, „TP na szczycie poprzedniej świecy” — to są
+**ceny**, nie wielokrotności ATR. Zamiast przybliżać je w `EXITS`, strategia podaje je wprost:
+
+```python
+EXITS = [{"kind": "level", "cap": 60}]
+
+def levels(df, p, ind):                      # ten sam df i p co signals(); liczona na ŚWIECY SYGNAŁU
+    low3 = df.low.rolling(3).min()           # dołek układu (tylko zamknięte świece — jak w signals)
+    return pd.DataFrame({"tp": df.close + 2 * (df.close - low3), "sl": low3})
+```
+
+- Kolumny `tp` i/lub `sl` — ceny; `NaN` = brak poziomu na tej świecy (wtedy tylko limit `cap`). Dla short poziomy są
+  po prostu niżej/wyżej — silnik sam bierze kierunek z sygnału; podajesz ceny, nie odległości.
+- Poziomy przechodzą **ten sam detektor look-ahead** co sygnały (cięcia + zaburzenie przyszłości): poziom liczony
+  z przyszłych świec = `błąd: look-ahead`.
+- R liczony względem odległości wejście → SL; bez SL — względem 1 × ATR14 (jak dla innych wyjść bez stopu).
+- B5 i B6 bez zmian: TP i SL w tej samej świecy → SL; luka przez SL → open, luka przez TP → poziom TP.
+- Benchmark losowych wejść (W3) dostaje te same odległości TP/SL (w ATR) wylosowane z transakcji strategii — porównuje
+  moment wejścia, nie regułę wyjścia.
+- Przykład: `strategies/examples/powrot_poziom.py`.
 
 ---
 

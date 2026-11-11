@@ -5,6 +5,28 @@ Najnowsze na górze.
 
 ---
 
+### D-057 · 2026-11-11 · Wyjście „level”: TP i SL jako ceny ze strategii (`levels(df, p, ind)`)
+- **Decyzja:** strategia może podać funkcję `levels(df, p, ind)` zwracającą kolumny `tp` i/lub `sl` jako ceny na świecy sygnału, a w `EXITS` wyjście `{"kind": "level", "cap": N}`. Silnik egzekwuje te poziomy jak TP/SL z ATR (B5, B6 bez zmian), R liczy względem odległości do SL (bez SL — 1 × ATR14). Poziomy przechodzą ten sam detektor look-ahead co sygnały. Benchmark losowy (W3) losuje odległości TP/SL (w ATR, w przestrzeni long) z transakcji strategii. Inwestorzy i zapowiedź sygnału pokazują poziomy ze strategii. `ENGINE_VERSION` 0.10.0.
+- **Powód:** dwa razy (Powrót v2: „TP w połowie drogi do bazy”, CRT: TP/SL z poziomów układu) reguła w cenie była przybliżana wielokrotnościami ATR — STATUS odnotował „brakuje w silniku”. Przybliżenie zmienia hipotezę; z poziomami w cenie liczymy to, co Michał opisał. Przykład: `strategies/examples/powrot_poziom.py`.
+- **Kontrakt:** `levels()` bez wyjścia `level` i odwrotnie = błąd kontraktu (poziomy nie byłyby użyte / brakłoby ich). Cena ≤ 0 = błąd.
+- **Odrzucone:** poziomy jako kolejne kolumny zwracane z `signals()` (łamie kontrakt +1/−1/0 i wszystkie istniejące strategie); poziomy w odległości od wejścia (strategia nie zna open następnej świecy — B1; w cenie jest jednoznacznie).
+
+### D-056 · 2026-11-11 · Forward test (W4) ocenia zamrożony wariant i liczy wynik od zamrożenia
+- **Problem:** co 6 h zamrożona strategia była liczona od zera na całej historii: granica IS/OOS przesuwała się z każdą świecą, walidacja brała aktualny szczyt rankingu (niekoniecznie zamrożony wariant), a `frozenVariant` runner w ogóle nie czytał. „Tylko forward” był filtrem w przeglądarce bez żadnej statystyki. W4 obiecywało czysty test, a liczby go nie pokazywały.
+- **Decyzja:** `run_file(frozen_at, frozen_variant)`: dla strategii zamrożonej walidacja (benchmark, DSR, PBO, kapitał, werdykt) liczy się na **zamrożonym wariancie** (`pinned_variant` w `validation.json`), a blok `forward` podaje: liczbę transakcji od zamrożenia, średnią (pips, R), sumę, win, t, bootstrap 95%, oczekiwanie sprzed zamrożenia (średnia wariantu na transakcjach przed datą) i `z` = odchylenie forward od oczekiwania w jednostkach błędu standardowego. Raport ma sekcję „Forward test od zamrożenia”, karta — tabelę pod walidacją. Manifest zapisuje `frozen_at`, `frozen_variant`.
+- **Nie zmienia:** W1 (granica IS/OOS nadal 25% historii — przesuwa się, bo historia rośnie; forward jest liczony od daty zamrożenia, nie od OOS). Zamrożenie bez `frozenVariant` (stare dokumenty) → wariant z rankingu, jak dotąd.
+- **Odrzucone:** zamrażanie granicy IS/OOS w dacie zamrożenia (zmieniłoby werdykty wszystkich wcześniejszych wyników i W1); osobny plik stanu forward (liczenie od zera jest odtwarzalne — D6 — i tańsze w utrzymaniu).
+
+### D-055 · 2026-11-11 · Obsunięcie z otwartymi pozycjami (MAE) obok obsunięcia zrealizowanego
+- **Problem:** kapitał był liczony tylko w chwilach zamknięcia pozycji. Strategie bez stopu (RSI 2, Powrót — obie żywe) mogą być w trakcie głęboko pod wodą, a wykres i „max obsunięcie” tego nie widzą: wariant z MAE −465 pipsów pokazywał łagodną krzywą.
+- **Decyzja:** `simulate_equity` (Python i JS, test zgodności) liczy dodatkowo `max_dd_mae`: w każdej chwili kapitał pomniejszony o MAE wszystkich otwartych pozycji (nominał × MAE w zwrocie) wobec szczytu zrealizowanego. To pesymistyczna granica (MAE wszystkich pozycji naraz, choć szczyty strat niekoniecznie wypadają w tej samej godzinie), nigdy łagodniejsza niż obsunięcie zrealizowane. Karta: kafelek „obsunięcie z otwartymi (MAE)”, raport: kolumna w tabeli kapitału.
+- **Odrzucone:** wycena godzina po godzinie z krzywej świec (wymaga świec wszystkich par w przeglądarce dla każdego wariantu — za ciężkie; MAE już jest w transakcjach); zastąpienie starego obsunięcia nowym (oba są informacją: zrealizowane i najgorsza chwila).
+
+### D-054 · 2026-11-11 · Noce w transakcjach i stres „koszt nocy” w walidacji (O5 zostaje 0)
+- **Decyzja:** każda transakcja ma kolumnę `nights` (przejścia przez 21:00 UTC; piątek → poniedziałek = 3), `summarize` podaje `avg_nights`. Walidacja: `swap` = średnia nocy, % transakcji przez noc, wynik netto przy koszcie 0,5 i 1 pips za noc (jak stres spreadu ×1,5 / ×2). Raport i karta pokazują to obok spreadu. Model wykonania bez zmian: swap = 0 (O5), werdykt go nie używa.
+- **Powód:** obie żywe strategie trzymają pozycje po nocach (bez okna, limit 60–120 świec); FOREST liczył noce (F9), silnik nie — a to ten sam pominięty koszt. Decyzja o prawdziwych swapach (O5) wymaga danych brokera; do tego czasu widać skalę.
+- **Odrzucone:** odejmowanie swapu w modelu (O5 otwarte, stawki różnią się między brokerami i w czasie — byłaby to fikcja z dokładnością do dwóch miejsc); jedna stawka zamiast dwóch (0,5 to typowa para majors, 1 pips — pary z JPY/CAD/CHF i okresy wysokiej różnicy stóp).
+
 ### D-053 · 2026-11-10 · Świece dzienne D1 z Yahoo, cała dostępna historia
 - **Decyzja (Michał):** „przebuduj system tak, żeby do wszystkich moich par walutowych dodał także świece dzienne tak daleko, jak sięga Yahoo”. Zmienia D7: źródło nadal tylko Yahoo, ale dwie serie — H1 (730 dni) i D1 (cała historia, dla par FX od ok. 2003). Nowa zasada D7a.
 - **Przepływ:** Apps Script `backfillD1()` raz (`interval=1d`, `period1=0`), potem `tick()` po północy w Londynie dopisuje zamknięty dzień (ostatnie 4 dni nadpisywane, zapis tylko przy nowym dniu albo korekcie) → Firestore `candles_d1/{PARA}_{RRRR}` + `meta/status.d1` → Mac `data/yahoo_d1/` → gałąź `data` `candles_d1/{PARA}.parquet` + manifest → kontrola „Świece dzienne (D1)” w przeglądzie zdrowia.

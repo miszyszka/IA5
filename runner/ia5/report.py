@@ -68,7 +68,7 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
          "- Wejście na open świecy po sygnale, tylko w oknie handlu 07:00–17:00 czasu polskiego (B11 — najniższe spready); ")
         + "wyjście na dowolnej świecy, także po nocy i weekendzie (D-032). TP i SL w tej samej świecy: "
         + "przyjęty SL (pesymistycznie — świece H1 nie mówią, co padło pierwsze; transakcja z flagą `ambiguous`, B5).",
-        f"- Spread raz na transakcję (pips): {spreads}. Swapy pominięte.",
+        f"- Spread raz na transakcję (pips): {spreads}. Swapy pominięte (O5) — liczba nocy i stres „koszt nocy” w walidacji (D-054).",
         (f"- Dokładanie (D-034): do {m['pyramid']} pozycji naraz w parze, tylko w jednym kierunku; każda pozycja ma własne "
          "TP i limit czasu, wyjście wskaźnikowe zamyka wszystkie naraz. Waga pozycji (|sygnał|) mnoży depozyt w symulacji "
          "kapitału; pipsy, R, ranking, DSR, PBO i benchmark losowy liczone są na pozycję, bez wag."
@@ -100,6 +100,7 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
         b = v["benchmark"]
         eq = pd.DataFrame([{"depozyt": f"{k}%", "kapitał końcowy": _f(e.get("final"), 0), "zwrot %": _f(e.get("return_pct"), 1),
                             "CAGR %": _f(e.get("cagr_pct"), 1), "max obsunięcie %": _f(e.get("max_dd_pct"), 1),
+                            "obsunięcie z otwartymi (MAE) %": _f(e.get("max_dd_mae_pct"), 1),
                             "Sharpe": _f(e.get("sharpe")), "pominięte (depozyt)": e.get("skipped_margin", 0)}
                            for k, e in v["equity"].items()])
         wf = v["walk_forward"]
@@ -122,7 +123,11 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
             f"- **Spread**: ×1 {_f(v['spread']['x1'])}, ×1,5 {_f(v['spread']['x1_5'])}, ×2 {_f(v['spread']['x2'])}"
             + " pips/transakcję.",
             f"- TP i SL w tej samej świecy bez rozstrzygnięcia: {_f(v['ambiguous_pct'])}% transakcji.",
+            _swap_line(v.get("swap") or {}),
         ]
+    fw = v.get("forward")
+    if fw:
+        parts += ["## Forward test od zamrożenia (W4, D-056)", _forward_lines(fw, v)]
     parts += [
         "## Znane ograniczenia",
         "- Dane: świece H1 Yahoo (jedno źródło, D-039) — historia od ok. 2 lat wstecz i rośnie; krótka historia = mało transakcji "
@@ -139,6 +144,33 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
         "4. Co w kodzie wejścia może być dopasowane do historii?",
     ]
     (out / "report.md").write_text("\n\n".join(p for p in parts if p) + "\n", encoding="utf-8")
+
+
+def _forward_lines(fw: dict, v: dict) -> str:
+    """D-056: wynik zamrożonego wariantu od daty zamrożenia wobec oczekiwania z backtestu sprzed niej."""
+    head = (f"- Zamrożona {_d(fw['since'])}; oceniany wariant: {v.get('best_exit')}"
+            f"{' (zamrożony, nie ranking)' if v.get('pinned_variant') else ''}; oczekiwanie sprzed zamrożenia: "
+            f"{_f(fw.get('expected_pips'))} pips / {_f(fw.get('expected_r'))} R na transakcję ({fw.get('pre_trades')} transakcji).")
+    if not fw.get("trades"):
+        return head + "\n- Jeszcze żadnej transakcji od zamrożenia."
+    bs = fw.get("bootstrap") or {}
+    return "\n".join([
+        head,
+        f"- **Forward: {fw['trades']} transakcji, śr. {_f(fw.get('mean_pips'))} pips ({_f(fw.get('mean_r'))} R), "
+        f"suma {_f(fw.get('sum_pips'), 0)} pips, win {_f(100 * fw.get('win_rate', 0), 0)}%, t = {_f(fw.get('t_stat'))}; "
+        f"bootstrap 95% [{_f(bs.get('low'))}; {_f(bs.get('high'))}].**",
+        f"- Odchylenie od oczekiwania: z = {_f(fw.get('z_vs_expected'))} (|z| ≥ 2 = forward nie wygląda jak backtest; "
+        f"przy małym n liczba ta jest głównie szumem — potrzeba setek transakcji, żeby odróżnić +3 pipsy od zera).",
+    ])
+
+
+def _swap_line(sw: dict) -> str:
+    """D-054: ile nocy trzymano pozycje i co zostaje z wyniku, gdyby każda noc kosztowała 0,5 / 1 pips."""
+    if not sw:
+        return ""
+    return (f"- **Noce (swap pominięty, O5)**: średnio {_f(sw.get('nights_mean'), 1)} nocy na transakcję, "
+            f"{_f(sw.get('overnight_pct'), 0)}% transakcji przez 21:00 UTC; wynik netto przy koszcie nocy "
+            f"0,5 pipsa: {_f(sw.get('x0_5'))}, 1 pips: {_f(sw.get('x1'))} pips/transakcję.")
 
 
 def _clean_line(m: dict) -> str:

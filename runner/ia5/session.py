@@ -58,6 +58,20 @@ def in_trading_hours(ts, hours=None, tz=None):
     return (hr >= a) & (hr < b)
 
 
+ROLLOVER_H = 21   # rolowanie (swap) liczone o 21:00 UTC — jak w forest_report
+SWAP_STRESS_PIPS = (0.5, 1.0)   # D-054: O5 zostaje 0 w modelu; to tylko stres „ile by kosztowały noce”
+
+
+def nights(entry_ts, exit_ts):
+    """D-054: ile razy pozycja przeszła przez 21:00 UTC między wejściem a wyjściem (koszt swapu, którego model nie liczy — O5).
+    Piątek → poniedziałek to 3 noce (jak u brokera: weekend liczony potrójnie w środę albo w piątek)."""
+    import numpy as np
+
+    e = (np.asarray(entry_ts, float) - ROLLOVER_H * H) // 86400
+    x = (np.asarray(exit_ts, float) - ROLLOVER_H * H) // 86400
+    return np.nan_to_num(x - e)
+
+
 def expected_ts(now: int) -> int:
     ts = last_closed_ts(now)
     for _ in range(80):

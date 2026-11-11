@@ -444,8 +444,11 @@ def handle_job(sid: str, data: dict, state: dict) -> None:
     try:
         from .store import READY
 
+        fz = data.get("frozenAt")   # D-056: zamrożona → ocena zamrożonego wariantu i blok forward od tej daty
+        fv = data.get("frozenVariant")
         out = run_file(data.get("code", ""), name, READY, HOME / "results", log=step, source="yahoo", strategy_id=sid,
-                       require_source="yahoo")
+                       require_source="yahoo", frozen_at=int(fz) if fz else None,
+                       frozen_variant=int(fv) if fz and fv is not None and str(fv).lstrip("-").isdigit() else None)
         sha = publish.publish_result(out, log=log)
         v = json.loads((out / "validation.json").read_text(encoding="utf-8"))
         cloud.update_strategy(sid, {"status": "policzona", "forwardError": None, "forwardAt": int(time.time()) if forward else None,

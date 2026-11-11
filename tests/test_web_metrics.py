@@ -22,10 +22,11 @@ def test_dashboard_js(tmp_path):
                       "exit_ts": entry + 3600 * rng.integers(1, 60, n), "pips_net": rng.normal(1, 20, n).round(1)})
     t["entry_px"] = t["pair"].map({"EURUSD": 1.1, "USDJPY": 150.0, "EURGBP": 0.85})
     t["weight"] = rng.choice([1.0, 1.0, 1.6, 3.0], n)  # D-034: wagi pozycji — JS i Python muszą liczyć tak samo
+    t["mae"] = rng.uniform(0, 40, n).round(1)          # D-055: obsunięcie z MAE — też w obu miejscach
     expected = {}
     for pct in (5, 10, 15, 20, 30):
         c = simulate_equity(t, pct)
-        expected[str(pct)] = {"final": c["final"], "skipped": c["skipped_margin"]}
+        expected[str(pct)] = {"final": c["final"], "skipped": c["skipped_margin"], "max_dd_mae": c["max_dd_mae"]}
     fx = tmp_path / "fx.json"
     fx.write_text(json.dumps({"trades": json.loads(t.to_json(orient="records")), "expected": expected}))
     r = subprocess.run(["node", "--test", str(ROOT / "tests" / "web" / "metrics.test.mjs")], capture_output=True, text=True,

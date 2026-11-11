@@ -115,3 +115,58 @@ def test_exit_reason_explains_killed_process():
     from ia5.sandbox import exit_reason
 
     assert "pamięci" in exit_reason(-9) and "Ctrl+C" in exit_reason(-2) and "kod wyjścia 1" in exit_reason(1)
+
+
+def test_frozen_strategy_is_judged_on_frozen_variant_with_forward_block_d056(h1_dir, tmp_path):
+    """D-056 (W4): zamrożona strategia — walidacja zamrożonego wariantu, blok forward od daty zamrożenia, noce i obsunięcie z MAE."""
+    base = run_file(GOOD, "test", h1_dir, tmp_path / "r1", log=lambda m: None)
+    v0 = json.loads((base / "validation.json").read_text())
+    var = pd.DataFrame(json.loads((base / "variants.json").read_text()))
+    other = int(var.dropna(subset=["rank_is"]).sort_values("rank_is").iloc[3]["variant_id"])   # nie szczyt rankingu
+    t = pd.read_parquet(base / "trades.parquet")
+    assert "nights" in t and (t["nights"] >= 0).all()                                           # D-054
+    assert v0["swap"]["nights_mean"] >= 0 and v0["spread"]["x1"] >= v0["swap"]["x0_5"] >= v0["swap"]["x1"]   # noce tylko kosztują
+    assert all("max_dd_mae_pct" in e and e["max_dd_mae_pct"] <= e["max_dd_pct"] + 1e-9 for e in v0["equity"].values())  # D-055
+    mid = int(t["entry_ts"].quantile(0.8))
+    out = run_file(GOOD, "test", h1_dir, tmp_path / "r2", log=lambda m: None, frozen_at=mid, frozen_variant=other)
+    v = json.loads((out / "validation.json").read_text())
+    assert v["best_variant_id"] == other and v["pinned_variant"] is True
+    fw = v["forward"]
+    assert fw["since"] == mid and fw["trades"] > 0 and fw["pre_trades"] > 0
+    tv = t[t["variant_id"] == other]
+    assert fw["trades"] == int((tv["entry_ts"] >= mid).sum())
+    assert abs(fw["expected_pips"] - tv[tv["entry_ts"] < mid]["pips_net"].mean()) < 1e-4
+    rep = (out / "report.md").read_text()
+    assert "Forward test od zamrożenia" in rep and "Noce (swap pominięty" in rep
+    m = json.loads((out / "manifest.json").read_text())
+    assert m["frozen_at"] == mid and m["frozen_variant"] == other
+
+
+LEVELS_OK = '''
+HYPOTHESIS = "Cel w cenie."
+EXITS = [{"kind": "level", "cap": 24}]
+def signals(df, p, ind):
+    return ind.cross_below(ind.rsi(df.close, 14), 30).astype("int8")
+def levels(df, p, ind):
+    atr = ind.atr(df, 14)
+    return pd.DataFrame({"tp": df.close + 2 * atr, "sl": df.close - atr})
+'''
+
+LEVELS_PEEK = LEVELS_OK.replace("df.close + 2 * atr", "df.high.shift(-5)")   # poziom zna przyszłość
+
+
+def test_levels_go_through_lookahead_detector_and_engine_d057(h1_dir, tmp_path):
+    sig, meta = run_strategy_code(LEVELS_OK, h1_dir)
+    assert meta["levels"] and not meta["lookahead"] and {"tp", "sl"} <= set(sig.columns) and sig["tp"].notna().all()
+    _sig, meta = run_strategy_code(LEVELS_PEEK, h1_dir)
+    assert meta["lookahead"], "poziom liczony z przyszłości musi być wykryty"
+    out = run_file(LEVELS_OK, "lv", h1_dir, tmp_path / "results", log=lambda m: None)
+    v = json.loads((out / "validation.json").read_text())
+    assert v["best_exit"].startswith("poziomy TP/SL") and v["benchmark"]["sims"] == 1000
+    t = pd.read_parquet(out / "trades.parquet")
+    assert set(t["reason"]) <= {"TP", "SL", "czas"} and (t["reason"] != "czas").any()
+    # kontrakt: EXITS level bez levels() → błąd; levels() bez wyjścia level → błąd
+    with pytest.raises(StrategyError, match="levels"):
+        run_strategy_code(LEVELS_OK.replace("def levels", "def poziomy"), h1_dir)
+    with pytest.raises(StrategyError, match="level"):
+        run_strategy_code(LEVELS_OK.replace('"kind": "level"', '"kind": "time", "n": 24'), h1_dir)

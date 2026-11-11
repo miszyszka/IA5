@@ -38,9 +38,11 @@ PROBE_MOVES = [0.0, 0.25, -0.25, 0.5, -0.5, 0.75, -0.75, 1.0, -1.0]   # D-051: h
 OPEN_EXIT = 1e15   # pozycja otwarta zajmuje miejsce w parze do końca danych (B8 / PYRAMID)
 
 
-def paper_trades(P: dict, sig: np.ndarray, ex, pair: str, start: int, hours=None, pyramid: int = 1) -> pd.DataFrame:
-    """Transakcje jednej pary od chwili `start`: zamknięte, otwarte (wycena) i anulowane (B12)."""
-    ent = find_entries(P, sig)
+def paper_trades(P: dict, sig: np.ndarray, ex, pair: str, start: int, hours=None, pyramid: int = 1,
+                 lv: np.ndarray | None = None) -> pd.DataFrame:
+    """Transakcje jednej pary od chwili `start`: zamknięte, otwarte (wycena) i anulowane (B12).
+    lv (D-057): poziomy TP/SL ze strategii na świecy sygnału (wyjścia rodzaju „level”)."""
+    ent = find_entries(P, sig, lv)
     ent = ent[ent["signal_ts"].to_numpy() + H > start]          # sygnał ze świecy zamkniętej po dodaniu inwestora
     ent = ent[~(ent["atr14"].isna() | ent["atr5"].isna()).to_numpy()]
     ent = ent[in_trading_hours(ent["entry_ts"].to_numpy(), hours)].reset_index(drop=True)
@@ -74,8 +76,12 @@ def paper_trades(P: dict, sig: np.ndarray, ex, pair: str, start: int, hours=None
     return out
 
 
-def exit_levels(ex, entry, d, atr14, atr5) -> tuple:
-    """Poziomy TP/SL wariantu — te same wzory co engine.simulate. None = brak poziomu (stop kroczący: SL = początkowy)."""
+def exit_levels(ex, entry, d, atr14, atr5, tp_px=None, sl_px=None) -> tuple:
+    """Poziomy TP/SL wariantu — te same wzory co engine.simulate. None = brak poziomu (stop kroczący: SL = początkowy).
+    Wyjście „level” (D-057): poziomy w cenie ze strategii (tp_px, sl_px), NaN = brak."""
+    if ex.kind == "level":
+        f = lambda x: None if x is None or (isinstance(x, float) and np.isnan(x)) else float(x)  # noqa: E731
+        return f(tp_px), f(sl_px)
     atr = atr5 if ex.n == 5 and ex.kind in ("atr", "rsi_streak", "trail") else atr14
     tp = entry + d * ex.tp * atr if ex.kind == "atr" or (ex.kind in ("rsi_streak", "trail") and ex.tp > 0) else None
     sl = entry - d * ex.sl * atr if ex.sl > 0 else None
@@ -212,10 +218,17 @@ def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print) -> dict:
                 arr = np.zeros(len(df), np.float32)
                 part = sig[(sig.param_id == pid) & (sig.pair == pair)]
                 arr[part["i"].to_numpy(int)] = part["sig"].to_numpy(np.float32)
-                t = paper_trades(preps[pair], arr, ex, pair, start, hours, pyramid)
+                lvl = None
+                if meta.get("levels"):   # D-057
+                    lvl = np.full((len(df), 2), np.nan)
+                    lvl[part["i"].to_numpy(int), 0] = part["tp"].to_numpy(float)
+                    lvl[part["i"].to_numpy(int), 1] = part["sl"].to_numpy(float)
+                t = paper_trades(preps[pair], arr, ex, pair, start, hours, pyramid, lv=lvl)
                 if not t.empty:
-                    lv = [exit_levels(ex, e, d, a14, a5) for e, d, a14, a5 in
-                          zip(t["entry_px"], t["dir"], t["atr14"], t["atr5"])]
+                    tpx = t["tp_px"] if "tp_px" in t else [None] * len(t)
+                    spx = t["sl_px"] if "sl_px" in t else [None] * len(t)
+                    lv = [exit_levels(ex, e, d, a14, a5, tp_, sl_) for e, d, a14, a5, tp_, sl_ in
+                          zip(t["entry_px"], t["dir"], t["atr14"], t["atr5"], tpx, spx)]
                     t["tp"] = [x[0] for x in lv]
                     t["sl"] = [x[1] for x in lv]
                     t["strategy"] = k
@@ -223,7 +236,8 @@ def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print) -> dict:
                 for x in pending_signals(preps[pair], arr, start, hours):
                     P, i = preps[pair], len(preps[pair]["ts"]) - 1
                     px = float(P["c"][i])
-                    tp, sl = exit_levels(ex, px, x["dir"], float(P["atr14"][i]), float(P["atr5"][i]))
+                    tp, sl = exit_levels(ex, px, x["dir"], float(P["atr14"][i]), float(P["atr5"][i]),
+                                         lvl[i, 0] if lvl is not None else None, lvl[i, 1] if lvl is not None else None)
                     pending.append({**x, "pair": pair, "strategy": k, "price": px, "tp": tp, "sl": sl, "free": True})
             if mine and meta.get("max_pairs"):
                 mine = [limit_pairs(pd.concat(mine, ignore_index=True), meta["max_pairs"], meta.get("pair_rank") or [], pyramid)]

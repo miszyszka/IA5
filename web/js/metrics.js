@@ -48,6 +48,8 @@ export function simulateEquity(trades, pct, capital = START_CAPITAL, leverage = 
   let eq = capital, used = 0, skipped = 0;
   const open = new Map();
   const ts = [Math.min(...trades.map((t) => t.entry_ts))], equity = [capital];
+  let peak = capital, worst = 0; // D-055: obsunięcie z otwartymi pozycjami w ich najgorszym punkcie (MAE)
+  const maeRet = (t) => ((t.mae || 0) * PAIRS[t.pair].pip) / t.entry_px;
   for (const [time, kind, k] of ev) {
     if (kind === 1) {
       const m = ((eq * pct) / 100) * (trades[k].weight ?? 1); // D-034: waga pozycji mnoży depozyt
@@ -58,8 +60,12 @@ export function simulateEquity(trades, pct, capital = START_CAPITAL, leverage = 
       eq += m * leverage * tradeReturn(trades[k]);
       ts.push(time); equity.push(eq);
     }
+    peak = Math.max(peak, eq);
+    let floor = eq;
+    for (const [j, m] of open) floor -= m * leverage * maeRet(trades[j]);
+    if (peak > 0) worst = Math.min(worst, (floor - peak) / peak);
   }
-  return { ts, equity, taken: trades.length - skipped, skipped, final: eq };
+  return { ts, equity, taken: trades.length - skipped, skipped, final: eq, maxDdMae: worst };
 }
 
 export function drawdown(equity) {
@@ -87,8 +93,9 @@ export function equityStats(curve, capital = START_CAPITAL) {
   for (let i = 1; i < daily.length; i++) r.push(daily[i] / daily[i - 1] - 1);
   const mean = r.reduce((a, b) => a + b, 0) / (r.length || 1);
   const sd = Math.sqrt(r.reduce((a, b) => a + (b - mean) ** 2, 0) / Math.max(r.length - 1, 1));
+  const maxDdMae = Math.min((curve.maxDdMae ?? 0) * 100, maxDd); // D-055: nigdy łagodniejsze niż zrealizowane
   return {
-    final, returnPct: (final / capital - 1) * 100, cagrPct: cagr * 100, maxDdPct: maxDd,
+    final, returnPct: (final / capital - 1) * 100, cagrPct: cagr * 100, maxDdPct: maxDd, maxDdMaePct: maxDdMae,
     sharpe: r.length > 2 && sd > 0 ? (mean / sd) * Math.sqrt(252) : null,
     calmar: maxDd < 0 ? (cagr * 100) / -maxDd : null,
   };

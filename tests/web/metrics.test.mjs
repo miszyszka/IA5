@@ -10,6 +10,7 @@ test('kapitał = Python (runner/ia5/portfolio.py) dla każdego depozytu', () => 
     const c = simulateEquity(fx.trades, +pct);
     assert.ok(Math.abs(c.final - expected.final) < 1e-6, `depozyt ${pct}%: ${c.final} != ${expected.final}`);
     assert.equal(c.skipped, expected.skipped);
+    assert.ok(Math.abs(c.maxDdMae - expected.max_dd_mae) < 1e-9, `obsunięcie MAE ${pct}%: ${c.maxDdMae} != ${expected.max_dd_mae}`);
   }
 });
 

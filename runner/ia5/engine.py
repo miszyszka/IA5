@@ -26,7 +26,7 @@ import pandas as pd
 
 from . import indicators as ind
 from .config import PAIRS
-from .session import in_trading_hours
+from .session import in_trading_hours, nights
 
 W = 120  # najdłuższe trzymanie pozycji w świecach
 H = 3600
@@ -34,7 +34,7 @@ H = 3600
 
 @dataclass(frozen=True)
 class Exit:
-    kind: str          # time | atr | rsi50 | sma | opposite | rsi_streak | trail
+    kind: str          # time | atr | rsi50 | sma | opposite | rsi_streak | trail | level
     n: int = 14        # time: N świec; atr: okres ATR
     tp: float = 0.0    # × ATR (tylko atr)
     sl: float = 0.0    # × ATR(n) dla atr, × ATR(14) dla wskaźnikowych; 0 = bez SL
@@ -45,11 +45,13 @@ class Exit:
 
     @property
     def family(self) -> str:
-        return {"time": "czas", "atr": "ATR", "trail": "stop kroczący"}.get(self.kind, "wskaźnik")
+        return {"time": "czas", "atr": "ATR", "trail": "stop kroczący", "level": "poziomy"}.get(self.kind, "wskaźnik")
 
     def label(self) -> str:
         if self.kind == "time":
             return f"po {self.n} świecach"
+        if self.kind == "level":
+            return f"poziomy TP/SL ze strategii, max {self.cap}"
         if self.kind == "atr":
             return f"ATR{self.n} TP {self.tp:g}× SL {self.sl:g}× max {self.cap}"
         if self.kind == "trail":
@@ -107,17 +109,22 @@ def data_cancel(P: dict, signal_i: np.ndarray, entry_i: np.ndarray, exit_i: np.n
     return (gap, fill) if split else gap | fill
 
 
-def find_entries(P: dict, sig: np.ndarray) -> pd.DataFrame:
-    """B1: sygnał w świecy i → wejście na open świecy i+1."""
+def find_entries(P: dict, sig: np.ndarray, lv: np.ndarray | None = None) -> pd.DataFrame:
+    """B1: sygnał w świecy i → wejście na open świecy i+1.
+    lv (D-057): tablica (n, 2) cen TP/SL z levels() na świecy sygnału; NaN = brak poziomu."""
     v = np.nan_to_num(np.asarray(sig, float))
     i = np.flatnonzero(v != 0)
     i = i[i + 1 < len(P["o"])]
     e = i + 1
-    return pd.DataFrame({
+    ent = pd.DataFrame({
         "signal_i": i, "entry_i": e, "dir": np.sign(v[i]).astype(np.int8), "weight": np.abs(v[i]),
         "signal_ts": P["ts"][i], "entry_ts": P["ts"][e], "entry_px": P["o"][e],
         "atr5": P["atr5"][i], "atr14": P["atr14"][i],
     })
+    if lv is not None:
+        lv = np.asarray(lv, float)
+        ent["tp_px"], ent["sl_px"] = lv[i, 0], lv[i, 1]
+    return ent
 
 
 def _windows(P: dict, e: np.ndarray, d: np.ndarray, width: int) -> dict:
@@ -161,7 +168,7 @@ def _first(mask: np.ndarray) -> np.ndarray:
 def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | None = None) -> pd.DataFrame:
     """Wynik każdego wejścia dla jednego wariantu wyjścia (bez filtra B8)."""
     m = len(ent)
-    cols = ["exit_i", "exit_ts", "exit_px", "reason", "pips_gross", "r", "risk_pips", "mae", "mfe", "bars", "ambiguous"]
+    cols = ["exit_i", "exit_ts", "exit_px", "reason", "pips_gross", "r", "risk_pips", "mae", "mfe", "bars", "nights", "ambiguous"]
     if m == 0:
         return pd.DataFrame(columns=cols)
     pip = PAIRS[pair].pip
@@ -175,8 +182,15 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     # opcjonalny limit świec dla każdego wejścia osobno (kolumna max_bars); domyślnie limit wariantu
     cap_r = np.clip(ent["max_bars"].to_numpy(np.int64), 1, cap) if "max_bars" in ent else np.full(m, cap)
     beyond = np.arange(cap)[None, :] >= cap_r[:, None]
-    tp = En + ex.tp * atr if ex.kind == "atr" or (ex.kind in ("rsi_streak", "trail") and ex.tp > 0) else np.full(m, np.inf)
-    sl = En - ex.sl * atr if ex.sl > 0 else np.full(m, -np.inf)
+    if ex.kind == "level":
+        # D-057: poziomy w cenie ze strategii (świeca sygnału), w przestrzeni „long” (× kierunek); brak poziomu = brak TP/SL
+        tp_px = ent["tp_px"].to_numpy(float) if "tp_px" in ent else np.full(m, np.nan)
+        sl_px = ent["sl_px"].to_numpy(float) if "sl_px" in ent else np.full(m, np.nan)
+        tp = np.where(np.isnan(tp_px), np.inf, tp_px * d)
+        sl = np.where(np.isnan(sl_px), -np.inf, sl_px * d)
+    else:
+        tp = En + ex.tp * atr if ex.kind == "atr" or (ex.kind in ("rsi_streak", "trail") and ex.tp > 0) else np.full(m, np.inf)
+        sl = En - ex.sl * atr if ex.sl > 0 else np.full(m, -np.inf)
     Hw, Lw, Ow = w["H"][:, :cap], w["L"][:, :cap], w["O"][:, :cap]
     if ex.kind == "trail":
         # najwyższe high świec PRZED świecą j (w świecy wejścia: cena wejścia)
@@ -279,7 +293,10 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     mae = En - np.minimum.reduce([prev_min, bar_min, exit_n, En])
 
     gross = exit_n - En
-    risk = np.where(ex.sl > 0, ex.sl * atr, ent["atr14"].to_numpy())
+    if ex.kind == "level":   # R względem odległości do SL ze strategii; bez SL — względem 1 × ATR14 (8.4)
+        risk = np.where(np.isfinite(sl) & (En - sl > 0), En - sl, ent["atr14"].to_numpy())
+    else:
+        risk = np.where(ex.sl > 0, ex.sl * atr, ent["atr14"].to_numpy())
     bar_idx = w["idx"][rows, np.clip(exit_j, 0, cap)]
     out["exit_i"] = np.where(done, bar_idx, np.nan)
     out["exit_ts"] = np.where(done, P["ts"][bar_idx] + np.where(exit_at_open, 0, H), np.nan)
@@ -290,6 +307,8 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     out["mae"] = mae / pip
     out["mfe"] = mfe / pip
     out["bars"] = np.where(done, exit_j + np.where(exit_at_open, 0, 1), np.nan)
+    # D-054: noce przez 21:00 UTC — koszt swapu, którego model nie liczy (O5); do stresu w walidacji i raporcie
+    out["nights"] = np.where(done, nights(P["ts"][e].astype(float), out["exit_ts"]), np.nan)
     df = pd.DataFrame(out)
     df["reason"] = reason
     df["ambiguous"] = amb
@@ -350,10 +369,12 @@ def no_overlap_pairs(pair: np.ndarray, entry_ts: np.ndarray, entry_i: np.ndarray
 
 def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray], params: list[dict],
         exits: list[Exit] | None = None, oos_frac: float = 0.25, hours=None, pyramid: int = 1,
-        max_pairs: int | None = None, pair_rank: list[str] | None = None) -> dict:
+        max_pairs: int | None = None, pair_rank: list[str] | None = None,
+        levels: dict[tuple[int, str], np.ndarray] | None = None) -> dict:
     """Pełny przebieg: wszystkie warianty wejścia (params) × wszystkie wyjścia × wszystkie pary.
 
     signals[(param_id, pair)] = tablica sygnałów (+1/-1/0) na świecach h1[pair].
+    levels[(param_id, pair)] (D-057) = tablica (n, 2) cen TP/SL na świecy sygnału dla wyjść rodzaju „level”.
     Zwraca tabele entries, outcomes, variants i liczniki.
     """
     exits = exits or default_exits()
@@ -371,7 +392,7 @@ def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray],
     eid = 0
     for (pid, pair), sig in signals.items():
         P = preps[pair]
-        ent = find_entries(P, sig)
+        ent = find_entries(P, sig, (levels or {}).get((pid, pair)))
         warm = ent["atr14"].isna() | ent["atr5"].isna()  # bez ATR nie ma poziomów TP/SL ani R
         skipped["rozgrzewka"] += int(warm.sum())
         # B11: wejście tylko w oknie handlu 07:00–17:00 czasu polskiego (D-028); wyjście na dowolnej świecy (D-032)
@@ -468,6 +489,7 @@ def summarize(outcomes: pd.DataFrame, by=("variant_id",)) -> pd.DataFrame:
             "t_stat": p.mean() / (sd / np.sqrt(n)) if n > 1 and sd > 0 else np.nan,
             "ambiguous_pct": g["ambiguous"].mean(),
             "avg_bars": g["bars"].mean(),
+            "avg_nights": g["nights"].mean() if "nights" in g else np.nan,
         })
 
     return outcomes.groupby(list(by)).apply(agg, include_groups=False).reset_index()

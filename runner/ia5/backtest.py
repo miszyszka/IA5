@@ -30,10 +30,12 @@ from .sandbox import run_strategy_code
 from .validate import (
     bootstrap_ci,
     deflated_sharpe,
+    forward_block,
     pbo_cscv,
     per_trade_sharpe,
     random_benchmark,
     spread_stress,
+    swap_stress,
     verdict,
     walk_forward,
 )
@@ -105,7 +107,8 @@ def trades_table(res: dict) -> pd.DataFrame:
         "exit_px": t["exit_px"].astype(float), "reason": t["reason"].astype(str),
         "pips_gross": t["pips_gross"].astype(np.float32), "pips_net": t["pips_net"].astype(np.float32),
         "r_net": t["r_net"].astype(np.float32), "mae": t["mae"].astype(np.float32), "mfe": t["mfe"].astype(np.float32),
-        "bars": t["bars"].astype(np.int16), "ambiguous": t["ambiguous"].astype(bool),
+        "bars": t["bars"].astype(np.int16), "nights": t["nights"].fillna(0).astype(np.int16),
+        "ambiguous": t["ambiguous"].astype(bool),
         "sample": t["sample"].astype(str), "weight": t["weight"].astype(np.float32), "entry_i": t["entry_i"].astype(np.int32),
     })
 
@@ -126,11 +129,17 @@ def clean(x):
 
 
 def validate_best(res: dict, variants: pd.DataFrame, trades: pd.DataFrame, exits: list[Exit], signals: dict,
-                  h1: dict, sizing, log=print, hours=None) -> dict:
+                  h1: dict, sizing, log=print, hours=None, frozen_at: int | None = None,
+                  frozen_variant: int | None = None) -> dict:
+    """Walidacja najlepszego wariantu IS. D-056: strategia zamrożona (W4) jest oceniana na ZAMROŻONYM wariancie —
+    to on jest strategią, a nie ten, który po dopisaniu nowych świec akurat wyszedł na szczyt rankingu."""
     ranked = variants.dropna(subset=["rank_is"]).sort_values("rank_is")
     if ranked.empty:
         return {"verdict": {"color": "yellow", "note": "żaden wariant nie ma 30 transakcji IS", "checks": []}}
     best = ranked.iloc[0]
+    pinned = frozen_at and frozen_variant is not None and (variants["variant_id"] == int(frozen_variant)).any()
+    if pinned:
+        best = variants[variants["variant_id"] == int(frozen_variant)].iloc[0]
     vid, pid = int(best["variant_id"]), int(best["param_id"])
     ex = exits[vid - pid * len(exits)]
     bt = trades[trades["variant_id"] == vid]
@@ -138,10 +147,14 @@ def validate_best(res: dict, variants: pd.DataFrame, trades: pd.DataFrame, exits
     out: dict = {"best_variant_id": vid, "best_exit": ex.label(), "best_params": best["params"],
                  "oos_trades": int(len(oos)), "oos_mean_pips": float(oos["pips_net"].mean()) if len(oos) else None,
                  "oos_mean_r": float(oos["r_net"].mean()) if len(oos) else None,
-                 "is_mean_r": float(best["is_exp_r"])}
+                 "is_mean_r": float(best["is_exp_r"]) if pd.notna(best["is_exp_r"]) else None,
+                 "pinned_variant": bool(pinned), "rank_is": int(best["rank_is"]) if pd.notna(best["rank_is"]) else None}
+    if frozen_at:
+        out["forward"] = forward_block(bt, int(frozen_at))   # D-056: wynik od zamrożenia wobec oczekiwania
     log("Walidacja: benchmark losowych wejść (1000 losowań)…")
     sig_best = {pair: signals[(pid, pair)] for pair in h1}
-    out["benchmark"] = random_benchmark(res["preps"], bt, ex, signals=sig_best, hours=hours)
+    lv_best = res["entries"][res["entries"]["param_id"] == pid] if ex.kind == "level" else None   # D-057
+    out["benchmark"] = random_benchmark(res["preps"], bt, ex, signals=sig_best, hours=hours, level_entries=lv_best)
     log("Walidacja: Deflated Sharpe, PBO, walk-forward…")
     is_t = trades[trades["sample"] == "IS"]
     sharpes = is_t.groupby("variant_id")["r_net"].apply(lambda r: per_trade_sharpe(r.to_numpy(float))
@@ -152,6 +165,7 @@ def validate_best(res: dict, variants: pd.DataFrame, trades: pd.DataFrame, exits
     out["bootstrap"] = {"all": bootstrap_ci(bt["pips_net"].to_numpy(float)),
                         "oos": bootstrap_ci(oos["pips_net"].to_numpy(float))}
     out["spread"] = spread_stress(bt)
+    out["swap"] = swap_stress(bt)   # D-054: noce i koszt swapu, którego model nie liczy (O5)
     out["ambiguous_pct"] = float(bt["ambiguous"].mean() * 100)
     out["equity"] = {}
     for pct in sizing:
@@ -196,8 +210,10 @@ def ready_source(h1_dir: Path) -> str | None:
 
 def run_file(code: str, name: str, h1_dir: Path, out_root: Path, log=print,
              source: str | None = None, full_candles: bool = True, strategy_id: str | None = None,
-             extra: dict | None = None, require_source: str | None = None) -> Path:
-    """require_source="yahoo" (ia5 start, ia5 run) — liczenie tylko na danych z tego źródła (D7, D-041)."""
+             extra: dict | None = None, require_source: str | None = None, frozen_at: int | None = None,
+             frozen_variant: int | None = None) -> Path:
+    """require_source="yahoo" (ia5 start, ia5 run) — liczenie tylko na danych z tego źródła (D7, D-041).
+    frozen_at / frozen_variant (D-056): strategia zamrożona — walidacja na tym wariancie, blok „forward” od tej daty."""
     t_start = time.time()
     src = ready_source(h1_dir)
     if not any(h1_dir.glob("*.parquet")):
@@ -212,13 +228,18 @@ def run_file(code: str, name: str, h1_dir: Path, out_root: Path, log=print,
         raise SystemExit(f"Błąd: look-ahead (B2) — {bad['pair']}, wariant parametrów {bad['param_id']}: "
                          "sygnały zmieniają się po dopisaniu przyszłych świec.")
     h1 = {f.stem: pd.read_parquet(f) for f in sorted(h1_dir.glob("*.parquet"))}
-    signals = {}
+    signals, levels = {}, {}
     for pid in range(len(meta["params"])):
         for pair, df in h1.items():
             arr = np.zeros(len(df), np.float32)
             part = sig[(sig.param_id == pid) & (sig.pair == pair)]
             arr[part["i"].to_numpy(int)] = part["sig"].to_numpy(np.float32)
             signals[(pid, pair)] = arr
+            if meta.get("levels"):   # D-057: poziomy TP/SL ze strategii na świecy sygnału
+                lv = np.full((len(df), 2), np.nan)
+                lv[part["i"].to_numpy(int), 0] = part["tp"].to_numpy(float)
+                lv[part["i"].to_numpy(int), 1] = part["sl"].to_numpy(float)
+                levels[(pid, pair)] = lv
     exits = exits_from(meta.get("exits"))
     sizing = [float(x) for x in (meta.get("sizing") or DEFAULT_SIZING)]
     log(f"Silnik: {len(meta['params'])} wariant(y) wejścia × {len(exits)} wyjść × {len(h1)} par…")
@@ -226,10 +247,12 @@ def run_file(code: str, name: str, h1_dir: Path, out_root: Path, log=print,
     hours = tuple(hours) if isinstance(hours, list) else hours
     pyramid = int(meta.get("pyramid") or 1)
     max_pairs, pair_rank = meta.get("max_pairs"), meta.get("pair_rank")   # D-050
-    res = run(h1, signals, meta["params"], exits=exits, hours=hours, pyramid=pyramid, max_pairs=max_pairs, pair_rank=pair_rank)
+    res = run(h1, signals, meta["params"], exits=exits, hours=hours, pyramid=pyramid, max_pairs=max_pairs, pair_rank=pair_rank,
+              levels=levels or None)
     variants = variant_table(res)
     trades = trades_table(res)
-    validation = validate_best(res, variants, trades, exits, signals, h1, sizing, log=log, hours=hours)
+    validation = validate_best(res, variants, trades, exits, signals, h1, sizing, log=log, hours=hours,
+                               frozen_at=frozen_at, frozen_variant=frozen_variant)
 
     run_id = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     sid = strategy_id or name
@@ -261,6 +284,7 @@ def run_file(code: str, name: str, h1_dir: Path, out_root: Path, log=print,
         "skipped": res["skipped"], "hypothesis": meta.get("hypothesis"), "trades_rows": int(len(trades)),
         "created": int(time.time()), "seconds": round(time.time() - t_start, 1),
         "verdict": validation.get("verdict", {}).get("color"),
+        "frozen_at": int(frozen_at) if frozen_at else None, "frozen_variant": validation.get("best_variant_id") if frozen_at else None,
         **(extra or {}),
     }
     vcols = [c for c in variants.columns if c not in ("x_kind",)]

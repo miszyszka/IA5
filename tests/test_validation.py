@@ -89,3 +89,18 @@ def test_verdict_pbo_not_applicable_for_single_variant():
     assert len(na) == 1 and na[0]["test"].startswith("PBO")
     v["pbo"] = {"pbo": float("nan"), "variants": 5}
     assert verdict(v)["color"] == "yellow"
+
+
+def test_mae_drawdown_is_never_milder_than_realized_d055():
+    """D-055: obsunięcie z MAE — otwarta pozycja w najgorszym punkcie liczy się do obsunięcia, nawet gdy zamknęła się na plusie."""
+    from ia5.portfolio import equity_stats
+
+    t = trades(2, [50.0, 50.0], step=86400, hold=3600)           # obie zamknięte +0,5% na nominale
+    t["mae"] = [300.0, 0.0]                                      # pierwsza była w trakcie 3% pod wodą (bez stopu)
+    c = simulate_equity(t, 10)                                   # nominał 300% kapitału → MAE = −9% kapitału
+    st = equity_stats(c)
+    assert st["max_dd_pct"] == 0.0                               # krzywa zrealizowana nie widzi żadnego obsunięcia
+    assert np.isclose(st["max_dd_mae_pct"], -9.0)                # pesymistycznie: −9%
+    t["mae"] = [0.0, 0.0]
+    st0 = equity_stats(simulate_equity(t, 10))
+    assert st0["max_dd_mae_pct"] <= st0["max_dd_pct"]

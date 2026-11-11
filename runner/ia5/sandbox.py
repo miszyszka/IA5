@@ -83,6 +83,27 @@ def _as_signal(s, df) -> np.ndarray:
     return v.astype(np.float32)
 
 
+def _as_levels(lv, df) -> np.ndarray:
+    """D-057: levels(df, p, ind) → tablica (n, 2) cen TP i SL na świecy sygnału; NaN = brak poziomu."""
+    if lv is None:
+        return np.full((len(df), 2), np.nan)
+    if not isinstance(lv, pd.DataFrame):
+        raise StrategyError("levels() musi zwrócić DataFrame z kolumnami tp i/lub sl (ceny) na indeksie df")
+    if len(lv) != len(df) or not lv.index.equals(df.index):
+        raise StrategyError("levels() musi zwrócić DataFrame na tym samym indeksie co df")
+    extra = set(lv.columns) - {"tp", "sl"}
+    if extra or not (set(lv.columns) & {"tp", "sl"}):
+        raise StrategyError("levels(): dozwolone kolumny to tp i sl (ceny); " + (f"nieznane: {sorted(extra)}" if extra else "brak obu"))
+    out = np.full((len(df), 2), np.nan)
+    for k, col in enumerate(("tp", "sl")):
+        if col in lv:
+            v = pd.to_numeric(lv[col], errors="coerce").to_numpy(float)
+            if (v <= 0).any():
+                raise StrategyError(f"levels(): kolumna {col} ma cenę ≤ 0")
+            out[:, k] = v
+    return out
+
+
 def read_settings(ns: dict) -> dict:
     """Ustawienia modułu strategii poza PARAMS/EXITS/SIZING (D-034): PYRAMID i HOURS."""
     out = {}
@@ -115,18 +136,28 @@ def read_settings(ns: dict) -> dict:
                 ex = Exit(**e)
             except TypeError as err:
                 raise StrategyError(f"EXITS: {e} — {err}") from err
-            if ex.kind not in ("time", "atr", "rsi50", "sma", "opposite", "rsi_streak", "trail"):
+            if ex.kind not in ("time", "atr", "rsi50", "sma", "opposite", "rsi_streak", "trail", "level"):
                 raise StrategyError(f"EXITS: nieznany rodzaj wyjścia „{ex.kind}”")
+            if ex.kind == "level" and "levels" not in ns:
+                raise StrategyError("EXITS level: strategia musi mieć funkcję levels(df, p, ind) z kolumnami tp i/lub sl (D-057)")
             if not 1 <= ex.cap <= W_MAX:
                 raise StrategyError(f"EXITS: limit czasu cap 1–{W_MAX} świec (B7)")
             if ex.kind == "trail" and not (ex.sl > 0 and ex.trail > 0):
                 raise StrategyError("EXITS trail: sl > 0 (stop początkowy) i trail > 0 (odległość stopu kroczącego)")
             if ex.kind == "rsi_streak" and not (ex.run >= 1 and 50 < ex.level < 100):
                 raise StrategyError("EXITS rsi_streak: run ≥ 1 i level między 50 a 100 (np. 70)")
+    if "levels" in ns and not callable(ns["levels"]):
+        raise StrategyError("levels musi być funkcją levels(df, p, ind)")
+    if "levels" in ns and not any(e.get("kind") == "level" for e in (ns.get("EXITS") or [])):
+        raise StrategyError("Strategia ma levels(), ale żadne wyjście w EXITS nie jest rodzaju „level” — poziomy nie byłyby użyte")
     return out
 
 
-def lookahead_cuts(fn, df, p, ind, seed: int = 0) -> list[int]:
+def _lv_equal(a: np.ndarray, b: np.ndarray) -> bool:
+    return np.array_equal(np.isnan(a), np.isnan(b)) and np.allclose(np.nan_to_num(a), np.nan_to_num(b), rtol=0, atol=1e-12)
+
+
+def lookahead_cuts(fn, df, p, ind, seed: int = 0, fn_lv=None) -> list[int]:
     """B2: sygnały na danych obciętych w punkcie c muszą równać się sygnałom z pełnych danych (do c).
 
     Dwa przebiegi:
@@ -140,29 +171,42 @@ def lookahead_cuts(fn, df, p, ind, seed: int = 0) -> list[int]:
         return []
     rng = np.random.default_rng(seed)
     bad = []
-    full = _as_signal(fn(df.copy(), p, ind), df)
+
+    def ev(frame):
+        """(sygnały, poziomy) na ramce; poziomy liczą się tylko tam, gdzie jest sygnał (D-057)."""
+        sg = _as_signal(fn(frame.copy(), p, ind), frame)
+        if fn_lv is None:
+            return sg, None
+        lv = _as_levels(fn_lv(frame.copy(), p, ind), frame)
+        lv[sg == 0] = np.nan
+        return sg, lv
+
+    def same(x, y, k):
+        return np.array_equal(x[0][:k], y[0][:k]) and (x[1] is None or _lv_equal(x[1][:k], y[1][:k]))
+
+    full = ev(df)
     for cut in sorted(rng.integers(WARMUP, n - 1, LOOKAHEAD_CUTS)):
         part = df.iloc[:cut].copy()
-        if not np.array_equal(_as_signal(fn(part, p, ind), part), full[:cut]):
+        if not same(ev(part), full, cut):
             bad.append(int(cut))
     if bad:
         return bad
     a = max(0, n // 2 - DENSE_BARS // 2)
     seg = df.iloc[a:a + DENSE_BARS]
-    seg_full = _as_signal(fn(seg.copy(), p, ind), seg)
+    seg_full = ev(seg)
     lo = min(WARMUP * 2, len(seg) // 3)
     cols = ["open", "high", "low", "close"]
     for cut in np.unique(np.linspace(lo, len(seg) - 1, DENSE_CUTS).astype(int) + rng.integers(0, 4, DENSE_CUTS)):
         cut = int(min(cut, len(seg) - 1))
         part = seg.iloc[:cut].copy()
-        if not np.array_equal(_as_signal(fn(part, p, ind), part), seg_full[:cut]):
+        if not same(ev(part), seg_full, cut):
             bad.append(a + cut)
             break
-        # zaburzenie przyszłości: ceny po cięciu ×1,3 i ×0,7 — sygnały sprzed cięcia nie mogą się zmienić
+        # zaburzenie przyszłości: ceny po cięciu ×1,3 i ×0,7 — sygnały (i poziomy) sprzed cięcia nie mogą się zmienić
         up, dn = seg.copy(), seg.copy()
         up.iloc[cut:, up.columns.get_indexer(cols)] *= 1.3
         dn.iloc[cut:, dn.columns.get_indexer(cols)] *= 0.7
-        if not np.array_equal(_as_signal(fn(up, p, ind), up)[:cut], _as_signal(fn(dn, p, ind), dn)[:cut]):
+        if not same(ev(up), ev(dn), cut):
             bad.append(a + cut)
             break
     return bad
@@ -179,6 +223,7 @@ def worker_main(code_path: str, h1_dir: str, out_dir: str, param_ids: list[int] 
         ns: dict = {"np": np, "pd": pd}
         exec(compile(Path(code_path).read_text(encoding="utf-8"), "strategia.py", "exec"), ns)  # noqa: S102
         fn = ns["signals"]
+        fn_lv = ns.get("levels")   # D-057: opcjonalne poziomy TP/SL w cenie na świecy sygnału
         params = param_grid(ns.get("PARAMS"))
         meta["params"] = params
         meta["hypothesis"] = ns.get("HYPOTHESIS")
@@ -194,14 +239,16 @@ def worker_main(code_path: str, h1_dir: str, out_dir: str, param_ids: list[int] 
             for pid, p in enumerate(params):
                 if param_ids is not None and pid not in param_ids:
                     continue
-                bad = lookahead_cuts(fn, df, p, ind)
+                bad = lookahead_cuts(fn, df, p, ind, fn_lv=fn_lv)
                 if bad:
                     meta["lookahead"].append({"pair": pair, "param_id": pid, "cuts": [int(raw.ts.iloc[c]) for c in bad]})
                     continue
                 s = _as_signal(fn(df.copy(), p, ind), df)
                 nz = np.flatnonzero(s)
-                rows.append(pd.DataFrame({"param_id": pid, "pair": pair, "i": nz, "sig": s[nz]}))
-        sig = pd.concat(rows, ignore_index=True) if rows else pd.DataFrame(columns=["param_id", "pair", "i", "sig"])
+                lv = _as_levels(fn_lv(df.copy(), p, ind), df) if fn_lv is not None else np.full((len(df), 2), np.nan)
+                rows.append(pd.DataFrame({"param_id": pid, "pair": pair, "i": nz, "sig": s[nz], "tp": lv[nz, 0], "sl": lv[nz, 1]}))
+        sig = pd.concat(rows, ignore_index=True) if rows else pd.DataFrame(columns=["param_id", "pair", "i", "sig", "tp", "sl"])
+        meta["levels"] = fn_lv is not None
         sig.to_parquet(out / "signals.parquet", index=False)
     except Exception as e:  # noqa: BLE001 — każdy błąd strategii trafia do raportu
         meta["errors"].append(f"{type(e).__name__}: {e}")

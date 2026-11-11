@@ -160,3 +160,53 @@ def test_no_forced_close_position_runs_overnight():
     res = run({"EURUSD": df}, {(0, "EURUSD"): sig}, [{}], exits=[Exit("time", n=24, cap=24)])
     t = res["outcomes"].iloc[0]
     assert t["reason"] == "czas" and t["bars"] == 24 and t["exit_ts"] == df.ts[33 + 24]
+
+
+def test_nights_count_rollovers_at_21_utc_d054():
+    """D-054: noce = przejścia przez 21:00 UTC między wejściem a wyjściem (piątek → poniedziałek = 3 noce)."""
+    from ia5.session import nights
+
+    mon_10 = T0 + 10 * 3600                       # poniedziałek 10:00 UTC
+    assert nights([mon_10], [mon_10 + 5 * 3600]).tolist() == [0]        # 15:00 tego samego dnia
+    assert nights([mon_10], [mon_10 + 12 * 3600]).tolist() == [1]       # 22:00 — po rolowaniu
+    assert nights([mon_10], [mon_10 + 3 * 86400]).tolist() == [3]       # czwartek 10:00
+    fri_15 = T0 + 4 * 86400 + 15 * 3600
+    assert nights([fri_15], [fri_15 + 3 * 86400]).tolist() == [3]       # poniedziałek 15:00 — weekend potrójnie
+    # w silniku: wyjście czasowe po 24 świecach o tej samej godzinie następnego dnia = 1 noc
+    rows = [FLAT] * 30
+    P = prepare(bars(rows))
+    r = simulate(P, entries(P, [1] + [0] * 29), Exit("time", n=24, cap=24), "EURUSD").iloc[0]
+    assert r.nights == 1
+
+
+def test_level_exit_uses_prices_from_strategy_d057():
+    """D-057: TP/SL to ceny z levels() na świecy sygnału; R względem odległości do SL; brak poziomu = brak TP/SL."""
+    rows = [FLAT, (1.1000, 1.1012, 1.0995, 1.1008), (1.1008, 1.1030, 1.1000, 1.1020), FLAT, FLAT]
+    P = prepare(bars(rows))
+    lv = np.full((len(rows), 2), np.nan)
+    lv[0] = [1.1025, 1.0990]                          # TP +25 pipsów, SL −10 pipsów od wejścia 1.1000
+    ent = find_entries(P, np.array([1, 0, 0, 0, 0]), lv)
+    ent["atr5"] = ent["atr14"] = 0.0010
+    r = simulate(P, ent, Exit("level", cap=24), "EURUSD").iloc[0]
+    assert r.reason == "TP" and r.exit_px == pytest.approx(1.1025) and r.bars == 2
+    assert r.risk_pips == pytest.approx(10) and r.r == pytest.approx(2.5)
+    # short: lustrzanie — TP niżej, SL wyżej
+    rows_s = [FLAT, (1.1000, 1.1004, 1.0990, 1.0992), (1.0992, 1.1000, 1.0970, 1.0975), FLAT]
+    P2 = prepare(bars(rows_s))
+    lv2 = np.full((4, 2), np.nan)
+    lv2[0] = [1.0975, 1.1006]
+    ent2 = find_entries(P2, np.array([-1, 0, 0, 0]), lv2)
+    ent2["atr5"] = ent2["atr14"] = 0.0010
+    r2 = simulate(P2, ent2, Exit("level", cap=24), "EURUSD").iloc[0]
+    assert r2.reason == "TP" and r2.exit_px == pytest.approx(1.0975) and r2.pips_gross == pytest.approx(25)
+    # SL trafiony najpierw → SL; brak SL (NaN) → tylko TP albo czas, R względem ATR14
+    lv3 = np.full((len(rows), 2), np.nan)
+    lv3[0] = [1.1050, 1.0996]
+    r3 = simulate(P, find_entries(P, np.array([1, 0, 0, 0, 0]), lv3).assign(atr5=0.001, atr14=0.001),
+                  Exit("level", cap=24), "EURUSD").iloc[0]
+    assert r3.reason == "SL" and r3.exit_px == pytest.approx(1.0996)
+    lv4 = np.full((len(rows), 2), np.nan)
+    lv4[0, 0] = 1.1050
+    r4 = simulate(P, find_entries(P, np.array([1, 0, 0, 0, 0]), lv4).assign(atr5=0.001, atr14=0.001),
+                  Exit("level", cap=3), "EURUSD").iloc[0]
+    assert r4.reason == "czas" and r4.risk_pips == pytest.approx(10)
