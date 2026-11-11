@@ -210,3 +210,57 @@ def test_level_exit_uses_prices_from_strategy_d057():
     r4 = simulate(P, find_entries(P, np.array([1, 0, 0, 0, 0]), lv4).assign(atr5=0.001, atr14=0.001),
                   Exit("level", cap=3), "EURUSD").iloc[0]
     assert r4.reason == "czas" and r4.risk_pips == pytest.approx(10)
+
+
+def test_level_exit_without_time_limit_d060():
+    """D-061: cap = 0 — pozycja trwa do TP (także po > 24 świecach); gdy dane się kończą, jest „otwarta” i wyceniona po ostatnim
+    close (nie znika z wyników — inaczej przegrane pozycje na końcu danych zawyżałyby wynik)."""
+    n = 40
+    flat = [(1.1000, 1.1004, 1.0996, 1.1000)] * n
+    rows = [FLAT] + flat
+    rows[35] = (1.1000, 1.1030, 1.0996, 1.1020)           # high 1.1030 ≥ TP 1.1025 — trafiony dopiero w 35. świecy
+    P = prepare(bars(rows))
+    lv = np.full((len(rows), 2), np.nan)
+    lv[0, 0] = 1.1025                                      # tylko TP (średnia), bez SL
+    ent = find_entries(P, np.array([1] + [0] * n), lv).assign(atr5=0.001, atr14=0.001)
+    r = simulate(P, ent, Exit("level", cap=0), "EURUSD").iloc[0]
+    assert r.reason == "TP" and r.exit_px == pytest.approx(1.1025) and r.bars == 35 and r.pips_gross == pytest.approx(25)
+    # z limitem 24 ta sama pozycja zostałaby zamknięta „czasem” — to różnica D-061
+    r24 = simulate(P, ent, Exit("level", cap=24), "EURUSD").iloc[0]
+    assert r24.reason == "czas" and r24.bars == 24
+    # TP nigdy nie trafiony → otwarta na końcu danych: wycena po ostatnim close, flaga w powodzie, MAE liczone
+    rows2 = [FLAT] + [(1.1000, 1.1004, 1.0990, 1.0995)] * 30 + [(1.0995, 1.1002, 1.0980, 1.0985)]
+    P2 = prepare(bars(rows2))
+    lv2 = np.full((len(rows2), 2), np.nan)
+    lv2[0, 0] = 1.1100
+    ent2 = find_entries(P2, np.array([1] + [0] * (len(rows2) - 1)), lv2).assign(atr5=0.001, atr14=0.001)
+    o = simulate(P2, ent2, Exit("level", cap=0), "EURUSD").iloc[0]
+    last = len(rows2) - 1
+    assert o.reason == "otwarta" and o.exit_px == pytest.approx(1.0985) and o.pips_gross == pytest.approx(-15)
+    assert o.exit_i == last and o.exit_ts == T0 + (last + 1) * 3600 and o.mae == pytest.approx(20)
+    # dwa wejścia: późniejsze też liczone do końca danych, wcześniejsze nie wpływa na późniejsze
+    ent3 = find_entries(P2, np.array([1] + [0] * 9 + [1] + [0] * (len(rows2) - 11)), lv2).assign(atr5=0.001, atr14=0.001)
+    res = simulate(P2, ent3, Exit("level", cap=0), "EURUSD")
+    assert res.reason.tolist() == ["otwarta", "otwarta"] and res.exit_i.tolist() == [last, last]
+    # porcjowanie okien (pamięć) nie zmienia wyniku
+    import ia5.engine as eng
+    old = eng.UNLIMITED_CELLS
+    eng.UNLIMITED_CELLS = 10
+    try:
+        res2 = simulate(P2, ent3, Exit("level", cap=0), "EURUSD")
+    finally:
+        eng.UNLIMITED_CELLS = old
+    pd.testing.assert_frame_equal(res, res2)
+    with pytest.raises(ValueError):
+        simulate(P2, ent3, Exit("time", n=3, cap=0), "EURUSD")
+
+
+def test_sandbox_allows_cap_zero_only_for_level_d060():
+    from ia5.sandbox import StrategyError, read_settings
+
+    ok = {"EXITS": [{"kind": "level", "cap": 0}], "levels": lambda d, p, i: None}
+    read_settings(ok)
+    for bad in ({"kind": "time", "n": 5, "cap": 0}, {"kind": "atr", "n": 14, "tp": 2.0, "cap": 0},
+                {"kind": "level", "cap": 481}, {"kind": "level", "cap": -1}):
+        with pytest.raises(StrategyError):
+            read_settings({"EXITS": [bad], "levels": lambda d, p, i: None})

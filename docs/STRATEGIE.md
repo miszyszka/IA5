@@ -1,6 +1,6 @@
 # STRATEGIE — jak pisać kod strategii dla IA5
 
-Wersja 0.42 · 2026-11-11 (dodane: `TIMEFRAME = "D1"` i tło D1 w strategiach H1 — D-058; `levels()` — D-057; noce i obsunięcie z MAE — D-054/D-055)
+Wersja 0.43 · 2026-11-11 (dodane: wyjście `level` z `cap = 0` — bez limitu czasu, D-061; `TIMEFRAME = "D1"` i tło D1 w strategiach H1 — D-058; `levels()` — D-057; noce i obsunięcie z MAE — D-054/D-055)
 
 > Ten plik jest **regułą dla Claude**. Gdy Michał mówi „zrób mi strategię …”, Claude postępuje dokładnie według sekcji 1 i zwraca kod, który bez zmian wkleja się do okna „Nowa strategia” w dashboardzie i który program `ia5` na Macu zrozumie.
 > Kontrakt jest egzekwowany w kodzie: `runner/ia5/sandbox.py` (wykonanie), `runner/ia5/check.py` (kontrola), `web/js/metrics.js` → `checkStrategyCode` (kontrola w przeglądarce).
@@ -198,9 +198,11 @@ EXITS = [
 ]
 
 Limit czasu `cap`: 1–480 świec (B7).
+
+**Bez limitu czasu (D-061, tylko na wyraźne życzenie Michała):** `{"kind": "level", "cap": 0}` — pozycja trwa do TP z `levels()` (bez SL). Gdy do końca danych cena nie dotarła do celu, pozycja ma powód „otwarta”: wyceniona po ostatnim close, wliczona do wszystkich statystyk (też OOS, DSR, benchmark) i opisana w raporcie. Nie ma stopu, więc przegrywająca pozycja trwa — patrz obsunięcie z MAE (D-055) i noce (D-054). Transakcja nachodząca na przerwę w danych jest anulowana (B12), a przy trzymaniu latami przerwy trafiają się częściej — liczby anulowanych są w raporcie.
 ```
 
-Każde wyjście musi mieć SL albo limit czasu (B7).
+Każde wyjście musi mieć SL albo limit czasu (B7; jedyny wyjątek: `level` z `cap = 0`, D-061).
 
 ### Poziomy w cenie: `levels(df, p, ind)` (D-057)
 

@@ -3,7 +3,7 @@
 > **Plik nadrzędny.** Każda sesja pracy (Claude albo człowiek) zaczyna się od przeczytania tego pliku, `docs/STATUS.md` i `docs/DECISIONS.md`.
 > Żelazne zasady (sekcja 1) zmienia wyłącznie Michał — wyraźnie, w rozmowie — i każda zmiana ma wpis w `docs/DECISIONS.md`.
 
-Wersja 0.48 · 2026-11-11 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku; `ia5 search` (D-044); zakładka Inwestorzy (D-045); eksperyment FOREST (D-048, v2: D-049); świece dzienne D1 (D-053); silnik 0.10.0: noce, obsunięcie z MAE, uczciwy forward, wyjście „level” (D-054–D-057); silnik 0.11.0: strategie na D1 i tło D1 dla H1 (D-058); przegląd D1 bez fałszywego alarmu o OHLC Yahoo (D-059); samonaprawa danych i prosty „Stan systemu”, silnik 0.12.0 (D-060) — `docs/STATUS.md`
+Wersja 0.49 · 2026-11-11 · Status: E0–E5 zbudowane (kod); uruchomienie na Macu w toku; `ia5 search` (D-044); zakładka Inwestorzy (D-045); eksperyment FOREST (D-048, v2: D-049); świece dzienne D1 (D-053); silnik 0.10.0: noce, obsunięcie z MAE, uczciwy forward, wyjście „level” (D-054–D-057); silnik 0.11.0: strategie na D1 i tło D1 dla H1 (D-058); przegląd D1 bez fałszywego alarmu o OHLC Yahoo (D-059); samonaprawa danych i prosty „Stan systemu”, silnik 0.12.0 (D-060); silnik 0.13.0: wyjście bez limitu czasu — wyjątek od B7 (D-061) — `docs/STATUS.md`
 
 ---
 
@@ -38,7 +38,7 @@ Zakładka **FOREST** (D-048, v2: D-049): demokratyczny eksperyment — do 1000 r
 - **B4.** Dźwignia **30:1** — zawsze (D-024). Wielkość pozycji = X% kapitału jako depozyt, nominał = 30 × X% kapitału. Domyślnie zawsze liczymy **X ∈ {5, 10, 15, 20, 30}%**; strategia może podać własne wartości (`SIZING`). Suma depozytów otwartych pozycji ≤ 100% kapitału, czyli łącznie nigdy ponad 30:1. Sygnał bez wolnego depozytu jest pomijany i liczony w raporcie. Szczegóły: 8.5.
 - **B5.** Gdy w jednej świecy H1 mieszczą się i TP, i SL — kolejności nie znamy (Yahoo nie daje danych wewnątrz świecy), więc zawsze **SL** (pesymistycznie) i transakcja dostaje flagę `ambiguous`. Wynik z > 2% takich transakcji dostaje ostrzeżenie.
 - **B6.** Luka cenowa: open za poziomem SL → wyjście po open (gorzej). Open za poziomem TP → wyjście po poziomie TP (bez zysku z luki).
-- **B7.** Każdy wariant wyjścia ma SL albo limit czasu. Żadnych pozycji bez końca.
+- **B7.** Każdy wariant wyjścia ma SL albo limit czasu. Żadnych pozycji bez końca. **Wyjątek na wyraźne życzenie Michała (D-061):** strategia może zadeklarować wyjście `level` z `cap = 0` (bez limitu czasu) — pozycja trwa do TP ze strategii; jeśli do końca danych nie zamknęła się, jest „otwarta” i wyceniona po ostatnim close, a jej wynik niezrealizowany wchodzi do wszystkich statystyk (nigdy nie jest pomijany). Bez tej deklaracji B7 obowiązuje bez zmian.
 - **B8.** Jedna pozycja na parę na wariant. Sygnał przy otwartej pozycji w tej parze jest pomijany (licznik pominiętych w raporcie). Wyjątek na życzenie Michała: strategia ustawia `PYRAMID = k` — do k pozycji naraz w parze, tylko w jednym kierunku; |sygnał| = waga depozytu (D-034). Strategia może też ustawić `MAX_PAIRS = k` — najwyżej k par z otwartymi pozycjami naraz; przy równoczesnych sygnałach wygrywa para wyżej w `PAIR_RANK` (ranking tylko z IS) (D-050).
 - **B9.** Wskaźniki tylko z modułu `ia5.indicators`, zweryfikowanego testami zgodności z TA-Lib. Strategie nie piszą własnych RSI/ATR.
 - **B10.** Zmiana logiki silnika = podbicie `ENGINE_VERSION`. Wyniki starszej wersji dashboard oznacza jako nieaktualne.
@@ -331,7 +331,7 @@ Domyślnie open świecy `t+1`, tylko w oknie 07:00–17:00 czasu polskiego (B11)
 ### 8.2 Domyślna siatka wyjść (~230 wariantów)
 - **Czasowe:** wyjście po N świecach, N ∈ {1, 2, 3, 4, 6, 8, 12, 16, 24, 36, 48, 72, 96, 120}.
 - **ATR:** ATR(n), n ∈ {5, 14}, liczony na świecach przed wejściem; TP ∈ {0,5; 0,75; 1; 1,5; 2; 3; 4} × ATR; SL ∈ {0,5; 1; 1,5; 2; 3} × ATR; limit czasu ∈ {24, 72, 120} świec.
-- **Na życzenie strategii (`EXITS`):** `rsi_streak` — RSI14 przez N zamknięć z rzędu po złej stronie poziomu → wyjście na open następnej (D-034); `trail` — stop kroczący `trail`×ATR od najwyższego high poprzednich świec, ze stopem początkowym (D-035); `level` — **TP i SL jako ceny ze strategii** z funkcji `levels(df, p, ind)` liczonej na świecy sygnału (przechodzi detektor look-ahead jak sygnały; D-057). Limit czasu w `EXITS` do 480 świec.
+- **Na życzenie strategii (`EXITS`):** `rsi_streak` — RSI14 przez N zamknięć z rzędu po złej stronie poziomu → wyjście na open następnej (D-034); `trail` — stop kroczący `trail`×ATR od najwyższego high poprzednich świec, ze stopem początkowym (D-035); `level` — **TP i SL jako ceny ze strategii** z funkcji `levels(df, p, ind)` liczonej na świecy sygnału (przechodzi detektor look-ahead jak sygnały; D-057). Limit czasu w `EXITS` do 480 świec (albo `cap = 0` tylko dla `level` — D-061).
 - **Wskaźnikowe:** RSI(14) dochodzi do 50 (long ≥ 50, short ≤ 50); przecięcie SMA; sygnał przeciwny. Każde z SL ∈ {1, 2, 3} × ATR(14) i limitem 120 świec.
 
 ### 8.3 Liczenie

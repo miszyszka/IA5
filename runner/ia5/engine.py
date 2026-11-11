@@ -29,6 +29,7 @@ from .config import PAIRS
 from .session import in_trading_hours, nights
 
 W = 120  # najdłuższe trzymanie pozycji w świecach
+UNLIMITED_CELLS = 6_000_000   # D-061: wyjście bez limitu czasu — najwyżej tyle komórek (wejścia × świece) okna cen naraz
 H = 3600
 
 
@@ -38,7 +39,7 @@ class Exit:
     n: int = 14        # time: N świec; atr: okres ATR
     tp: float = 0.0    # × ATR (tylko atr)
     sl: float = 0.0    # × ATR(n) dla atr, × ATR(14) dla wskaźnikowych; 0 = bez SL
-    cap: int = W       # limit czasu w świecach (B7)
+    cap: int = W       # limit czasu w świecach (B7); 0 = bez limitu — tylko kind "level", na wyraźne życzenie Michała (D-061)
     run: int = 0       # rsi_streak: ile kolejnych zamknięć RSI14 po złej stronie poziomu zamyka pozycję
     level: float = 0.0  # rsi_streak: poziom dla short (np. 70); dla long lustrzany 100 − level (30)
     trail: float = 0.0  # trail: odległość stopu kroczącego od najwyższego high (long) w × ATR(n)
@@ -51,7 +52,7 @@ class Exit:
         if self.kind == "time":
             return f"po {self.n} świecach"
         if self.kind == "level":
-            return f"poziomy TP/SL ze strategii, max {self.cap}"
+            return "poziomy TP/SL ze strategii, bez limitu czasu" if self.cap == 0 else f"poziomy TP/SL ze strategii, max {self.cap}"
         if self.kind == "atr":
             return f"ATR{self.n} TP {self.tp:g}× SL {self.sl:g}× max {self.cap}"
         if self.kind == "trail":
@@ -176,13 +177,24 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     pip = PAIRS[pair].pip
     e = ent["entry_i"].to_numpy()
     d = ent["dir"].to_numpy().astype(int)
-    cap = ex.cap
+    n_bars = len(P["o"])
+    unlimited = ex.cap == 0   # D-061: bez limitu czasu — do TP albo do końca danych (wtedy „otwarta”, wycena po ostatnim close)
+    if unlimited:
+        if ex.kind != "level":
+            raise ValueError("cap = 0 (bez limitu czasu) tylko dla wyjścia level")
+        if m > 1 and m * (n_bars - int(e.min()) + 1) > UNLIMITED_CELLS:   # pamięć: okna cen m × świec — liczymy porcjami wejść
+            half = max(1, UNLIMITED_CELLS // max(1, n_bars - int(e.min()) + 1))
+            parts = [simulate(P, ent.iloc[k:k + half], ex, pair, opp) for k in range(0, m, half)]
+            return pd.concat(parts, ignore_index=True)
+    cap = n_bars - int(e.min()) if unlimited else ex.cap
     w = _windows(P, e, d, cap + 1)
     En = ent["entry_px"].to_numpy() * d
     atr = ent[f"atr{ex.n}" if ex.kind in ("atr", "rsi_streak", "trail") else "atr14"].to_numpy()
 
     # opcjonalny limit świec dla każdego wejścia osobno (kolumna max_bars); domyślnie limit wariantu
     cap_r = np.clip(ent["max_bars"].to_numpy(np.int64), 1, cap) if "max_bars" in ent else np.full(m, cap)
+    if unlimited:   # ostatnia dostępna świeca każdego wejścia = koniec danych
+        cap_r = np.minimum(cap_r, n_bars - e)
     beyond = np.arange(cap)[None, :] >= cap_r[:, None]
     if ex.kind == "level":
         # D-057: poziomy w cenie ze strategii (świeca sygnału), w przestrzeni „long” (× kierunek); brak poziomu = brak TP/SL
@@ -276,7 +288,7 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     tw = ~stop & ~xw
     exit_n = np.where(tw, w["C"][rows, cap_r - 1], exit_n)
     exit_j = np.where(tw, cap_r - 1, exit_j)
-    reason[tw] = "czas"
+    reason[tw] = "otwarta" if unlimited else "czas"   # D-061: bez limitu, koniec danych — pozycja otwarta, wycena po ostatnim close
 
     done = ~np.isnan(exit_n)
     # MAE/MFE: świece przed świecą wyjścia + cena wyjścia
@@ -288,7 +300,7 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     # świeca wyjścia wewnątrz-świecowego/czasowego sama też należy do przebiegu pozycji
     in_bar = ~exit_at_open
     jb = np.clip(exit_j, 0, cap)
-    timed = reason == "czas"
+    timed = (reason == "czas") | (reason == "otwarta")
     bar_max = np.where(in_bar & timed, w["H"][rows, jb], -np.inf)
     bar_min = np.where(in_bar & timed, w["L"][rows, jb], np.inf)
     mfe = np.maximum.reduce([prev_max, bar_max, exit_n, En]) - En

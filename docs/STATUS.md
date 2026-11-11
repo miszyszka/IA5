@@ -2,6 +2,17 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-11 (wieczór) — wyjście bez limitu czasu (D-061), silnik 0.13.0
+
+**Zrobione (na prośbę Michała: pozycje strategii „powrót do 3-letniej średniej” mają się zamykać tylko na średniej, nigdy czasem)**
+- `Exit("level", cap=0)` — bez limitu czasu (wyjątek od B7, tylko `level`, tylko jawnie w strategii). Pozycja niezamknięta na końcu danych: powód „otwarta”, wycena po ostatnim close, **wliczona do wszystkich statystyk**; raport ma linię „Pozycje otwarte”. Wejścia liczone porcjami (pamięć).
+- Testy: złote scenariusze (TP po 35 świecach, otwarta na końcu danych, porcjowanie, odrzucenie cap=0 dla innych rodzajów) + przebieg końcowy na D1 z walidacją i raportem. CLAUDE.md 0.49 (B7), STRATEGIE.md 0.43, `ENGINE_VERSION` 0.13.0 (dashboard oznaczy stare wyniki jako nieaktualne).
+
+**Następne / do uwagi Michała**
+1. Na Macu: `cd /Users/szyszka/IA5 && git pull && uv tool install -e runner --force`, restart `ia5 start`; wkleić zaktualizowaną strategię (cap = 0) i policzyć ponownie.
+2. Cel „średnia” to wartość SMA756 z dnia sygnału, nie ruchoma średnia. Dokładne „przecięcie średniej” = nowy rodzaj wyjścia w silniku — tylko na życzenie.
+3. Ocena: najpierw liczba i wynik pozycji „otwartych”, obsunięcie z MAE (D-055), noce (D-054), liczba anulowanych przez przerwy w danych (B12).
+
 ## 2026-11-11 (później) — przegląd D1 bez fałszywego alarmu (D-059)
 
 **Zrobione (na prośbę Michała: „napraw co trzeba, przy okazji zobacz co mówi system”)**

@@ -205,3 +205,41 @@ def test_full_run_on_d1_uses_daily_candles_close_ts_and_no_hours_window_d058(h1_
     out2 = run_file(GOOD, "h1", h1_dir, tmp_path / "r2", log=lambda m: None, d1_dir=d1_dir)
     m2 = json.loads((out2 / "manifest.json").read_text())
     assert m2["timeframe"] == "H1" and m2["d1_background"] is True and m2["d1_hash"]
+
+
+D1_MEAN_CODE = '''
+TIMEFRAME = "D1"
+HYPOTHESIS = "Powrót do średniej, bez limitu czasu."
+EXITS = [{"kind": "level", "cap": 0}]
+PYRAMID = 10
+SIZING = [1]
+def levels(df, p, ind):
+    return pd.DataFrame({"tp": ind.sma(df.close, 250)}, index=df.index)
+def signals(df, p, ind):
+    dev = (df.close / ind.sma(df.close, 250) - 1.0).to_numpy()
+    out = np.zeros(len(dev)); last = -10**9
+    for t in range(len(dev)):
+        if t - last >= 5 and np.isfinite(dev[t]) and abs(dev[t]) >= 0.05:
+            out[t], last = -np.sign(dev[t]), t
+    return out
+'''
+
+
+def test_exit_without_time_limit_keeps_open_positions_in_results_d060(h1_dir, tmp_path):
+    """D-061: cap = 0 — żadnej transakcji nie zamyka czas; niezamknięte na końcu danych są „otwarte” i wliczone w wyniki
+    (wycena po ostatnim close), a nie wyrzucone jako „brak danych”."""
+    from ia5.check import synthetic_d1
+
+    d1_dir = synthetic_d1(tmp_path / "d1", days=3000)
+    out = run_file(D1_MEAN_CODE, "mean", h1_dir, tmp_path / "results", log=lambda m: None, d1_dir=d1_dir)
+    t = pd.read_parquet(out / "trades.parquet")
+    assert set(t["reason"]) <= {"TP", "otwarta"} and (t["reason"] == "otwarta").any() and (t["reason"] == "TP").any()
+    assert t["exit_px"].notna().all() and t["pips_net"].notna().all()
+    m = json.loads((out / "manifest.json").read_text())
+    assert m["skipped"]["brak_danych"] == 0
+    last_close = {p: pd.read_parquet(d1_dir / f"{p}.parquet")["close_ts"].max() for p in t["pair"].unique()}
+    op = t[t["reason"] == "otwarta"]
+    assert all(r.exit_ts == last_close[r.pair] for r in op.itertuples())              # wycena na zamknięciu ostatniej świecy
+    v = json.loads((out / "validation.json").read_text())
+    assert v["best_exit"].startswith("poziomy TP/SL") and "bez limitu" in v["best_exit"]
+    assert "Pozycje otwarte (D-061" in (out / "report.md").read_text()

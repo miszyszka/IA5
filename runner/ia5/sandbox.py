@@ -153,8 +153,11 @@ def read_settings(ns: dict) -> dict:
                 raise StrategyError(f"EXITS: nieznany rodzaj wyjścia „{ex.kind}”")
             if ex.kind == "level" and "levels" not in ns:
                 raise StrategyError("EXITS level: strategia musi mieć funkcję levels(df, p, ind) z kolumnami tp i/lub sl (D-057)")
-            if not 1 <= ex.cap <= W_MAX:
-                raise StrategyError(f"EXITS: limit czasu cap 1–{W_MAX} świec (B7)")
+            if ex.cap == 0:   # D-061: bez limitu czasu — wyjątek od B7 na wyraźne życzenie Michała, tylko poziomy ze strategii
+                if ex.kind != "level":
+                    raise StrategyError("EXITS: cap = 0 (bez limitu czasu, D-061) tylko dla wyjścia level z poziomem TP z levels()")
+            elif not 1 <= ex.cap <= W_MAX:
+                raise StrategyError(f"EXITS: limit czasu cap 1–{W_MAX} świec (B7); cap = 0 = bez limitu tylko dla level (D-061)")
             if ex.kind == "trail" and not (ex.sl > 0 and ex.trail > 0):
                 raise StrategyError("EXITS trail: sl > 0 (stop początkowy) i trail > 0 (odległość stopu kroczącego)")
             if ex.kind == "rsi_streak" and not (ex.run >= 1 and 50 < ex.level < 100):

@@ -145,6 +145,7 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
         "- Kapitał: zwrot liczony na nominale w walucie kwotowanej (dla EUR/GBP, EUR/JPY, USD/JPY, USD/CHF, USD/CAD "
         "przybliżenie — pomija zmianę kursu przeliczenia w trakcie transakcji).",
         "- Benchmark losowy nie stosuje reguły jednej pozycji na parę.",
+        _open_line(trades),
         "## Kod strategii", "```python", code.strip(), "```",
         "## Pytania do recenzenta",
         "1. Czy OOS i walk-forward potwierdzają IS, czy najlepszy wariant to efekt przeszukania?",
@@ -153,6 +154,20 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
         "4. Co w kodzie wejścia może być dopasowane do historii?",
     ]
     (out / "report.md").write_text("\n\n".join(p for p in parts if p) + "\n", encoding="utf-8")
+
+
+def _open_line(trades: pd.DataFrame) -> str:
+    """D-061: wyjście bez limitu czasu — pozycje niezamknięte na końcu danych są wyliczone po ostatnim close (niezrealizowane)."""
+    if trades is None or trades.empty or "reason" not in trades:
+        return ""
+    op = trades[trades["reason"] == "otwarta"]
+    if op.empty:
+        return ""
+    net = f"; średnio {_f(op['pips_net'].mean())} pips netto na pozycję" if "pips_net" in op else ""
+    share = 100 * len(op) / len(trades)
+    return (f"- **Pozycje otwarte (D-061, wyjście bez limitu czasu):** {len(op):,} z {len(trades):,} transakcji ({share:.1f}%) "
+            f"nie zamknęło się do końca danych — liczone po ostatnim close jako wynik niezrealizowany{net}. "
+            "Wynik realny zależy od tego, czy cena jeszcze wróci do poziomu; nie ma stopu, więc przegrywająca pozycja trwa.")
 
 
 def _forward_lines(fw: dict, v: dict) -> str:
