@@ -2,7 +2,8 @@
 
 Stan (`rev/state.json` na gałęzi data) jest tylko dopisywany: rozliczonych wierszy dziennika i wyceny nigdy się nie
 przelicza. Zdarzenia (dni wyceny i wtorki) idą po kolei, więc po przerwie nadrabianie daje ten sam wynik co krok po kroku.
-Metoda = zwycięzca badania zamrożony w `research.frozen`; zmiana metody (id albo hash kodu) = nowy start, stary portfel
+Metoda = zwycięzca badania zamrożony w `research.frozen`; portfel startuje od razu po badaniu — pierwszy podział po
+ostatnim zamkniętym dniu (D-064), potem co wtorek. Zmiana metody (id albo hash kodu) = nowy start, stary portfel
 trafia do `archive` (R6). Ten sam krok przeliczenia co w badaniu (`rev_method.trade`).
 """
 from __future__ import annotations
@@ -45,7 +46,7 @@ def expected_price_day(decision_ts: int) -> str:
 def new_state(research: dict, archive: list | None = None) -> dict:
     m = method_of(research)
     universe = list(research["universe"])
-    start = next_decision(m["frozen_at"])
+    start = int(m["frozen_at"])   # D-064: pierwszy podział od razu po badaniu (ostatni zamknięty dzień), potem co wtorek 08:00
     units = {b: (START_PLN if b == BASE else 0.0) for b in universe}
     return {"rev_version": research.get("rev_version"), "method": m, "universe": universe,
             "blocs": research.get("blocs", {}), "start_ts": int(start), "capital0": START_PLN,
@@ -85,6 +86,9 @@ def _decision(st: dict, research: dict, ready: dict, D: int, exp_day: str) -> No
     have = [ready[c] for c in universe if c != BASE and ready.get(c) is not None and len(ready[c])]
     first = int(min(int(f["close_ts"].iloc[0]) for f in have))
     times = decision_times(first, D)
+    if not len(times) or int(times[-1]) != int(D):   # D-064: pierwszy podział poza wtorkiem — tygodniowa siatka kończąca się w D
+        n = (int(D) - first) // (7 * 86400) + 1
+        times = (int(D) - 7 * 86400 * np.arange(n)[::-1]).astype("int64")
     prices, pts = weekly_panel(ready, universe, times)
     elig = rm.eligible(prices)
     x = rm.relative(prices)
@@ -171,7 +175,9 @@ def live_step(prev: dict | None, research: dict, ready: dict[str, pd.DataFrame],
         after = st["last_day"] if st["last_day"] is not None else start
         days = [int(d) for d in daily.index.to_numpy("int64") if after < d <= now]
         last_dec = st["last_decision"]
-        decs = [int(D) for D in decision_times(start, now) if last_dec is None or D > last_dec]
+        tuesdays = [int(D) for D in decision_times(start, now)]
+        first = [] if tuesdays[:1] == [start] else [start]          # start poza wtorkiem 08:00 = osobny pierwszy podział
+        decs = [D for D in first + tuesdays if last_dec is None or D > last_dec]
         events = sorted([(d, 0) for d in days] + [(D, 1) for D in decs])
         for t, kind in events:
             if kind == 0:

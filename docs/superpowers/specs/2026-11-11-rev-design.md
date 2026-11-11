@@ -1,6 +1,6 @@
 # REV — kapitał w złotówkach rozłożony na przecenione waluty · projekt
 
-Wersja 0.3 · 2026-11-11 · Status: **zatwierdzony przez Michała 2026-11-11 12:22** („Wszystko super — działaj”) · Plan: `docs/superpowers/plans/2026-11-11-rev.md` · Decyzja: D-063.
+Wersja 0.4 · 2026-11-11 · Status: **zatwierdzony przez Michała 2026-11-11 12:22** („Wszystko super — działaj”) · Plan: `docs/superpowers/plans/2026-11-11-rev.md` · Decyzja: D-063.
 Zmiany 0.2 (po recenzji budującego): własna warstwa czyszczenia kursów PLN (tylko zamknięcia, 6.2), reguła spóźnionej świecy poniedziałku (6.3), odcinki IS / OOS / na żywo z datą graniczną i zasady ponownego badania (6.3), przełącznik na żywo (6.3), okresy dla każdego testu werdyktu (6.3).
 
 ---
@@ -160,7 +160,7 @@ Zasada: każdy test, który ma coś potwierdzić, liczy się poza danymi, na kt�
 
 ### 6.4 Portfel na żywo (etap R2)
 
-- **Start:** pierwszy wtorek 08:00 po zamrożeniu metody; 10 000 zł w PLN, w tym wtorku pierwszy podział.
+- **Start:** od razu po zamrożeniu metody — pierwszy podział po zamknięciu ostatniego zamkniętego dnia (D-064, zmiana z „pierwszy wtorek 08:00”); 10 000 zł w PLN.
 - **Co wtorek ≥ 08:00:** gdy jest zamknięta świeca poniedziałku (albo reguła „bez notowań” z 6.3): oceny zamrożoną metodą → cele z limitem i pasmem → przewalutowania po cenie z poniedziałkowego zamknięcia → wpis do dziennika. Data transakcji = wtorek 08:00, cena = zamknięcie poniedziałku (zapisana w wierszu).
 - **Codziennie:** po każdym zamkniętym dniu roboczym punkt wyceny: Σ jednostek × zamknięcie (PLN = 1). Obok liczony **równy podział na żywo** od tej samej daty startu (do porównania).
 - **Dziennik:** wiersz na każdą zmianę koszyka: wtorek, waluta, jednostki przed → po, kurs (PLN za 1), wartość zmiany w zł. Suma wartości zmian w jednym przeliczeniu = 0 (bez opłat — test). **Rozliczonych wierszy się nie zmienia** (jak F7); późniejsza korekta kursu w Yahoo nie przepisuje dziennika ani wyceny.

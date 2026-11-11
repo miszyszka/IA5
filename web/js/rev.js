@@ -38,7 +38,7 @@ function header(st, res) {
     h('div', { class: 'istatus', 'data-state': { green: 'ok', yellow: 'warn', red: 'bad' }[b.color] || 'mute' }, h('i', { class: 'dot flat' }),
       h('b', {}, res ? res.frozen.label : 'brak badania'), h('span', {}, res ? `werdykt badania ${b.text}` : ''),
       st ? h('span', { class: 'muted' }, ` · ostatnia zmiana stanu ${ago(st.computedAt)}`) : ''),
-    h('p', { class: 'muted small' }, 'Co wtorek o 08:00 (cena z zamknięcia poniedziałku) cały kapitał jest dzielony na waluty proporcjonalnie do tego, jak bardzo są teraz tanie wobec złotego. Żaden koszyk — waluta, blok o sztywnym kursie ani PLN — nie ma więcej niż 50%. Bez spreadów i opłat.'),
+    h('p', { class: 'muted small' }, 'Pierwszy podział od razu po badaniu, potem co wtorek o 08:00 (cena z zamknięcia poniedziałku) cały kapitał jest dzielony na waluty proporcjonalnie do tego, jak bardzo są teraz tanie wobec złotego. Żaden koszyk — waluta, blok o sztywnym kursie ani PLN — nie ma więcej niż 50%. Bez spreadów i opłat.'),
     h('div', { class: 'kpis small' },
       kpi('Kapitał teraz', zl(s.total), cls(s.change)), kpi('Od startu', `${signed(s.change, 2)} zł (${signed(s.pct, 2)}%)`, cls(s.change)),
       kpi('Równy podział', `${zl(s.equal)} (${signed(s.equalPct, 2)}%)`, cls(s.equalPct)),

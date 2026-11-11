@@ -50,12 +50,14 @@ def test_handle_rev_runs_research_when_missing(env, monkeypatch):
     calls, repo, home = env
     monkeypatch.setattr(cli, "cloud_active", lambda *a: True)          # portfel liczy Actions
     cli.handle_rev({})
-    assert calls["research"] == 1 and calls["live"] == 0
+    assert calls["research"] == 1 and calls["live"] == 1      # D-064: pierwszy podział od razu na Macu, choć Actions działa
     runs = list((home / "rev" / "research").iterdir())
     assert len(runs) == 1 and (runs[0] / "research.json").exists() and (runs[0] / "report.md").exists()
     res = json.loads((runs[0] / "research.json").read_text())
     assert res["rejected"] == {"QAR": "historia krótsza niż 10 lat"} and res["oos_openings"] == 1
-    assert set(calls["published"][0]) == {"research.json", "report.md"}
+    assert set(calls["published"][0]) == {"research.json", "report.md"} and set(calls["published"][1]) == {"state.json"}
+    st = json.loads(calls["published"][1]["state.json"])
+    assert st["start_ts"] == res["frozen"]["at"] and len(st["rebalances"]) == 1
     assert json.loads((home / "oos_ledger.json").read_text())[0]["kind"] == "rev"
 
 
@@ -88,7 +90,7 @@ def test_handle_rev_live_publishes_state(env, monkeypatch):
     cli.handle_rev({}, source="actions")                                 # Actions: portfel
     st = json.loads(calls["published"][-1]["state.json"])
     assert st["start_ts"] > 0 and st["method"]["id"]
-    assert calls["live"] == 1
+    assert calls["live"] == 2                                  # Mac: pierwszy podział; Actions: dalej
 
 
 def test_mac_skips_live_when_actions_fresh(env):

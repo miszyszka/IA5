@@ -15,8 +15,8 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
 **Następne — kroki Michała**
 1. Apps Script: wklej nowy `Code.gs`, uruchom raz `backfillPLN()` (ponowne uruchomienie jest bezpieczne — upsert) (kilka minut; w arkuszu `log` przyjęte i odrzucone waluty), potem `installTrigger()`.
-2. Mac: `cd /Users/szyszka/IA5 && git pull && uv tool install -e runner --force`, restart `ia5 start` — kopia kursów PLN, potem badanie REV (ok. minuty), zakładka REV pokaże wynik; portfel startuje w najbliższy wtorek 08:00.
-3. Napisz Claude'owi po pierwszym badaniu: D-064 z listą przyjętych walut, datami odcinków IS/OOS i werdyktem.
+2. Mac: `cd /Users/szyszka/IA5 && git pull && uv tool install -e runner --force`, restart `ia5 start` — kopia kursów PLN, potem badanie REV (ok. minuty) i od razu pierwszy podział (D-064, cena z ostatniego zamkniętego dnia); dalej co wtorek 08:00.
+3. Napisz Claude'owi po pierwszym badaniu: D-065 z listą przyjętych walut, datami odcinków IS/OOS i werdyktem.
 
 **Znane ograniczenia**
 - Badanie i rzadkie kursy sprawdzone tylko na danych syntetycznych i w symulacji Apps Script (Yahoo niedostępne z sesji Claude) — pierwsze prawdziwe pobranie rozstrzygnie, które waluty wejdą.

@@ -5,6 +5,12 @@ Najnowsze na górze.
 
 ---
 
+### D-064 · 2026-11-11 · REV: pierwszy podział od razu po badaniu, nie w najbliższy wtorek
+- **Decyzja (Michał: „A możemy zrobić już pierwszy podział teraz?”):** portfel REV startuje w chwili zamrożenia metody po badaniu (`research.frozen.at`), a nie w najbliższy wtorek 08:00. Pierwszy podział: zamrożoną metodą, po cenie zamknięcia ostatniego zamkniętego dnia przed startem (w środę po południu — wtorek). Potem bez zmian: co wtorek 08:00 po zamknięciu poniedziałku (R2). To samo przy nowym starcie po zmianie metody (R6).
+- **Jak:** pierwszy podział poza wtorkiem liczony na tygodniowej siatce kończącej się w chwili startu (oceny mają te same odstępy tygodniowe co w badaniu); gotowość jak we wtorek (świeca ostatniego dnia roboczego, najpóźniej 12 h). Mac robi pierwszy podział od razu po badaniu, nawet gdy portfel normalnie liczy GitHub Actions — dalej liczy Actions.
+- **Odrzucone:** czekanie do wtorku (tydzień kapitału w PLN bez powodu); podział po kursie „teraz” (nie ma zamkniętej świecy — D2, B1).
+- **Zmiana żelaznej zasady:** R2 (CLAUDE.md 0.52). `REV_VERSION` bez zmian — badania jeszcze nie było.
+
 ### D-063 · 2026-11-11 · REV: kapitał w złotówkach rozłożony na przecenione waluty — kursy walut do PLN, turniej metod, portfel tygodniowy
 - **Decyzja (Michał):** „Potrzebuję w moim systemie zakładki REV. Do systemu dodaj dzienne świece walut w przeliczeniu na złotówki … chciałbym przenosić kapitał między walutami tak, żeby możliwie z największym prawdopodobieństwem zwiększać jego wartość … w żadnej walucie nie może być więcej niż 50% całego kapitału”. Doprecyzowania w rozmowie: bloki o sztywnym kursie liczone razem z kotwicą („KONIECZNIE”), bez rubla i bez rzadkich kursów, przeliczenie **we wtorek 08:00** na zamkniętej świecy poniedziałku, **PLN jako koszyk** (wariant A), metoda wybrana w **turnieju** (droga B). Projekt `docs/superpowers/specs/2026-11-11-rev-design.md` zatwierdzony: „Wszystko super — działaj” (2026-11-11 12:22). Plan: `docs/superpowers/plans/2026-11-11-rev.md`.
 - **Zmiany żelaznych zasad:** D7 — trzecia seria Yahoo `{WALUTA}PLN=X` (D1, cała historia, tylko do REV) i lokalnie `data/yahoo_pln/`, `data/pln_ready/`; wyjątek od B3 tylko dla REV (bez spreadów, opłat, odsetek); nowa sekcja **REV (R0–R8)** w CLAUDE.md (0.50).

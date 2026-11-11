@@ -36,7 +36,7 @@ def ready_at(raw: dict, now: int, edit=None) -> tuple[dict, dict]:
     return out, infos
 
 
-def research(frozen_id="V5-R", at="2026-11-11 12:00"):
+def research(frozen_id="V5-R", at="2026-11-17 08:00"):
     return {"rev_version": "1", "universe": baskets(CODES), "blocs": {},
             "periods": {"start_ts": ts("2021-01-05 08:00")},
             "frozen": {"id": frozen_id, "label": rm.VARIANT_BY_ID[frozen_id].label, "code_hash": "abc123",
@@ -47,13 +47,32 @@ def roundtrip(st):
     return json.loads(json.dumps(st, allow_nan=False))
 
 
-def test_waits_for_first_tuesday(raw):
+def test_waits_for_research_moment(raw):
     now = ts("2026-11-14 12:00")
     r, i = ready_at(raw, now)
     st = live_step(None, research(), r, now, i)
     assert st["start_ts"] == ts("2026-11-17 08:00")
     assert st["ledger"] == [] and st["valuation"] == [] and st["next_rebalance"] == st["start_ts"]
     assert st["units"]["PLN"] == 10_000
+
+
+def test_first_split_right_after_research_d064(raw):
+    """D-064 (Michał: „możemy zrobić już pierwszy podział teraz?”): start od razu po badaniu, cena z ostatniego zamkniętego
+    dnia; kolejne przeliczenia co wtorek 08:00."""
+    at = "2026-11-11 15:41"
+    now = ts("2026-11-11 16:00")
+    r, i = ready_at(raw, now)
+    st = live_step(None, research(at=at), r, now, i)
+    assert st["start_ts"] == ts(at) and len(st["rebalances"]) == 1
+    assert st["rebalances"][0]["ts"] == ts(at) and st["rebalances"][0]["price_day"] == "2026-11-10"
+    assert {x["price_day"] for x in st["ledger"] if x["basket"] != "PLN"} == {"2026-11-10"}
+    assert st["next_rebalance"] == ts("2026-11-17 08:00")
+    later = ts("2026-11-17 09:00")
+    r2, i2 = ready_at(raw, later)
+    st2 = live_step(roundtrip(st), research(at=at), r2, later, i2)
+    assert [x["ts"] for x in st2["rebalances"]] == [ts(at), ts("2026-11-17 08:00")]
+    once = live_step(None, research(at=at), r2, later, i2)        # nadrabianie = krok po kroku
+    assert once["ledger"] == st2["ledger"]
 
 
 def test_first_rebalance_from_pln(raw):
@@ -139,8 +158,8 @@ def test_method_change_restarts_and_archives(raw):
     r2 = research("M3-P", "2026-11-25 10:00")
     r2["frozen"]["code_hash"] = "def456"
     st2 = live_step(roundtrip(st1), r2, r, now, i)
-    assert st2["method"]["id"] == "M3-P" and st2["start_ts"] == ts("2026-12-01 08:00")
-    assert st2["ledger"] == [] and len(st2["archive"]) == 1
+    assert st2["method"]["id"] == "M3-P" and st2["start_ts"] == ts("2026-11-25 10:00")
+    assert [x["ts"] for x in st2["rebalances"]] == [ts("2026-11-25 10:00")] and len(st2["archive"]) == 1
     assert st2["archive"][0]["method"]["id"] == "V5-R" and st2["archive"][0]["final"] > 0
 
 

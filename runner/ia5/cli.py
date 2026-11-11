@@ -749,6 +749,7 @@ def handle_rev(state: dict, source: str = "mac") -> None:
             return
         infos = {c: df.attrs.get("info", {}) for c, df in pln.items()}
         research = _read_json(DATA_REPO / "rev" / "research.json")
+        fresh = False
         if source == "mac" and (research is None or research.get("rev_version") != REV_VERSION):
             local = _local_research(REV_VERSION)   # badanie policzone, ale publikacja się nie udała — bez drugiego otwarcia OOS
             if local is not None:
@@ -762,6 +763,7 @@ def handle_rev(state: dict, source: str = "mac") -> None:
             beat("computing", job)
             log("REV: badanie metody (turniej 13 wariantów, ≥ 1000 losowych podziałów)…")
             research = rev_research_run(pln, research, now)
+            fresh = True
         if research is None:
             log("REV: badania jeszcze nie ma — policzy je Mac (ia5 start).")
             return
@@ -772,10 +774,11 @@ def handle_rev(state: dict, source: str = "mac") -> None:
 
         if code_hash() != (research.get("frozen") or {}).get("code_hash"):
             log("REV: uwaga — kod REV zmienił się od badania bez nowej REV_VERSION (liczę dalej zamrożoną metodą).")
-        if source == "mac" and cloud_active(DATA_REPO, now):
+        prev = _read_json(DATA_REPO / "rev" / "state.json")
+        first_split = fresh and (prev is None or (prev.get("method") or {}).get("code_hash") != research["frozen"]["code_hash"])
+        if source == "mac" and cloud_active(DATA_REPO, now) and not first_split:   # D-064: pierwszy podział od razu, na Macu
             log("REV: portfel liczy GitHub Actions — Mac pomija.")
             return
-        prev = _read_json(DATA_REPO / "rev" / "state.json")
         st = rev_live.live_step(prev, research, pln, now, infos)
         st["source"] = source
         v = st.get("today", {}).get("total")
