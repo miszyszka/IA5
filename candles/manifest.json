@@ -15,7 +15,7 @@
   "candles/AUDUSD/2026.parquet": {
    "bars": 5252,
    "from": 1767225600,
-   "hash": "8238aa6f8fd3c1c5",
+   "hash": "bfb2e441a327eace",
    "to": 1794434400
   },
   "candles/EURGBP/2024.parquet": {
@@ -33,7 +33,7 @@
   "candles/EURGBP/2026.parquet": {
    "bars": 5241,
    "from": 1767225600,
-   "hash": "b6d0d22e29a58a18",
+   "hash": "7bea466feabc91d7",
    "to": 1794434400
   },
   "candles/EURJPY/2024.parquet": {
@@ -51,7 +51,7 @@
   "candles/EURJPY/2026.parquet": {
    "bars": 5236,
    "from": 1767229200,
-   "hash": "d4c33f72b34096ac",
+   "hash": "f76387d04663a574",
    "to": 1794434400
   },
   "candles/EURUSD/2024.parquet": {
@@ -69,7 +69,7 @@
   "candles/EURUSD/2026.parquet": {
    "bars": 5234,
    "from": 1767225600,
-   "hash": "5a39dd3e3d4a39b6",
+   "hash": "302d884e9ec95398",
    "to": 1794434400
   },
   "candles/GBPUSD/2024.parquet": {
@@ -87,7 +87,7 @@
   "candles/GBPUSD/2026.parquet": {
    "bars": 5236,
    "from": 1767225600,
-   "hash": "52f05d2095f15236",
+   "hash": "4d9df629c00f5523",
    "to": 1794434400
   },
   "candles/USDCAD/2024.parquet": {
@@ -105,7 +105,7 @@
   "candles/USDCAD/2026.parquet": {
    "bars": 5250,
    "from": 1767225600,
-   "hash": "46800149f212c857",
+   "hash": "1fa0c3df32c0331c",
    "to": 1794434400
   },
   "candles/USDCHF/2024.parquet": {
@@ -123,7 +123,7 @@
   "candles/USDCHF/2026.parquet": {
    "bars": 5210,
    "from": 1767229200,
-   "hash": "c65b07727c9e47b4",
+   "hash": "78b1007c70678ccd",
    "to": 1794434400
   },
   "candles/USDJPY/2024.parquet": {
@@ -141,7 +141,7 @@
   "candles/USDJPY/2026.parquet": {
    "bars": 5206,
    "from": 1767290400,
-   "hash": "cdc97a0f03bc1d7b",
+   "hash": "63331eac79eacf6a",
    "to": 1794434400
   }
  },
