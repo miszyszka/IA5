@@ -1,6 +1,38 @@
 {
  "strategies": [
   {
+   "id": "KitxeCBn7ZWKho2zYmoW",
+   "name": "D5",
+   "run_id": "20261112-222602",
+   "created": 1794522362,
+   "verdict": "red",
+   "verdict_note": "brak przewagi",
+   "n_variants": 9,
+   "hypothesis": "Poniedziałkowy powrót. Przed weekendem rynek pozbywa się ryzyka: kto jest po złej stronie ruchu, zamyka pozycje\ndo piątkowego zamknięcia i dopycha kurs dalej, niż uzasadniają to informacje. W poniedziałek ten wymuszony ruch się cofa.\nWejście: para rozciągnięta na zamknięciu piątku (RSI2 dziennych zamknięć z 16:00 w Nowym Jorku poniżej progu → kupno,\npowyżej 100 − próg → sprzedaż), wejście w poniedziałek o 01:00 czasu Londynu (rynek w Tokio już otwarty), wyjście po czasie.\nEfekt znaleziony na danych niezależnych od danych IA5 (świece dzienne 2003–2019 i świece godzinowe brokera 2012–2022);\nw inne dni tygodnia go nie ma. Lista wariantów ustalona przed pierwszym policzeniem na świecach Yahoo H1 (research/rynek/).",
+   "pairs": [
+    "AUDUSD",
+    "EURGBP",
+    "EURJPY",
+    "EURUSD",
+    "GBPUSD",
+    "USDCAD",
+    "USDCHF",
+    "USDJPY"
+   ],
+   "data_from": 1730073600,
+   "data_to": 1794517200,
+   "source": "yahoo",
+   "engine_version": "0.13.0",
+   "best_exit": "po 30 świecach",
+   "is_mean_r": 0.411918,
+   "oos_mean_r": -0.112664,
+   "oos_mean_pips": -0.285406,
+   "oos_trades": 81,
+   "demo": false,
+   "timeframe": "H1",
+   "d1_background": true
+  },
+  {
    "id": "wSKI1vQ0WgIVXq2m53BL",
    "name": "Powrót",
    "run_id": "20261112-203934",
