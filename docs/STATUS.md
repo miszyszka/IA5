@@ -2,6 +2,21 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-12 — strategia RSI na świecach dziennych z poszukiwaniem (~492 tys. prób), CLAUDE.md 0.55
+
+**Zrobione (na prośbę Michała: progi RSI, TP/SL w ATR albo od szczytu/dołka, wyjście po X dniach na zamknięciu, stawka od głębokości RSI / numeru świecy / liczby otwartych, piramidowanie; „najbardziej stabilna, mało okresów stratnych, dużo transakcji”)**
+- `research/rsi_d1/` — poszukiwanie na świecach D1 Yahoo (gałąź `data`, `clean_d1`), transakcje `engine.simulate` (wyjście `level` + limit dni), koszt 0,5 pipsa za noc, wybór tylko na IS po stabilności z miesięcy (Sharpe, zyskowne kwartały/lata, transakcje, pary). Wnioski i tabela IS | OOS: `research/rsi_d1/README.md`.
+- `strategies/examples/rsi_d1_powrot_w_trendzie.py` — 12 wersji (`CONFIGS`) × 3 limity dni (3/5/10) = 36 wariantów, `PYRAMID = 3`, `SIZING = [1, 2, 3, 5]` (D-067). Kontrola `check_strategy.py`: OK (ostrzeżenie „stan, nie zdarzenie” — celowe: dokładanie w każdej świecy wyprzedania).
+- Wybór po IS: cfg 0, limit 3 dni (RSI3 < 15 lub RSI14 < 40 nad rosnącą SMA200, stawka 1/2/3 z kolejną świecą).
+
+**Wynik — uczciwie:** w IS rodzina „wyprzedanie RSI w trendzie” ma Sharpe z miesięcy ≈ 0,5 i ~60% zyskownych kwartałów, ale **w OOS 2019–2026 jest koło zera** (cfg 0: −0,04). Silnikiem lokalnie (ten sam kod co Mac): 🔴 — #1 IS według R to cfg 11 (stop pod dołkiem), OOS −12 pipsów. Jedyna wyraźnie dodatnia w OOS: cfg 9 (RSI5 < 25, TP 1,5 / SL 1 ATR, stawka z liczbą otwartych) — wybór po OOS byłby nieuczciwy (W1), można ją zamrozić i patrzeć na forward (W4).
+
+**Następne / do uwagi Michała**
+1. Wkleić strategię w dashboard (Nowa strategia) — Mac policzy kartę; porównać cfg 0 / limit 3 (wybór) z #1 IS.
+2. Decyzja: zamrozić cfg 9 jako forward test albo odpuścić RSI na D1 i szukać innej hipotezy.
+
+**Znane problemy:** `tests/test_rev_cli.py::test_handle_rev_runs_research_when_missing` czerwony w czwartek 2026-11-12 także bez zmian z tej sesji (test zależny od dnia tygodnia — liczba przewalutowań od startu); do poprawki osobno.
+
 ## 2026-11-11 (późny wieczór) — odporność na pustą próbę IS/OOS (D-066), CLAUDE.md 0.54
 
 **Zrobione**

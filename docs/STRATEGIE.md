@@ -1,6 +1,6 @@
 # STRATEGIE — jak pisać kod strategii dla IA5
 
-Wersja 0.43 · 2026-11-11 (dodane: wyjście `level` z `cap = 0` — bez limitu czasu, D-061; `TIMEFRAME = "D1"` i tło D1 w strategiach H1 — D-058; `levels()` — D-057; noce i obsunięcie z MAE — D-054/D-055)
+Wersja 0.44 · 2026-11-12 (dodane: przykład `rsi_d1_powrot_w_trendzie.py` — wersje w `CONFIGS`, wyjście po X dniach przez `level` + `cap`, D-067; wyjście `level` z `cap = 0` — bez limitu czasu, D-061; `TIMEFRAME = "D1"` i tło D1 w strategiach H1 — D-058; `levels()` — D-057; noce i obsunięcie z MAE — D-054/D-055)
 
 > Ten plik jest **regułą dla Claude**. Gdy Michał mówi „zrób mi strategię …”, Claude postępuje dokładnie według sekcji 1 i zwraca kod, który bez zmian wkleja się do okna „Nowa strategia” w dashboardzie i który program `ia5` na Macu zrozumie.
 > Kontrakt jest egzekwowany w kodzie: `runner/ia5/sandbox.py` (wykonanie), `runner/ia5/check.py` (kontrola), `web/js/metrics.js` → `checkStrategyCode` (kontrola w przeglądarce).
@@ -244,7 +244,7 @@ def levels(df, p, ind):                      # ten sam df i p co signals(); licz
 
 ## 7. Przykłady (każdy sprawdzany w CI)
 
-`strategies/examples/`: `donchian_d1_trend.py` (wybicie z kanału + trend D1, wyjścia ATR/SMA/przeciwny), `donchian_d1_trail.py` (to samo ze stopem kroczącym), `trend_pullback_v2.py` (powrót RSI w trendzie, stop w ATR), `rsi_trend_pyramid.py` (dokładanie z wagami, `PYRAMID`, `HOURS`, wyjście `rsi_streak`), `rsi_trend_single.py` (to samo, 1 pozycja), `sma200_rsi_pullback.py`, `donchian_breakout.py`, `bollinger_reversion.py`, `macd_trend_adx.py`, `asia_range_breakout.py` (poziomy sesji bez look-ahead), `stoch_session_reversal.py` (filtry czasu). Nowe: `d1_trend_pullback.py` (strategia na świecach dziennych, `TIMEFRAME = "D1"`, D-058), `h1_z_tlem_d1.py` (H1 z trendem z D1 — `ind.d1`, `ind.d1_to_h1`), `powrot_poziom.py` (TP/SL jako ceny, `levels()`, D-057).
+`strategies/examples/`: `donchian_d1_trend.py` (wybicie z kanału + trend D1, wyjścia ATR/SMA/przeciwny), `donchian_d1_trail.py` (to samo ze stopem kroczącym), `trend_pullback_v2.py` (powrót RSI w trendzie, stop w ATR), `rsi_trend_pyramid.py` (dokładanie z wagami, `PYRAMID`, `HOURS`, wyjście `rsi_streak`), `rsi_trend_single.py` (to samo, 1 pozycja), `sma200_rsi_pullback.py`, `donchian_breakout.py`, `bollinger_reversion.py`, `macd_trend_adx.py`, `asia_range_breakout.py` (poziomy sesji bez look-ahead), `stoch_session_reversal.py` (filtry czasu). Nowe: `d1_trend_pullback.py` (strategia na świecach dziennych, `TIMEFRAME = "D1"`, D-058), `h1_z_tlem_d1.py` (H1 z trendem z D1 — `ind.d1`, `ind.d1_to_h1`), `powrot_poziom.py` (TP/SL jako ceny, `levels()`, D-057), `rsi_d1_powrot_w_trendzie.py` (D1: 12 wersji w `CONFIGS` — progi RSI, TP/SL w ATR albo od dołka/szczytu, wyjście po X dniach na zamknięciu przez `level` + `cap`, stawka od serii / otwartych / głębokości, `PYRAMID`, `SIZING`; D-067).
 
 ---
 

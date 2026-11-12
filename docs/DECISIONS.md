@@ -5,6 +5,12 @@ Najnowsze na górze.
 
 ---
 
+### D-067 · 2026-11-12 · Strategia RSI na D1: wersje w `CONFIGS`, wyjścia `level` z limitem dni, własne `SIZING`
+- **Decyzja:** `strategies/examples/rsi_d1_powrot_w_trendzie.py` koduje każdą wersję (próg RSI, filtr trendu, TP/SL w ATR albo od dołka/szczytu, stawka) jako konfigurację w `CONFIGS`; TP/SL podaje `levels()` (D-057), a wyjście po X dniach na zamknięciu to `level` z `cap` = X (bez poziomu = tylko czas). `PYRAMID = 3`. `SIZING = [1, 2, 3, 5]` — wyjątek od K2 przy prośbie Michała o dynamiczną stawkę: waga do 3× × 3 pozycje w parze × 8 par daje przy 5% depozytu obsunięcie IS > 90%.
+- **Powód:** jedna strategia zamiast 12 — wszystkie wersje w jednej karcie, 36 wariantów (mniej niż 233 domyślne wyjścia na 1 wejście), każda wersja ma własne poziomy.
+- **Badanie:** `research/rsi_d1/` (~492 tys. konfiguracji, wybór tylko na IS, OOS otwarty raz dla listy). Wynik: przewaga z IS nie przetrwała OOS — patrz `research/rsi_d1/README.md` i `STATUS.md`.
+- **Odrzucone:** wybór wersji po OOS (W1); osobna strategia na każdą wersję (12 kart, 12 × kara DSR); zmiana rankingu karty na miarę stabilności (zmiana silnika poza zakresem prośby — G6).
+
 ### D-066 · 2026-11-11 · Liczenie nie pada, gdy IS albo OOS nie ma żadnej transakcji
 - **Decyzja:** `variant_table` (backtest) przy próbie IS lub OOS bez ani jednej transakcji zostawia puste metryki tej próby (NaN) zamiast rzucać `KeyError: variant_id`. Karta strategii pokazuje wtedy to, co jest (np. „żaden wariant nie ma 30 transakcji IS”).
 - **Powód:** strategia na D1 „jedna pozycja naraz w całym portfelu, wyjście tylko na średniej, bez limitu czasu” (bez dźwigni, cały kapitał) na prawdziwych danych dała 9 transakcji, z których ostatnia (AUD/USD od 2014) wisi otwarta do dziś i blokuje resztę — OOS (od 2019) nie ma żadnej transakcji, a liczenie kończyło się błędem zamiast raportem.
