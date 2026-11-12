@@ -1,6 +1,6 @@
 # Raport strategii: Powrót
 
-Run `20261111-214443` · silnik 0.13.0 · kod `12864a1b4312df32` · dane `ef4e95eb7bd91b4c`
+Run `20261112-165330` · silnik 0.13.0 · kod `12864a1b4312df32` · dane `b50e2d6c1f25d7e9`
 
 ## Werdykt: 🟡 ŻÓŁTY — zaliczone 4 z 5 testów
 
@@ -8,7 +8,7 @@ Run `20261111-214443` · silnik 0.13.0 · kod `12864a1b4312df32` · dane `ef4e95
 |---|---|---|
 | expectancy netto OOS > 0 | ✔ | 9.75 |
 | percentyl benchmarku ≥ 95 | ✔ | 100.00 |
-| PBO < 0,3 | ✔ | 0.16 |
+| PBO < 0,3 | ✔ | 0.14 |
 | DSR ≥ 0,95 | ✘ | 0.68 |
 | dodatni przy spreadzie ×1,5 | ✔ | 9.79 |
 
@@ -24,9 +24,9 @@ na razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach 
 
 ## Dane i model wykonania
 
-- Pary: AUDUSD, EURGBP, EURJPY, EURUSD, GBPUSD, USDCAD, USDCHF, USDJPY; świece H1 od 2024-10-28 do 2026-11-11; źródło: yahoo; tło D1 (świece dzienne, cała historia Yahoo) w signals() — D-058.
+- Pary: AUDUSD, EURGBP, EURJPY, EURUSD, GBPUSD, USDCAD, USDCHF, USDJPY; świece H1 od 2024-10-28 do 2026-11-12; źródło: yahoo; tło D1 (świece dzienne, cała historia Yahoo) w signals() — D-058.
 
-- In-sample do 2026-05-09, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS.
+- In-sample do 2026-05-10, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS.
 
 - Wejście na open świecy po sygnale, o dowolnej godzinie (strategia wyłączyła okno handlu, HOURS = False, D-034); wyjście na dowolnej świecy, także po nocy i weekendzie (D-032). TP i SL w tej samej świecy: przyjęty SL (pesymistycznie — świece H1 nie mówią, co padło pierwsze; transakcja z flagą `ambiguous`, B5).
 
@@ -42,7 +42,7 @@ na razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach 
 
 - **Przetestowane warianty: 5** (1 wejścia × 5 wyjść).
 
-- Pominięte sygnały, średnio na wariant: 32 (limit otwartych pozycji w parze), 2.0 (brak danych do wyjścia); 0 wejść w rozgrzewce ATR, 0 sygnałów poza oknem 07:00–17:00 czasu polskiego (B11), anulowane transakcje, średnio na wariant: 5.0 (przerwa w dostępie do danych), 1.0 (sygnał, wejście lub wyjście na świecy uzupełnionej) — D-032.
+- Pominięte sygnały, średnio na wariant: 32 (limit otwartych pozycji w parze), 1.8 (brak danych do wyjścia); 0 wejść w rozgrzewce ATR, 0 sygnałów poza oknem 07:00–17:00 czasu polskiego (B11), anulowane transakcje, średnio na wariant: 5.0 (przerwa w dostępie do danych), 1.0 (sygnał, wejście lub wyjście na świecy uzupełnionej) — D-032.
 
 ## Top 10 wariantów (ranking po IS, min. 30 transakcji IS)
 
@@ -51,7 +51,7 @@ na razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach 
 | 1 | ATR14 TP 1.5× SL 0× max 60 | — | 207 | 0.53 | 10.86 | 83.6 | 76 | 0.48 | 9.75 |
 | 2 | ATR14 TP 1× SL 0× max 60 | — | 213 | 0.46 | 9.15 | 91.5 | 79 | 0.51 | 9.30 |
 | 3 | ATR14 TP 2× SL 0× max 60 | — | 197 | 0.11 | 5.06 | 72.1 | 74 | 0.44 | 10.12 |
-| 4 | po 60 świecach | — | 179 | -0.18 | -1.88 | 45.8 | 64 | 0.17 | 10.26 |
+| 4 | po 60 świecach | — | 179 | -0.18 | -1.88 | 45.8 | 65 | 0.02 | 8.25 |
 | 5 | ATR14 TP 3× SL 0× max 60 | — | 190 | -0.21 | -1.12 | 55.3 | 71 | 0.25 | 10.12 |
 
 ## Najlepszy wariant IS: ATR14 TP 1.5× SL 0× max 60 (—)
@@ -392,11 +392,11 @@ Dni = dni kalendarzowe od wejścia (open świecy) do wyjścia. Pozycja **OTWARTA
 
 ## Walidacja
 
-- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 10.56 pips/transakcję, percentyl **100.0** (losowe: 5%=-6.78, mediana=-1.83, 95%=2.92).
+- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 10.56 pips/transakcję, percentyl **100.0** (losowe: 5%=-7.30, mediana=-1.76, 95%=2.62).
 
 - **Deflated Sharpe Ratio**: 0.681 (Sharpe na transakcję 0.223, próg przy 5 próbach 0.172).
 
-- **PBO** (CSCV, 16 bloków, 5 wariantów): 0.162 — szansa, że najlepszy wariant IS wypada poniżej mediany poza próbą.
+- **PBO** (CSCV, 16 bloków, 5 wariantów): 0.141 — szansa, że najlepszy wariant IS wypada poniżej mediany poza próbą.
 
 - **Walk-forward** (okna kotwiczone, wybór najlepszego wariantu przed każdym oknem): 172 transakcji, śr. 8.91 pips, 0.52 R.
 
