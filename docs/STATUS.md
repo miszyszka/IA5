@@ -2,6 +2,22 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-12 (noc) — badanie „co steruje rynkiem”: poniedziałkowy powrót, księga trzech przewag (D-069), CLAUDE.md 0.57
+
+**Zrobione (na prośbę Michała: „przeanalizuj to jak rasowy trader… pomyśl out of the box, jak trzeba, zmodyfikuj silnik”)**
+- `research/rynek/` — hipotezy o przepływach (koniec tygodnia, zamknięcie Nowego Jorku, fixing, koniec miesiąca, sesje, siła walut, VIX) na **niezależnych świecach H1 brokera 2012–2022** i świecach dziennych 2003–2019; ok. 95 tys. reguł; okres C (świece Yahoo H1 2024-10 → 2026-11) otwarty raz dla listy z `LISTA_PRZED_TESTEM.md`. Pełny opis i tabele: `research/rynek/README.md`.
+- **Główne znalezisko — poniedziałkowy powrót:** para rozciągnięta na zamknięciu piątku wraca w poniedziałek (w inne dni nie). D1: t −3,5 / −3,3 / −2,2 w 2003–11 / 2012–19 / 2019–26; H1 brokera: +8,3 / +5,1 pipsa netto (t 3,3 / 2,1), ~160 transakcji rocznie. Na Yahoo H1 2024–26: +2,6 pipsa netto (t 0,7) — znak zgodny, nierozstrzygające; ostatnie pół roku płaskie.
+- Słabsze: powrót w sesji azjatyckiej (+3,9 / +1,75 pipsa netto; C +1,9). Niepotwierdzone: fixing w końcu miesiąca, polowania na stopy, wybicia Azji, VIX, cechy międzyparowe — **zmiana silnika nie była potrzebna**.
+- Strategie: `strategies/examples/poniedzialek_powrot.py` (9 wariantów) i `azja_powrot.py` (9 wariantów), obie H1 z `HOURS = False`; kontrola OK. Silnikiem lokalnie na świecach Yahoo: obie 🔴 (OOS karty = ostatnie 6 miesięcy).
+- **Księga** (poniedziałek + Azja + seria D1, równa zmienność): Sharpe 1,52 i 9/10 lat na plusie w 2013–2022 (dla dwóch pierwszych to okres badania), 1,30 w 2024-11 → 2026-10; korelacje −0,22…+0,29. Seria D1 po raz pierwszy sprawdzona na niezależnych danych z prawdziwymi zamknięciami: Sharpe 0,58.
+
+**Następne / do decyzji Michała**
+1. Wkleić `poniedzialek_powrot.py`; zamrozić wariant próg 15, 20 godzin (lista sprzed testu) i dodać go razem z serią D1 do jednego inwestora — tak działa księga na żywo.
+2. D-068 (zamknięcia D1) nadal czeka; z nią poniedziałkowy powrót można policzyć także na 23 latach świec dziennych.
+3. Jeśli chcesz większej przewagi niż „płacą nam za płynność”: potrzebne dane o stopach procentowych (carry) i decyzja o swapach (O5).
+
+**Naprawione przy okazji:** testy `tests/test_rev_cli.py` zależały od dnia uruchomienia (dane testowe kończą się 2026-11-10, a kod brał bieżący czas) — od 2026-11-12 jeden test był czerwony. Zegar w tych testach jest teraz zatrzymany na 2026-11-11; logika REV bez zmian.
+
 ## 2026-11-12 (wieczór) — RSI D1 wersja 2 z diagnozy wejść; błąd zamknięć D1 Yahoo (D-068), CLAUDE.md 0.56
 
 **Zrobione (na prośbę Michała: „przeanalizuj, co poszło nie tak, co łączy stratne i zyskowne wejścia; potrzebuję czegoś lepszego”)**

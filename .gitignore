@@ -34,3 +34,10 @@ node_modules/
 # Paczki pobrane lokalnie (nie należą do repo)
 *.whl
 research/data/
+research/rynek/ej/
+research/rynek/yh_ready
+research/rynek/vix.csv
+research/rynek/out/
+research/rynek/ej_d1/
+research/rsi_d1/d1_fixed/
+research/rsi_d1/*.parquet

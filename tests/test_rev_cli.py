@@ -6,6 +6,7 @@ import pytest
 from ia5 import cli, cloud, publish, ready, rev_config, rev_live, rev_research, store
 
 CODES = ["EUR", "USD", "CHF", "GBP", "JPY", "NOK", "SEK", "CZK", "HUF", "AUD"]
+NOW = 1794398400.0   # 2026-11-11 12:00 UTC (środa); dane testowe kończą się 2026-11-10
 
 
 @pytest.fixture(scope="module")
@@ -31,6 +32,8 @@ def env(monkeypatch, tmp_path, pln):
     monkeypatch.setattr(cloud, "read_status", lambda: {"pln": {"rejected": {"QAR": "historia krótsza niż 10 lat"}}})
     monkeypatch.setattr(ready, "load_pln", lambda folder: pln)
     monkeypatch.setattr(cli, "log", lambda m: calls["logs"].append(m))
+    # zegar zatrzymany dzień po ostatniej świecy danych testowych — bez tego test zależy od dnia, w którym jest uruchamiany
+    monkeypatch.setattr(time, "time", lambda: NOW)
     real_rr, real_live = rev_research.run_research, rev_live.live_step
 
     def rr(*a, **k):
