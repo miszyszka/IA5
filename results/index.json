@@ -1,6 +1,38 @@
 {
  "strategies": [
   {
+   "id": "ED4hNQCGi0Rg4gK6jyg6",
+   "name": "RSI D1",
+   "run_id": "20261112-165248",
+   "created": 1794502368,
+   "verdict": "red",
+   "verdict_note": "brak przewagi",
+   "n_variants": 36,
+   "hypothesis": "Na świecach dziennych par FX trend trwa miesiącami, a krótkie wyprzedanie w trendzie wzrostowym (i wykupienie\nw spadkowym) zwykle się cofa w ciągu kilku dni. Kupujemy, gdy RSI spada pod próg, ale tylko gdy cena jest nad rosnącą SMA200\n(sprzedajemy lustrzanie pod opadającą SMA200). Bez filtra trendu czysty powrót RSI na D1 po spreadzie nie zarabia — to\nsprawdziło poszukiwanie (research/rsi_d1/README.md). Wersje różnią się progiem RSI, wyjściem (po X dniach na zamknięciu,\nTP/SL w ATR, stop pod dołkiem) i stawką: stała, rosnąca z kolejną świecą wyprzedania, z liczbą otwartych pozycji, z głębokością RSI.\nKonfiguracje wybrane wyłącznie na IS (przed 2019-05); wynik OOS badania jest w raporcie poszukiwania.",
+   "pairs": [
+    "AUDUSD",
+    "EURGBP",
+    "EURJPY",
+    "EURUSD",
+    "GBPUSD",
+    "USDCAD",
+    "USDCHF",
+    "USDJPY"
+   ],
+   "data_from": 846633600,
+   "data_to": 1794355200,
+   "source": "yahoo",
+   "engine_version": "0.13.0",
+   "best_exit": "poziomy TP/SL ze strategii, max 10",
+   "is_mean_r": 0.412869,
+   "oos_mean_r": -0.135051,
+   "oos_mean_pips": -12.04287,
+   "oos_trades": 222,
+   "demo": false,
+   "timeframe": "D1",
+   "d1_background": false
+  },
+  {
    "id": "yNiRuui7kP8m0aR1aV3K",
    "name": "D4 v2",
    "run_id": "20261111-220654",
