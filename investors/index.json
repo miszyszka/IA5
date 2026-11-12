@@ -18,6 +18,23 @@
    "errors": 0
   },
   {
+   "id": "WLnEnKT9wRI4bZTZOo6p",
+   "name": "RSI v.1",
+   "capital": 10000.0,
+   "pct": 5.0,
+   "start": 1794516343,
+   "computedAt": 1794516824,
+   "dataTo": 1794513600,
+   "equity": 10000.0,
+   "return_pct": 0.0,
+   "closed": 0,
+   "open": 0,
+   "strategies": [
+    "RSI - Dzienne v.1"
+   ],
+   "errors": 0
+  },
+  {
    "id": "Zed3yb2lC8KLH5LgwOuF",
    "name": "Combined",
    "capital": 10000.0,
