@@ -2,6 +2,20 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-12 (wieczór) — RSI D1 wersja 2 z diagnozy wejść; błąd zamknięć D1 Yahoo (D-068), CLAUDE.md 0.56
+
+**Zrobione (na prośbę Michała: „przeanalizuj, co poszło nie tak, co łączy stratne i zyskowne wejścia; potrzebuję czegoś lepszego”)**
+- **Znalezione w danych (D-068):** od ~2011 świeca D1 Yahoo par FX ma `close` ≈ `open` tego samego dnia; prawdziwe zamknięcie to open następnego dnia (EUR/USD 2025–26 vs H1: 3,4 pipsa mediany zamiast 26). Wskaźniki „na zamknięciu” D1 liczą się od 2011 z ceny z początku dnia, a wyjścia „na zamknięciu” wypadają na otwarciu dnia. Wersja 1 na poprawionych zamknięciach: OOS Sharpe +0,31 zamiast −0,04. Propozycja naprawy `clean_d1` czeka na decyzję — dane i silnik bez zmian.
+- Diagnoza (tylko IS, połowy 1996–2011 i 2012–2019): straty łączy pierwszy dzień wyprzedania, dzień-szok (zakres ≥ 1,5–2 ATR), głęboki krach przeciw trendowi; zyski — trend po stronie transakcji i kolejny dzień wyprzedania z rzędu (3. dzień ok. 3× lepszy niż 1.). Model ML (A → B) nie znalazł nic więcej; trend-following zjada koszt nocy.
+- `strategies/examples/rsi_d1_seria_w_trendzie.py` — wersja 2: od 2. dnia z rzędu RSI5 < 25 nad SMA200, bez dni-szoków, wyjście po 3–5 dniach, PYRAMID 3, SIZING 1–5%; 12 wersji × 3 limity = 36 wariantów; kontrola OK. Wybór po IS: cfg 0, 3 dni (najwyższe minimum Sharpe z 2 połów IS × 2 wersji zamknięć).
+- Wynik OOS (otwarcie nr 3 tej rodziny, zapisane w `research/rsi_d1/README.md`): wszystkie 36 wariantów dodatnie na poprawionych zamknięciach, 34/36 na danych silnika; cfg 0 / 3 dni: Sharpe 0,44 (poprawione) / 0,18 (Yahoo), 4 dni: 0,58 / 0,40. Silnikiem lokalnie: 🟡 4/5 na obu wersjach (PBO ✘). Słabe lata 2023–2024, odbicie 2025–2026.
+
+**Następne / do decyzji Michała**
+1. **D-068:** czy naprawić zamknięcie D1 w warstwie czyszczenia (wersja `clean_d1` 2: close dnia = ostatni close H1 przed północą w Londynie, gdzie jest H1; wcześniej open następnego dnia). Dotyczy wszystkich strategii D1 i tła D1 dla H1.
+2. Wkleić `rsi_d1_seria_w_trendzie.py` w dashboard; zamrozić cfg 0 (3 dni) albo cfg 0 (4 dni) jako forward test.
+
+**Znane problemy:** `test_rev_cli.py::test_handle_rev_runs_research_when_missing` zależy od dnia tygodnia (bez zmian od poprzedniego wpisu).
+
 ## 2026-11-12 — strategia RSI na świecach dziennych z poszukiwaniem (~492 tys. prób), CLAUDE.md 0.55
 
 **Zrobione (na prośbę Michała: progi RSI, TP/SL w ATR albo od szczytu/dołka, wyjście po X dniach na zamknięciu, stawka od głębokości RSI / numeru świecy / liczby otwartych, piramidowanie; „najbardziej stabilna, mało okresów stratnych, dużo transakcji”)**
