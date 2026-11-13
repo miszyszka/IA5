@@ -86,23 +86,31 @@ def _as_signal(s, df) -> np.ndarray:
 
 
 def _as_levels(lv, df) -> np.ndarray:
-    """D-057: levels(df, p, ind) → tablica (n, 2) cen TP i SL na świecy sygnału; NaN = brak poziomu."""
+    """D-057: levels(df, p, ind) → tablica (n, 3): ceny TP i SL na świecy sygnału + limit świec wejścia (`bars`, D-070);
+    NaN = brak poziomu / limit wariantu."""
     if lv is None:
-        return np.full((len(df), 2), np.nan)
+        return np.full((len(df), 3), np.nan)
     if not isinstance(lv, pd.DataFrame):
-        raise StrategyError("levels() musi zwrócić DataFrame z kolumnami tp i/lub sl (ceny) na indeksie df")
+        raise StrategyError("levels() musi zwrócić DataFrame z kolumnami tp i/lub sl (ceny) i/lub bars (limit świec) na indeksie df")
     if len(lv) != len(df) or not lv.index.equals(df.index):
         raise StrategyError("levels() musi zwrócić DataFrame na tym samym indeksie co df")
-    extra = set(lv.columns) - {"tp", "sl"}
-    if extra or not (set(lv.columns) & {"tp", "sl"}):
-        raise StrategyError("levels(): dozwolone kolumny to tp i sl (ceny); " + (f"nieznane: {sorted(extra)}" if extra else "brak obu"))
-    out = np.full((len(df), 2), np.nan)
+    extra = set(lv.columns) - {"tp", "sl", "bars"}
+    if extra or not (set(lv.columns) & {"tp", "sl", "bars"}):
+        raise StrategyError("levels(): dozwolone kolumny to tp i sl (ceny) oraz bars (limit świec wejścia); "
+                            + (f"nieznane: {sorted(extra)}" if extra else "brak wszystkich"))
+    out = np.full((len(df), 3), np.nan)
     for k, col in enumerate(("tp", "sl")):
         if col in lv:
             v = pd.to_numeric(lv[col], errors="coerce").to_numpy(float)
             if (v <= 0).any():
                 raise StrategyError(f"levels(): kolumna {col} ma cenę ≤ 0")
             out[:, k] = v
+    if "bars" in lv:   # D-070: własny limit świec wejścia — liczba całkowita ≥ 1 (silnik przytnie do limitu wariantu)
+        v = pd.to_numeric(lv["bars"], errors="coerce").to_numpy(float)
+        ok = np.isfinite(v)
+        if (v[ok] < 1).any() or (v[ok] != np.round(v[ok])).any():
+            raise StrategyError("levels(): kolumna bars to liczba świec — całkowita, co najmniej 1 (NaN = limit wariantu)")
+        out[:, 2] = v
     return out
 
 
@@ -324,9 +332,10 @@ def worker_main(code_path: str, h1_dir: str, out_dir: str, param_ids: list[int] 
                 full = with_d1(fresh(df), d1)
                 s = _as_signal(fn(fresh(full), p, ind), full)
                 nz = np.flatnonzero(s)
-                lv = _as_levels(fn_lv(fresh(full), p, ind), full) if fn_lv is not None else np.full((len(df), 2), np.nan)
-                rows.append(pd.DataFrame({"param_id": pid, "pair": pair, "i": nz, "sig": s[nz], "tp": lv[nz, 0], "sl": lv[nz, 1]}))
-        sig = pd.concat(rows, ignore_index=True) if rows else pd.DataFrame(columns=["param_id", "pair", "i", "sig", "tp", "sl"])
+                lv = _as_levels(fn_lv(fresh(full), p, ind), full) if fn_lv is not None else np.full((len(df), 3), np.nan)
+                rows.append(pd.DataFrame({"param_id": pid, "pair": pair, "i": nz, "sig": s[nz], "tp": lv[nz, 0], "sl": lv[nz, 1],
+                                          "bars": lv[nz, 2]}))
+        sig = pd.concat(rows, ignore_index=True) if rows else pd.DataFrame(columns=["param_id", "pair", "i", "sig", "tp", "sl", "bars"])
         meta["levels"] = fn_lv is not None
         meta["d1_background"] = tf == "H1" and bool(d1_dir) and any(Path(d1_dir).glob("*.parquet"))
         sig.to_parquet(out / "signals.parquet", index=False)

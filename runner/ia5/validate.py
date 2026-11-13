@@ -31,14 +31,16 @@ def random_benchmark(preps: dict, trades: pd.DataFrame, ex: Exit, signals: dict 
                      level_entries: pd.DataFrame | None = None) -> dict:
     """Rozkład średnich pipsów netto z losowych wejść; percentyl faktycznego wyniku w tym rozkładzie.
     level_entries (D-057): dla wyjść „level” losowe wejścia dostają odległości TP/SL (w ATR14, w przestrzeni long)
-    wylosowane spośród odległości, jakie strategia naprawdę ustawiła — te same reguły wyjścia, inne momenty wejścia."""
+    wylosowane spośród odległości, jakie strategia naprawdę ustawiła — te same reguły wyjścia, inne momenty wejścia;
+    razem z nimi limit świec wejścia (D-070), jeśli strategia go podała."""
     rng = np.random.default_rng(seed)
     lv_pool = None
     if ex.kind == "level" and level_entries is not None and len(level_entries) and "tp_px" in level_entries:
         le = level_entries
         dd, en, a14 = le["dir"].to_numpy(float), le["entry_px"].to_numpy(float), le["atr14"].to_numpy(float)
         lv_pool = np.column_stack([(le["tp_px"].to_numpy(float) * dd - en * dd) / a14,
-                                   (en * dd - le["sl_px"].to_numpy(float) * dd) / a14])   # NaN zostaje NaN = brak poziomu
+                                   (en * dd - le["sl_px"].to_numpy(float) * dd) / a14,   # NaN zostaje NaN = brak poziomu
+                                   le["max_bars"].to_numpy(float) if "max_bars" in le else np.full(len(le), np.nan)])   # D-070
     actual = float(trades["pips_net"].mean())
     total = np.zeros(sims)
     count = np.zeros(sims)
@@ -65,6 +67,8 @@ def random_benchmark(preps: dict, trades: pd.DataFrame, ex: Exit, signals: dict 
                 pick = lv_pool[rng.integers(0, len(lv_pool), len(e))]
                 ent["tp_px"] = (P["o"][e] * d + pick[:, 0] * P["atr14"][i]) * d
                 ent["sl_px"] = (P["o"][e] * d - pick[:, 1] * P["atr14"][i]) * d
+                if np.isfinite(pick[:, 2]).any():   # D-070: limit świec wejścia losowany razem z poziomami
+                    ent["max_bars"] = np.where(np.isfinite(pick[:, 2]), pick[:, 2], 10 ** 9).astype(np.int64)
             opp = signals.get(pair) if signals else None
             res = simulate(P, ent, ex, pair, opp=opp)
             net = np.array(res["pips_gross"] - spread, dtype=float)

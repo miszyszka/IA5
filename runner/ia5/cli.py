@@ -150,7 +150,7 @@ def do_prepare(progress=None) -> dict:
     if d1:   # D-058: świece dzienne do liczenia (TIMEFRAME = "D1" i tło D1 dla strategii H1)
         from .store import D1_READY
 
-        ready.build_d1(d1, D1_READY, tz=d1_tz, log=log)
+        ready.build_d1(d1, D1_READY, tz=d1_tz, log=log, h1=yahoo)   # D-068: zamknięcie dnia z H1
     if pln:  # D-063: kursy PLN do liczenia REV (warstwa tylko zamknięć)
         from .store import PLN_READY
 
@@ -636,7 +636,7 @@ def cmd_live(_args) -> None:
         st = {}
     d1, d1_tz = sync_d1(cloud, st)
     if d1:
-        ready.build_d1(d1, D1_READY, tz=d1_tz, log=log)
+        ready.build_d1(d1, D1_READY, tz=d1_tz, log=log, h1=yahoo)   # D-068: zamknięcie dnia z H1
     pln, pln_tz = sync_pln(cloud, st)
     if pln:
         ready.build_pln(pln, PLN_READY, tz=pln_tz, log=log)

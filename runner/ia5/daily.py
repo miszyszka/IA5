@@ -135,7 +135,8 @@ def years_to_read(last_ts: int, now: int, tz: str = D1_TZ) -> list[str]:
 
 # ---------- warstwa czyszczenia D1 do liczenia (D-058) ----------
 
-CLEAN_D1_VERSION = "1"
+CLEAN_D1_VERSION = "2"   # 2: zamknięcie dnia z H1 albo z open następnego dnia (D-068)
+H1_CLOSE_FROM = 20       # D-068: świeca H1 otwarta od tej godziny (Londyn) może być zamknięciem dnia
 GAP_DAYS = 3        # ≥ 3 kolejne brakujące dni robocze = przerwa w danych (B12); 1–2 dni to zwykle święto, którego Yahoo nie ma
 DAY = 86400
 
@@ -152,15 +153,60 @@ def close_ts(ts, tz: str = D1_TZ) -> np.ndarray:
     return out
 
 
-def clean_d1(raw: pd.DataFrame, tz: str = D1_TZ) -> tuple[pd.DataFrame, dict]:
+def h1_day_closes(h1: pd.DataFrame | None, tz: str = D1_TZ) -> pd.Series:
+    """D-068: zamknięcie dnia z H1 — close ostatniej świecy H1 dnia w strefie tz, jeśli otwarta od H1_CLOSE_FROM:00
+    (piątek kończy się ok. 21–22; dzień ze skróconą sesją nie ma tu zamknięcia). Indeks: ts północy dnia (jak świece D1)."""
+    if h1 is None or len(h1) == 0:
+        return pd.Series(dtype=float)
+    x = h1[["ts", "close"]].sort_values("ts").drop_duplicates("ts", keep="last")
+    x = x[np.isfinite(x["close"].to_numpy(float)) & (x["close"].to_numpy(float) > 0)]
+    loc = local_dt(x["ts"], tz)
+    day = loc.tz_localize(None).normalize()
+    last = pd.DataFrame({"day": day, "hour": loc.hour, "close": x["close"].to_numpy(float)}).groupby("day").last()
+    last = last[last["hour"] >= H1_CLOSE_FROM]
+    mid = pd.DatetimeIndex(last.index).tz_localize(tz, ambiguous="NaT", nonexistent="shift_forward")
+    ok = ~mid.isna()
+    sec = ((mid[ok].tz_convert("UTC") - pd.Timestamp("1970-01-01", tz="UTC")) // pd.Timedelta(seconds=1)).to_numpy("int64")
+    return pd.Series(last["close"].to_numpy()[ok], index=sec)
+
+
+def fix_close(out: pd.DataFrame, days, h1: pd.DataFrame | None, tz: str) -> dict:
+    """D-068: Yahoo od ok. 2011 podaje dla par FX close ≈ open tego samego dnia. Prawdziwe zamknięcie dnia t to
+    (2) close ostatniej świecy H1 dnia, gdy H1 jest, inaczej (1) open następnego oczekiwanego dnia handlu (także piątek →
+    poniedziałek), gdy ten dzień jest w danych; w pozostałych przypadkach zostaje (0) close z Yahoo. Kolumna close_src mówi,
+    skąd jest zamknięcie; high/low są rozszerzane o nowe zamknięcie. Zmienia `out` w miejscu, zwraca liczniki."""
+    n = len(out)
+    c = out["close"].to_numpy(float).copy()
+    src = np.zeros(n, np.int8)
+    o = out["open"].to_numpy(float)
+    for i in range(n - 1):
+        d = date.fromisoformat(days[i]) + timedelta(days=1)
+        while not is_expected_day(d):
+            d += timedelta(days=1)
+        if days[i + 1] == d.isoformat():
+            c[i], src[i] = o[i + 1], 1
+    hc = h1_day_closes(h1, tz)
+    if len(hc):
+        v = hc.reindex(out["ts"].to_numpy()).to_numpy()
+        m = ~np.isnan(v)
+        c[m], src[m] = v[m], 2
+    out["close"] = c
+    out["high"] = np.maximum(out["high"].to_numpy(float), c)
+    out["low"] = np.minimum(out["low"].to_numpy(float), c)
+    out["close_src"] = src
+    return {"close_yahoo": int((src == 0).sum()), "close_next_open": int((src == 1).sum()), "close_h1": int((src == 2).sum())}
+
+
+def clean_d1(raw: pd.DataFrame, tz: str = D1_TZ, h1: pd.DataFrame | None = None) -> tuple[pd.DataFrame, dict]:
     """Świece D1 do liczenia (D8 dla D1): odrzucone = łamiące D5 (OHLC, cena ≤ 0, czas nie o północy, dwa wpisy na dzień);
     poza sesją = weekend/święto (stara historia Yahoo) i świece płaskie O=H=L=C (brak notowań, powtórzona cena).
     Brakujące dni robocze: < GAP_DAYS z rzędu → nic (dzień bez świecy jak weekend); ≥ GAP_DAYS → gap_before = liczba dni
     (B12: transakcje przez przerwę anulowane). Bez uzupełniania (filled zawsze False) — doba to za dużo, żeby interpolować.
-    Kolumny jak w h1_ready: ts, open, high, low, close, filled, gap_before + close_ts (koniec dnia w UTC)."""
+    Zamknięcie dnia (D-068, wersja 2): z H1 albo z open następnego dnia — patrz fix_close; `h1` = surowe świece H1 pary.
+    Kolumny jak w h1_ready: ts, open, high, low, close, filled, gap_before + close_ts (koniec dnia w UTC) + close_src."""
     info = {"version": CLEAN_D1_VERSION, "tz": tz, "bars": 0, "rejected": 0, "rejected_ts": [], "off_session": 0, "flat": 0,
             "filled": 0, "gaps": [], "gap_hours": 0, "gap_days": 0, "missing_days": 0, "closed_hours": 0}
-    cols = COLS + ["filled", "gap_before", "close_ts"]
+    cols = COLS + ["filled", "gap_before", "close_ts", "close_src"]
     if raw is None or raw.empty:
         return pd.DataFrame(columns=cols), info
     df = raw[COLS].sort_values("ts").drop_duplicates("ts", keep="last").reset_index(drop=True)
@@ -209,6 +255,7 @@ def clean_d1(raw: pd.DataFrame, tz: str = D1_TZ) -> tuple[pd.DataFrame, dict]:
     out["filled"] = False
     out["gap_before"] = gap_before
     out["close_ts"] = close_ts(out["ts"].to_numpy(), tz)
+    info.update(fix_close(out, days, h1, tz))   # D-068: zamknięcie dnia (po wykryciu przerw — te zależą tylko od dat)
     info.update({"bars": int(len(out)), "missing_days": int(missing), "gap_hours": int(info["gap_days"] * 24),
                  "from": int(out["ts"].iloc[0]), "to": int(out["ts"].iloc[-1])})
     return out, info

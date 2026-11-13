@@ -2,6 +2,22 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-13 — naprawa zamknięć D1 (D-068), limit świec na wejście (D-070), strategia składana na D1; CLAUDE.md 0.58
+
+**Zrobione (na prośbę Michała: „najlepsza, najbardziej stabilna, wzrastająca strategia na świecach dziennych… tysiące kombinacji”)**
+- **D-068 wdrożone** (zgoda „Tak, napraw”): `clean_d1` wersja 2 — zamknięcie dnia z ostatniej świecy H1 albo z otwarcia następnego dnia; kolumna `close_src`; `build_d1(h1=…)`; 4 nowe testy.
+- **D-070, silnik 0.14.0:** `levels()` może podać `bars` — własną liczbę świec każdego wejścia; przechodzi przez piaskownicę, silnik, inwestorów i benchmark losowy; 3 nowe testy.
+- **`research/d1/`**: 75 924 + 191 100 reguł strukturalnych (połowy IS + niezależne dane brokera), 6 216 konfiguracji składników silnikiem, 60 zestawów głosowania, 19 odmian odporności. Zostały trzy rodziny: poniedziałek, cofnięcie w trendzie, początek miesiąca.
+- **`strategies/examples/d1_skladana.py`** (5 wariantów, kontrola OK): IS Sharpe 1,16 (połowy 1,09 / 1,29), 231 transakcji rocznie, 8/8 par na plusie; **OOS (2019-05 → 2026-11) Sharpe 0,73, +6,3 pipsa netto, 6 z 8 lat na plusie**; dane brokera 1,46 / 0,72. Pełne liczenie w piaskownicy: werdykt 🟢 (DSR zawyżony — liczy 5 wariantów).
+- **Uczciwie:** składnik poniedziałkowy po 2019 nie zarabia; wynik OOS trzymają cofnięcie w trendzie i początek miesiąca.
+
+**Następne / do decyzji Michała**
+1. `git pull` na Macu i `ia5 start` — dane D1 przebudują się same (wersja 2); **strategie D1 policzyć ponownie** (silnik 0.14.0 oznaczy stare wyniki jako nieaktualne).
+2. Wkleić `d1_skladana.py`; jeśli wynik na Macu zgadza się z piaskownicą — zamrozić wariant cfg 0 i dodać inwestora.
+3. Do rozważenia przy następnej wersji (nowy OOS dopiero z nowymi danymi): czy poniedziałek zostaje w księdze.
+
+**Znane problemy:** pełne testy trwają ok. 16 min w piaskownicy (2 rdzenie); w starszej historii „zamknięcie piątku” = otwarcie poniedziałku (opis w D-068).
+
 ## 2026-11-12 (noc) — badanie „co steruje rynkiem”: poniedziałkowy powrót, księga trzech przewag (D-069), CLAUDE.md 0.57
 
 **Zrobione (na prośbę Michała: „przeanalizuj to jak rasowy trader… pomyśl out of the box, jak trzeba, zmodyfikuj silnik”)**

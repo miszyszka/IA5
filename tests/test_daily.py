@@ -158,3 +158,72 @@ def test_clean_d1_rejects_bad_bars_and_marks_long_gaps_d058(tmp_path):
     assert (tmp_path / "d1_ready" / "EURUSD.parquet").exists() and "close_ts" in pd.read_parquet(tmp_path / "d1_ready" / "EURUSD.parquet")
     b2 = ready.build_d1({"EURUSD": df, "USDJPY": short}, tmp_path / "d1_ready", pairs=("EURUSD", "USDJPY", "GBPUSD"))
     assert not b2["EURUSD"]["rebuilt"]
+
+
+# ---------- D-068: zamknięcie dnia w warstwie czyszczenia D1 (clean_d1 wersja 2) ----------
+
+def yahoo_style(df: pd.DataFrame) -> pd.DataFrame:
+    """Świece jak z Yahoo po 2011: close ≈ open tego samego dnia; prawdziwe zamknięcie = open następnego dnia."""
+    out = df.copy()
+    out["close"] = out["open"] * (1 + 1e-5)
+    return out
+
+
+def h1_for(day: str, closes: dict[int, float]) -> pd.DataFrame:
+    """Świece H1 jednego dnia w Londynie: godzina otwarcia → zamknięcie."""
+    ts = [int(pd.Timestamp(f"{day} {h:02d}:00", tz="Europe/London").timestamp()) for h in closes]
+    c = list(closes.values())
+    return pd.DataFrame({"ts": ts, "open": c, "high": c, "low": c, "close": c})
+
+
+def test_clean_d1_close_is_next_days_open_d068():
+    """Zamknięcie dnia = open następnego oczekiwanego dnia handlu (także piątek → poniedziałek); high/low obejmują nowe zamknięcie."""
+    raw = yahoo_style(d1_frame("2024-01-01", "2024-03-29"))
+    out, info = daily.clean_d1(raw)
+    assert info["version"] == "2"
+    nxt = out["open"].shift(-1)
+    assert np.allclose(out["close"].iloc[:-1], nxt.iloc[:-1])
+    fri = out[pd.to_datetime(out["ts"], unit="s", utc=True).dt.tz_convert("Europe/London").dt.dayofweek == 4].index[0]
+    assert out["close"].iloc[fri] == out["open"].iloc[fri + 1]
+    assert (out["high"] >= out["close"]).all() and (out["low"] <= out["close"]).all()
+    assert (out["close_src"].iloc[:-1] == 1).all() and info["close_next_open"] == len(out) - 1
+
+
+def test_clean_d1_keeps_yahoo_close_when_next_day_is_missing_d068():
+    """Gdy następnego dnia handlu nie ma w danych (święto, koniec danych), zamknięcie zostaje z Yahoo i jest to policzone."""
+    raw = yahoo_style(d1_frame("2024-01-01", "2024-03-29"))
+    miss = midnight("2024-02-14")
+    raw = raw[raw.ts != miss].reset_index(drop=True)
+    out, info = daily.clean_d1(raw)
+    before = out.index[out.ts == midnight("2024-02-13")][0]
+    assert out["close_src"].iloc[before] == 0 and out["close"].iloc[before] == raw.close[raw.ts == midnight("2024-02-13")].iloc[0]
+    assert out["close_src"].iloc[-1] == 0 and info["close_yahoo"] == 2
+
+
+def test_clean_d1_prefers_last_h1_close_before_london_midnight_d068():
+    """Gdy są świece H1 dnia, zamknięcie = close ostatniej świecy H1 tego dnia w Londynie (od 20:00) — także dla ostatniego dnia."""
+    raw = yahoo_style(d1_frame("2024-01-01", "2024-03-29"))
+    last_day, mid_day, early = "2024-03-29", "2024-03-13", "2024-03-20"
+    h1 = pd.concat([h1_for(last_day, {21: 1.5001, 22: 1.5002}), h1_for(mid_day, {22: 1.4001, 23: 1.4002}),
+                    h1_for(early, {14: 1.3001, 15: 1.3002})])        # dzień z ostatnią świecą o 15:00 — nie jest zamknięciem dnia
+    out, info = daily.clean_d1(raw, h1=h1)
+    row = lambda day: out[out.ts == midnight(day)].iloc[0]           # noqa: E731
+    assert row(last_day)["close"] == 1.5002 and row(last_day)["close_src"] == 2
+    assert row(mid_day)["close"] == 1.4002 and row(mid_day)["close_src"] == 2
+    assert row(early)["close_src"] == 1 and info["close_h1"] == 2
+    assert row(mid_day)["high"] >= 1.4002
+
+
+def test_build_d1_rebuilds_when_h1_close_arrives_d068(tmp_path):
+    """Plik do liczenia przebudowuje się, gdy dojdzie świeca H1 zamykająca ostatni dzień — bez zmiany świec D1."""
+    from ia5 import ready
+
+    raw = yahoo_style(d1_frame("2023-01-02", "2024-03-29"))
+    out = tmp_path / "d1_ready"
+    assert ready.build_d1({"EURUSD": raw}, out, pairs=("EURUSD",))["EURUSD"]["rebuilt"]
+    assert not ready.build_d1({"EURUSD": raw}, out, pairs=("EURUSD",))["EURUSD"]["rebuilt"]
+    h1 = {"EURUSD": h1_for("2024-03-29", {21: 1.5001, 22: 1.5002})}
+    b = ready.build_d1({"EURUSD": raw}, out, pairs=("EURUSD",), h1=h1)
+    assert b["EURUSD"]["rebuilt"] and b["EURUSD"]["close_h1"] == 1
+    assert pd.read_parquet(out / "EURUSD.parquet")["close"].iloc[-1] == 1.5002
+    assert not ready.build_d1({"EURUSD": raw}, out, pairs=("EURUSD",), h1=h1)["EURUSD"]["rebuilt"]

@@ -264,3 +264,22 @@ def test_sandbox_allows_cap_zero_only_for_level_d060():
                 {"kind": "level", "cap": 481}, {"kind": "level", "cap": -1}):
         with pytest.raises(StrategyError):
             read_settings({"EXITS": [bad], "levels": lambda d, p, i: None})
+
+
+def test_level_exit_bars_column_sets_time_limit_per_entry_d070():
+    """D-070: trzecia kolumna poziomów (bars z levels()) = limit świec TEGO wejścia; NaN = limit wariantu (cap)."""
+    rows = [FLAT] * 12
+    P = prepare(bars(rows))
+    lv = np.full((len(rows), 3), np.nan)
+    lv[0, 2] = 1                                      # pierwsze wejście: wyjście po 1 świecy
+    lv[3, 2] = 99                                     # ponad limit wariantu → limit wariantu
+    sig = np.zeros(len(rows))
+    sig[[0, 3, 6]] = 1                                # trzecie wejście bez limitu własnego
+    ent = find_entries(P, sig, lv)
+    ent["atr5"] = ent["atr14"] = 0.0010
+    r = simulate(P, ent, Exit("level", cap=4), "EURUSD")
+    assert r.bars.tolist() == [1, 4, 4] and set(r.reason) == {"czas"}
+    assert r.exit_i.tolist() == [1, 7, 10]
+    # stare poziomy (n, 2) działają jak dotąd — bez limitu na wejście
+    ent2 = find_entries(P, sig, lv[:, :2])
+    assert "max_bars" not in ent2

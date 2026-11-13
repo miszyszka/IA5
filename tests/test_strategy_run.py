@@ -293,3 +293,28 @@ def test_variant_table_with_empty_oos_sample_d066():
     outcomes["sample"] = "OOS"                                   # i odwrotnie: wszystko w OOS, IS puste
     v = variant_table(res)
     assert v.loc[0, "oos_trades"] == 3 and pd.isna(v.loc[0, "is_trades"]) and pd.isna(v.loc[0, "rank_is"])
+
+
+LEVELS_BARS = '''
+HYPOTHESIS = "Dwa rodzaje wejść, każde z własną liczbą świec."
+EXITS = [{"kind": "level", "cap": 24}]
+def signals(df, p, ind):
+    r = ind.rsi(df.close, 14)
+    return ind.cross_below(r, 30).astype("int8") - ind.cross_above(r, 70).astype("int8")
+def levels(df, p, ind):
+    r = ind.rsi(df.close, 14)
+    return pd.DataFrame({"bars": np.where(r < 50, 3.0, 7.0)}, index=df.index)
+'''
+
+
+def test_levels_bars_gives_each_entry_its_own_time_limit_d070(h1_dir, tmp_path):
+    sig, meta = run_strategy_code(LEVELS_BARS, h1_dir)
+    assert meta["levels"] and not meta["lookahead"] and set(sig["bars"].unique()) == {3.0, 7.0}
+    out = run_file(LEVELS_BARS, "bars", h1_dir, tmp_path / "results", log=lambda m: None)
+    t = pd.read_parquet(out / "trades.parquet")
+    timed = t[t["reason"] == "czas"]
+    assert set(timed[timed["dir"] > 0]["bars"]) == {3} and set(timed[timed["dir"] < 0]["bars"]) == {7}
+    with pytest.raises(StrategyError, match="bars"):
+        run_strategy_code(LEVELS_BARS.replace("3.0, 7.0", "0.0, 7.0"), h1_dir)
+    with pytest.raises(StrategyError, match="bars"):
+        run_strategy_code(LEVELS_BARS.replace("3.0, 7.0", "2.5, 7.0"), h1_dir)

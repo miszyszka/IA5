@@ -112,9 +112,13 @@ def data_cancel(P: dict, signal_i: np.ndarray, entry_i: np.ndarray, exit_i: np.n
     return (gap, fill) if split else gap | fill
 
 
+NO_BAR_LIMIT = 10 ** 9   # D-070: wejście bez własnego limitu świec — simulate przytnie do limitu wariantu
+
+
 def find_entries(P: dict, sig: np.ndarray, lv: np.ndarray | None = None) -> pd.DataFrame:
     """B1: sygnał w świecy i → wejście na open świecy i+1.
-    lv (D-057): tablica (n, 2) cen TP/SL z levels() na świecy sygnału; NaN = brak poziomu."""
+    lv (D-057): tablica (n, 2) cen TP/SL z levels() na świecy sygnału; NaN = brak poziomu.
+    Trzecia kolumna (D-070, `bars` z levels()): limit świec tego wejścia; NaN = limit wariantu (kolumna max_bars)."""
     v = np.nan_to_num(np.asarray(sig, float))
     i = np.flatnonzero(v != 0)
     i = i[i + 1 < len(P["o"])]
@@ -127,6 +131,8 @@ def find_entries(P: dict, sig: np.ndarray, lv: np.ndarray | None = None) -> pd.D
     if lv is not None:
         lv = np.asarray(lv, float)
         ent["tp_px"], ent["sl_px"] = lv[i, 0], lv[i, 1]
+        if lv.shape[1] > 2 and np.isfinite(lv[i, 2]).any():
+            ent["max_bars"] = np.where(np.isfinite(lv[i, 2]), lv[i, 2], NO_BAR_LIMIT).astype(np.int64)
     return ent
 
 
@@ -388,7 +394,8 @@ def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray],
     """Pełny przebieg: wszystkie warianty wejścia (params) × wszystkie wyjścia × wszystkie pary.
 
     signals[(param_id, pair)] = tablica sygnałów (+1/-1/0) na świecach h1[pair].
-    levels[(param_id, pair)] (D-057) = tablica (n, 2) cen TP/SL na świecy sygnału dla wyjść rodzaju „level”.
+    levels[(param_id, pair)] (D-057) = tablica (n, 2) cen TP/SL na świecy sygnału dla wyjść rodzaju „level”;
+    opcjonalna trzecia kolumna (D-070) = limit świec danego wejścia.
     Zwraca tabele entries, outcomes, variants i liczniki.
     """
     exits = exits or default_exits()

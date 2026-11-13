@@ -10,6 +10,7 @@ import json
 import time
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from .clean import CLEAN_VERSION, COLS, clean_h1
@@ -70,7 +71,7 @@ MIN_BARS_D1 = 260   # D-058: para z mniej niż ~rokiem świec dziennych nie traf
 
 
 def _build_daily(raw_map: dict[str, pd.DataFrame], out_dir: Path, tz: str, names, clean_fn, version: str, min_bars: int,
-                 tag: str, meta: dict, describe, log=print) -> dict:
+                 tag: str, meta: dict, describe, log=print, extra: dict | None = None, extra_sig=None) -> dict:
     """Wspólna przebudowa serii dziennych (D1 FX, kursy PLN): plik pochodny tylko, gdy zmieniły się surowe świece, wersja
     czyszczenia albo strefa (podpis w {NAZWA}.json); pliki nazw spoza `names` znikają (to kopia pochodna, nie dane)."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -89,6 +90,9 @@ def _build_daily(raw_map: dict[str, pd.DataFrame], out_dir: Path, tz: str, names
         h = hashlib.sha256(f"{SOURCE}:{tag}:{version}:{min_bars}:{tz}".encode())
         if raw is not None:
             h.update(pd.util.hash_pandas_object(raw[COLS].reset_index(drop=True), index=False).values.tobytes())
+        ex = (extra or {}).get(name)
+        if ex is not None and extra_sig is not None:      # dane pomocnicze (D-068: zamknięcia dnia z H1) też wchodzą do podpisu
+            h.update(extra_sig(ex, tz))
         sig = h.hexdigest()[:16]
         if old.get("sig") == sig and old.get("source") == SOURCE and (pf.exists() or not old.get("bars")):
             out[name] = {**old, "rebuilt": False}
@@ -100,7 +104,7 @@ def _build_daily(raw_map: dict[str, pd.DataFrame], out_dir: Path, tz: str, names
             out[name] = {**info, "rebuilt": True}
             log(f"  {tag} {name}: za mało świec dziennych ({info['raw_bars']}) — pominięte w liczeniu")
             continue
-        df, info = clean_fn(raw, tz)
+        df, info = clean_fn(raw, tz) if ex is None else clean_fn(raw, tz, ex)
         tmp = pf.with_suffix(".tmp")
         df.to_parquet(tmp, index=False)
         tmp.replace(pf)
@@ -113,18 +117,25 @@ def _build_daily(raw_map: dict[str, pd.DataFrame], out_dir: Path, tz: str, names
     return out
 
 
-def build_d1(d1: dict[str, pd.DataFrame], out_dir: Path, tz: str | None = None, pairs=COMPUTE_PAIRS, log=print) -> dict:
+def build_d1(d1: dict[str, pd.DataFrame], out_dir: Path, tz: str | None = None, pairs=COMPUTE_PAIRS, log=print,
+             h1: dict[str, pd.DataFrame] | None = None) -> dict:
     """D-058: świece dzienne do liczenia (data/d1_ready/) — jak build(), ale warstwa czyszczenia D1 (daily.clean_d1).
-    Pliki {PARA}.json mają "source": "yahoo" i "timeframe": "D1"."""
-    from .daily import CLEAN_D1_VERSION, D1_TZ, clean_d1
+    Pliki {PARA}.json mają "source": "yahoo" i "timeframe": "D1".
+    h1 (D-068): surowe świece H1 par — z nich bierze się zamknięcie dnia tam, gdzie H1 istnieje (także dla ostatniego dnia)."""
+    from .daily import CLEAN_D1_VERSION, D1_TZ, clean_d1, h1_day_closes
+
+    def h1_sig(frame, zone):
+        hc = h1_day_closes(frame, zone)
+        return np.asarray(hc.index, "int64").tobytes() + hc.to_numpy("float64").tobytes()
 
     def describe(pair, info):
         return (f"  D1 {pair} do liczenia: {info['bars']:,} dni · odrzucone {info['rejected']} (D5) + {info['off_session']} "
                 f"weekend/święto + {info['flat']} płaskie · brakujące dni {info['missing_days']} · przerwy {info['gaps_n']} "
-                f"({info['gap_days']} dni)")
+                f"({info['gap_days']} dni) · zamknięcie dnia: {info['close_h1']} z H1, {info['close_next_open']} z open "
+                f"następnego dnia, {info['close_yahoo']} z Yahoo (D-068)")
 
     return _build_daily(d1, out_dir, tz or D1_TZ, pairs, clean_d1, CLEAN_D1_VERSION, MIN_BARS_D1, "D1", {"timeframe": "D1"},
-                        describe, log)
+                        describe, log, extra=h1, extra_sig=h1_sig)
 
 
 MIN_BARS_PLN = 260   # D-063: waluta z mniej niż ~rokiem kursów nie trafia do REV

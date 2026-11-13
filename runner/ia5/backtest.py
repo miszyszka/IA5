@@ -243,9 +243,11 @@ def run_file(code: str, name: str, h1_dir: Path, out_root: Path, log=print,
             arr[part["i"].to_numpy(int)] = part["sig"].to_numpy(np.float32)
             signals[(pid, pair)] = arr
             if meta.get("levels"):   # D-057: poziomy TP/SL ze strategii na świecy sygnału
-                lv = np.full((len(df), 2), np.nan)
+                lv = np.full((len(df), 3), np.nan)
                 lv[part["i"].to_numpy(int), 0] = part["tp"].to_numpy(float)
                 lv[part["i"].to_numpy(int), 1] = part["sl"].to_numpy(float)
+                if "bars" in part:   # D-070: limit świec danego wejścia
+                    lv[part["i"].to_numpy(int), 2] = part["bars"].to_numpy(float)
                 levels[(pid, pair)] = lv
     exits = exits_from(meta.get("exits"))
     sizing = [float(x) for x in (meta.get("sizing") or DEFAULT_SIZING)]

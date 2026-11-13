@@ -104,3 +104,20 @@ def test_mae_drawdown_is_never_milder_than_realized_d055():
     t["mae"] = [0.0, 0.0]
     st0 = equity_stats(simulate_equity(t, 10))
     assert st0["max_dd_mae_pct"] <= st0["max_dd_pct"]
+
+
+def test_random_benchmark_draws_per_entry_time_limit_with_levels_d070():
+    """W3 + D-070: losowe wejścia dostają limit świec wylosowany z limitów strategii — te same zasady wyjścia."""
+    from ia5.engine import Exit, prepare
+    from ia5.validate import random_benchmark
+
+    n = 400
+    px = 1.1000 + 0.0010 * np.arange(n + 1)                       # stały wzrost: +10 pipsów na świecę
+    df = pd.DataFrame({"ts": 1761523200 + 3600 * np.arange(n), "open": px[:-1], "high": px[1:], "low": px[:-1], "close": px[1:]})
+    P = {"EURUSD": prepare(df)}
+    tr = pd.DataFrame({"pair": "EURUSD", "dir": 1, "pips_net": [10.0] * 30})
+    le = pd.DataFrame({"dir": 1, "entry_px": 1.2, "atr14": 0.001, "tp_px": np.nan, "sl_px": np.nan, "max_bars": 2}, index=range(30))
+    b = random_benchmark(P, tr, Exit("level", cap=20), sims=50, hours=False, level_entries=le)
+    assert b["p50"] < 25                                           # 2 świece ≈ 20 pipsów; bez limitu wejścia byłoby ≈ 200
+    b0 = random_benchmark(P, tr, Exit("level", cap=20), sims=50, hours=False, level_entries=le.drop(columns="max_bars"))
+    assert b0["p50"] > 150

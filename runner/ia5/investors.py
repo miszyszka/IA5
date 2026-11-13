@@ -235,9 +235,11 @@ def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print, d1_dir: 
                 arr[part["i"].to_numpy(int)] = part["sig"].to_numpy(np.float32)
                 lvl = None
                 if meta.get("levels"):   # D-057
-                    lvl = np.full((len(df), 2), np.nan)
+                    lvl = np.full((len(df), 3), np.nan)
                     lvl[part["i"].to_numpy(int), 0] = part["tp"].to_numpy(float)
                     lvl[part["i"].to_numpy(int), 1] = part["sl"].to_numpy(float)
+                    if "bars" in part:   # D-070: limit świec danego wejścia
+                        lvl[part["i"].to_numpy(int), 2] = part["bars"].to_numpy(float)
                 t = paper_trades(prp[pair], arr, ex, pair, start, hours, pyramid, lv=lvl)
                 if not t.empty:
                     tpx = t["tp_px"] if "tp_px" in t else [None] * len(t)
