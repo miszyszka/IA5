@@ -1,68 +1,68 @@
 {
  "files": {
   "candles_d1/AUDUSD.parquet": {
-   "bars": 5330,
+   "bars": 5332,
    "first_day": "2006-05-16",
    "from": 1147734000,
-   "hash": "b73b9117c5a4478c",
-   "last_day": "2026-11-11",
-   "to": 1794355200
+   "hash": "f2d0cd8606218aba",
+   "last_day": "2026-11-13",
+   "to": 1794528000
   },
   "candles_d1/EURGBP.parquet": {
-   "bars": 7254,
+   "bars": 7256,
    "first_day": "1999-01-04",
    "from": 915408000,
-   "hash": "23dc1b4c11615307",
-   "last_day": "2026-11-11",
-   "to": 1794355200
+   "hash": "ff8c8e87f5009d6f",
+   "last_day": "2026-11-13",
+   "to": 1794528000
   },
   "candles_d1/EURJPY.parquet": {
-   "bars": 6179,
+   "bars": 6181,
    "first_day": "2003-01-23",
    "from": 1043280000,
-   "hash": "2095cd290c35bd40",
-   "last_day": "2026-11-11",
-   "to": 1794355200
+   "hash": "aa340ee3ac6b6826",
+   "last_day": "2026-11-13",
+   "to": 1794528000
   },
   "candles_d1/EURUSD.parquet": {
-   "bars": 5954,
+   "bars": 5956,
    "first_day": "2003-12-01",
    "from": 1070236800,
-   "hash": "b76de958c56edcd3",
-   "last_day": "2026-11-11",
-   "to": 1794355200
+   "hash": "8a27a40f932948b2",
+   "last_day": "2026-11-13",
+   "to": 1794528000
   },
   "candles_d1/GBPUSD.parquet": {
-   "bars": 5966,
+   "bars": 5968,
    "first_day": "2003-12-01",
    "from": 1070236800,
-   "hash": "960ebef2379838f8",
-   "last_day": "2026-11-11",
-   "to": 1794355200
+   "hash": "22dcb7a0ebb1433d",
+   "last_day": "2026-11-13",
+   "to": 1794528000
   },
   "candles_d1/USDCAD.parquet": {
+   "bars": 6024,
+   "first_day": "2003-09-17",
+   "from": 1063753200,
+   "hash": "c945d26bcce0753b",
+   "last_day": "2026-11-13",
+   "to": 1794528000
+  },
+  "candles_d1/USDCHF.parquet": {
    "bars": 6022,
    "first_day": "2003-09-17",
    "from": 1063753200,
-   "hash": "9c30bf4ee85ea984",
-   "last_day": "2026-11-11",
-   "to": 1794355200
-  },
-  "candles_d1/USDCHF.parquet": {
-   "bars": 6020,
-   "first_day": "2003-09-17",
-   "from": 1063753200,
-   "hash": "803eafb6ac7b21b2",
-   "last_day": "2026-11-11",
-   "to": 1794355200
+   "hash": "45e5342b0f494ae0",
+   "last_day": "2026-11-13",
+   "to": 1794528000
   },
   "candles_d1/USDJPY.parquet": {
-   "bars": 7788,
+   "bars": 7790,
    "first_day": "1996-10-30",
    "from": 846633600,
-   "hash": "0d948976c66e916c",
-   "last_day": "2026-11-11",
-   "to": 1794355200
+   "hash": "11c5a30fcb8adc69",
+   "last_day": "2026-11-13",
+   "to": 1794528000
   }
  },
  "interval": "1d",
