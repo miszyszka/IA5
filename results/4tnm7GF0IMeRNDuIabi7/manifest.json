@@ -1,7 +1,7 @@
 {
  "id": "4tnm7GF0IMeRNDuIabi7",
  "name": "RSI 2",
- "run_id": "20261114-085837",
+ "run_id": "20261114-154849",
  "engine_version": "0.13.0",
  "code_hash": "05a4838aae5707ab",
  "data_hash": "26762a643b673873",
@@ -162,8 +162,8 @@
  },
  "hypothesis": "Jak w wersji 1: w wyraźnym trendzie H1 gwałtowny ruch przeciw trendowi, w którym RSI14 przebija 70\n(trend spadkowy) albo 30 (trend wzrostowy), to chwilowa przesada, po której cena cofa się o ok. 1,5 ATR.\nWersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób łącznie 1 + 24):\n1) Największe straty wersji 1 to nie przesady, tylko SZOKI informacyjne (np. 1.08.2025 13:00 UTC, dane z rynku pracy\n   USA): jedna świeca o zakresie kilku ATR to nowa cena, a nie przesada — filtr „szok” pomija taki epizod.\n2) Seria RSI zamyka stratę dopiero po 6 godzinach; w tym czasie cena potrafiła odejść o 100+ pipsów — stop cenowy\n   2 / 3 × ATR ucina ten ogon (wariant bez stopu zostaje do porównania).\n3) Więcej wejść: łagodniejszy próg „wyraźnego trendu” (0,15 ATR) i krótsza średnia (EMA100).",
  "trades_rows": 8685,
- "created": 1794646717,
- "seconds": 29.9,
+ "created": 1794671329,
+ "seconds": 1643.5,
  "verdict": "yellow",
  "frozen_at": 1793447191,
  "frozen_variant": 12
