@@ -1,6 +1,6 @@
 # Raport strategii: RSI 2
 
-Run `20261114-220540` · silnik 0.13.0 · kod `05a4838aae5707ab` · dane `26762a643b673873`
+Run `20261115-070006` · silnik 0.13.0 · kod `05a4838aae5707ab` · dane `26762a643b673873`
 
 ## Werdykt: 🟡 ŻÓŁTY — zaliczone 4 z 5 testów
 
