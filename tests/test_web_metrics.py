@@ -39,3 +39,10 @@ def test_rev_page_logic():
     """D-063: zakładka REV — odliczanie do wtorku 08:00 (z czasem letnim), podział, ranking, CSV dziennika."""
     r = subprocess.run(["node", "--test", str(ROOT / "tests" / "web" / "rev.test.mjs")], capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="brak Node")
+def test_stocks_page_logic():
+    """D-071: zakładka Stocks — szkic ustawień (dodaj/usuń, 100%), stan liczenia, plan, transakcje, CSV."""
+    r = subprocess.run(["node", "--test", str(ROOT / "tests" / "web" / "stocks.test.mjs")], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr

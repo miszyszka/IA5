@@ -28,6 +28,11 @@ jobs:
             candles
             investors
             alerts
+            rev
+            candles_pln
+            candles_d1
+            stocks
+            candles_stk
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

@@ -446,13 +446,7 @@ ul.plain { margin: 4px 0 0; padding-left: 18px; }
 .panel.collapsed > .phead > :not(h3) { display: none; }
 .backrow { margin: 4px 0; } .backrow .back { margin: 8px 0; }
 
-/* ---------- FOREST (D-049) ---------- */
-.fconcl { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.fconcl li { display: flex; gap: 10px; align-items: baseline; }
-.fconcl li[data-state=ok] .dot { background: var(--ok); } .fconcl li[data-state=warn] .dot { background: var(--warn); } .fconcl li[data-state=bad] .dot { background: var(--bad); }
-.fjournal { max-height: 520px; overflow: auto; }
-.frule { white-space: normal !important; min-width: 280px; max-width: 560px; font-size: 12px; }
-.fvoters { white-space: normal; font-family: Inter, system-ui, sans-serif; }
+/* ---------- panele rozwijane (REV, Stocks) ---------- */
 .fdetails summary { cursor: pointer; }
 .fdetails h3 { margin: 16px 0 8px; }
 section.panel select { font: inherit; color: var(--text); background: var(--raised); border: 1px solid var(--line-2); border-radius: var(--r-ctl); padding: 3px 8px; }
@@ -463,3 +457,14 @@ ul.plain { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 2px;
 
 /* REV (D-063): nagłówek grupy przewalutowań w tabeli transakcji */
 table.data tr.grp td { background: var(--raised); font-family: inherit; }
+
+/* Stocks (D-071): ustawienia portfela */
+.stk-capital { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-end; margin-bottom: 14px; }
+.stk-capital label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; }
+.stk-capital input.big { font: 600 22px var(--mono); width: 200px; padding: 8px 10px; }
+input.num { font-family: var(--mono); text-align: right; }
+input.w-pct { width: 84px; padding: 3px 6px; }
+.stk-table td .row input[type=text] { width: 200px; text-transform: uppercase; }
+.stk-table tr.addrow td { background: transparent; }
+.warn-t { color: var(--warn); }
+#stk-settings .row.between { margin-top: 10px; gap: 12px; }

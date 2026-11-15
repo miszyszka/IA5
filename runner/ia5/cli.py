@@ -125,6 +125,7 @@ def do_prepare(progress=None) -> dict:
         yahoo = cloud.load_yahoo(YAHOO)
     d1, d1_tz = sync_d1(cloud, st)
     pln, pln_tz = sync_pln(cloud, st)
+    stk = sync_stk(cloud, st)
 
     if progress:
         progress("Kontrola danych", 40)
@@ -170,12 +171,30 @@ def do_prepare(progress=None) -> dict:
             sha = publish.publish_candles_d1(d1, d1_tz, log=lambda m: log(m)) or sha
         if pln:
             sha = publish.publish_candles_pln(pln, pln_tz, log=lambda m: log(m)) or sha
+        if stk:
+            from .stk_config import TZ as STK_TZ
+
+            sha = publish.publish_candles_stk(stk, (st.get("stk") or {}).get("tz") or STK_TZ, log=lambda m: log(m)) or sha
         if sha:
             cloud.set_data_sha(sha)
     except Exception as e:  # noqa: BLE001 — brak publikacji nie zatrzymuje programu; zgłasza go przegląd zdrowia
         publish_error = str(e)[:300]
         log(f"  publikacja nie powiodła się: {publish_error}")
-    return {"yahoo": yahoo, "cov": cov, "ready": rdy, "publish_error": publish_error, "d1": d1, "pln": pln}
+    return {"yahoo": yahoo, "cov": cov, "ready": rdy, "publish_error": publish_error, "d1": d1, "pln": pln, "stk": stk}
+
+
+STK_CFG: dict = {"doc": None}   # D-071: ostatni stocks/config z nasłuchu (ia5 start)
+
+
+def sync_stk(cloud, st: dict) -> dict:
+    """D-071: kopia świec spółek z Firestore (lista ze strony + zamrożone badanie). Błąd nie zatrzymuje synchronizacji."""
+    from . import stk_run
+
+    try:
+        return stk_run.sync(cloud, st, stk_run.tickers_wanted(STK_CFG.get("doc")), log=log)
+    except Exception as e:  # noqa: BLE001
+        log(f"  Spółki (Stocks): błąd kopii — {e}")
+        return {}
 
 
 def sync_d1(cloud, st: dict) -> tuple[dict, str]:
@@ -270,12 +289,39 @@ def do_health(ctx: dict, beat_state: str | None = None, write: bool = True) -> d
             pass
     h = health.run(cloud.read_status(), ctx["yahoo"], ctx["cov"], docs=docs, beat_state=beat_state,
                    publish_error=ctx.get("publish_error"), home=HOME, ready=ctx.get("ready"), code=code_info(),
-                   d1=ctx.get("d1"), pln=ctx.get("pln"), pln_universe=universe, pln_infos=infos)
+                   d1=ctx.get("d1"), pln=ctx.get("pln"), pln_universe=universe, pln_infos=infos,
+                   stk_wanted=_stk_wanted())
     if write:
         cloud.write_health(h)
     bad = [c for c in h["checks"] if c["state"] != "ok"]
     log(f"Przegląd zdrowia: {h['summary'] if bad else 'wszystko w porządku'}")
     return h
+
+
+def _stk_wanted() -> list[str]:
+    from . import stk_run
+
+    try:
+        return stk_run.tickers_wanted(STK_CFG.get("doc"))
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def purge_forest() -> None:
+    """D-071 (Michał, 2026-11-15): FOREST usunięty — lokalny stan lasu i folder forest/ na gałęzi data znikają."""
+    import shutil
+
+    from .store import FOREST_OLD
+
+    if FOREST_OLD.exists():
+        shutil.rmtree(FOREST_OLD)
+        log(f"Usunięto {FOREST_OLD} — FOREST wyłączony (D-071)")
+    try:
+        from . import publish
+
+        publish.purge_forest(log=log)
+    except Exception as e:  # noqa: BLE001 — ponowimy przy następnym starcie
+        log(f"  Gałąź data: forest/ jeszcze nie usunięty ({e}) — ponowię przy następnym starcie.")
 
 
 def cmd_start(_args) -> int:
@@ -320,6 +366,7 @@ def cmd_start(_args) -> int:
     log(f"IA5 start · silnik {ENGINE_VERSION} · kod {sha} z {REPO_ROOT} · dane: świece H1 Yahoo (Firestore)")
     first = migrate_legacy(log)
     enforce_local_data(log)
+    purge_forest()
 
     def sync_progress(name, pct):
         state["job"] = {"id": "sync", "name": name, "progress": pct}
@@ -366,11 +413,31 @@ def cmd_start(_args) -> int:
             queue_investors()
 
     cloud.watch_investors(on_investors)
+
+    # D-071: Stocks — „Policz backtest” na stronie zapisuje stocks/config ze statusem do_policzenia
+    stk_seen = {"req": None}
+
+    def on_stocks(doc):
+        STK_CFG["doc"] = doc
+        if not doc or doc.get("status") != "do_policzenia":
+            return
+        if owner and doc.get("updatedBy") != owner:
+            if doc.get("updatedBy") != "mac":
+                log("Stocks: pomijam konfigurację — zapisał ją ktoś inny niż właściciel (S1)")
+            return
+        if doc.get("requestedAt") != stk_seen["req"]:
+            stk_seen["req"] = doc.get("requestedAt")
+            jobs.put((STOCKS_JOB, True))
+
+    try:
+        cloud.watch_stocks_config(on_stocks)
+    except Exception as e:  # noqa: BLE001
+        log(f"Stocks: nasłuch stocks/config nieudany ({e})")
     state["now"] = "idle"
     beat_now()
     enqueue_frozen(jobs, owner)
-    jobs.put((FOREST_JOB, None))                                   # D-048: las zbuduje się sam przy pierwszym starcie
     jobs.put((REV_JOB, None))                                      # D-063: badanie REV przy pierwszym starcie, potem portfel
+    jobs.put((STOCKS_JOB, False))                                  # D-071: backtest Stocks przy pierwszym starcie, potem portfel
     log("Połączony. Czekam na strategie (Ctrl+C kończy).")
     next_sync, last_forward = next_sync_time(), time.time()
     while True:
@@ -391,18 +458,18 @@ def cmd_start(_args) -> int:
                     enqueue_frozen(jobs, owner)
                     last_forward = time.time()
                 queue_investors()                                  # nowe świece → paper trading inwestorów (D-045)
-                jobs.put((FOREST_JOB, None))                       # nowe świece → FOREST (D-048)
                 jobs.put((REV_JOB, None))                          # nowe kursy PLN → REV (D-063)
+                jobs.put((STOCKS_JOB, False))                      # nowe świece spółek → portfel Stocks (D-071)
             continue
         if sid == INVESTORS_JOB:
             inv_seen["queued"] = False
             handle_investors(dict(inv_docs), owner, state)
             continue
-        if sid == FOREST_JOB:
-            handle_forest(state)
-            continue
         if sid == REV_JOB:
             handle_rev(state)
+            continue
+        if sid == STOCKS_JOB:
+            handle_stocks(state, bool(data))
             continue
         if data.get("status") == "do_usuniecia":
             handle_delete(sid)
@@ -441,8 +508,8 @@ def requeue_after_source_change(owner: str | None) -> bool:
 
 FORWARD_SECONDS = 6 * 3600   # W4: forward test zamrożonych strategii
 INVESTORS_JOB = "__inwestorzy__"
-FOREST_JOB = "__forest__"
 REV_JOB = "__rev__"
+STOCKS_JOB = "__stocks__"
 SYNC_OFFSET = 300            # kopia świec 5 min po pełnej godzinie
 
 
@@ -642,42 +709,17 @@ def cmd_live(_args) -> None:
         ready.build_pln(pln, PLN_READY, tz=pln_tz, log=log)
     handle_investors(cloud.list_investors(), config().get("owner_uid"), {}, source="actions")
     handle_rev({}, source="actions")    # D-063: portfel REV (wtorek 08:00, wycena dzienna)
+    from . import stk_run
+    from .store import YAHOO_STK
 
-
-def handle_forest(state: dict) -> None:
-    """D-048: FOREST działa tylko tu, przy ia5 start. Brak lasu → budowa; jest las → nowe świece po kolei (po przerwie Maca
-    nadrabia wszystko, co ominęło) i publikacja na gałąź data. Błąd nie zatrzymuje programu; stan na dysku zostaje poprzedni."""
-    from . import cloud, forest_run, publish, ready
-    from .store import READY
-
-    job = {"id": "forest", "name": "FOREST", "progress": 0, "phase": "start"}
-    state["now"], state["job"] = "computing", job
-
-    def step(msg: str) -> None:
-        log(msg)
-        job["phase"] = msg.strip()[:60]
-        try:
-            cloud.heartbeat("computing", job)
-        except Exception:  # noqa: BLE001 — chwilowy brak sieci nie przerywa liczenia
-            pass
-
-    try:
-        frames = ready.load(READY)
-        if not forest_run.exists():
-            step("FOREST: pierwsza budowa lasu (kilka–kilkanaście minut)…")
-            st = forest_run.build(frames, log=step, ledger=HOME)
-            made = st["counts"]["decyzje"]
-        else:
-            st, made = forest_run.step(frames, log=step)
-        log(f"FOREST: {made} nowych decyzji · w lesie {st['counts']['las']} · " + " · ".join(
-            f"{x['name']} {x['equity']:,.0f} USD" for x in st["books"].values()))
-        publish.publish_forest(forest_run.public_dir(), log=log)
-    except Exception as e:  # noqa: BLE001 — błąd lasu nie może zatrzymać programu
-        log(f"FOREST: błąd — {type(e).__name__}: {e}")
-    finally:
-        state["now"] = "idle"
-        state["job"] = None
-        cloud.heartbeat("idle")
+    YAHOO_STK.mkdir(parents=True, exist_ok=True)
+    wanted = stk_run.tickers_wanted(None)   # D-071: spółki zamrożonego badania — historia z gałęzi data, najnowsze dni z Firestore
+    for t in wanted:
+        fp = DATA_REPO / "candles_stk" / f"{t}.parquet"
+        if fp.exists():
+            pd.read_parquet(fp).to_parquet(YAHOO_STK / f"{t}.parquet", index=False)
+    stk_run.sync(cloud, st, wanted, log=log)
+    handle_stocks({}, False, source="actions")   # D-071: portfel Stocks (wtorek: plan 08:00, wykonanie na otwarciu)
 
 
 def _read_json(path: Path) -> dict | None:
@@ -797,6 +839,59 @@ def handle_rev(state: dict, source: str = "mac") -> None:
         if source == "mac":
             state["now"], state["job"] = "idle", None
             beat("idle")
+
+
+def handle_stocks(state: dict, want_research: bool, source: str = "mac") -> None:
+    """D-071: Stocks — badanie na żądanie ze strony (albo gdy go brak), potem portfel na żywo. Błąd nie zatrzymuje programu."""
+    from . import cloud, stk_run
+
+    beat = cloud.heartbeat if source == "mac" else (lambda *a, **k: None)
+    try:
+        stk_run.handle(cloud, state, STK_CFG.get("doc"), want_research, source, log=log, beat=beat, cloud_active=cloud_active)
+    except Exception as e:  # noqa: BLE001
+        log(f"Stocks: błąd — {type(e).__name__}: {e}")
+        if source != "mac":
+            raise
+    finally:
+        if source == "mac":
+            state["now"], state["job"] = "idle", None
+
+
+def cmd_stocks(args) -> int:
+    """Stocks ręcznie (D-071). Normalnie niepotrzebne: badanie liczy ia5 start po „Policz backtest”, portfel — ia5 live."""
+    from . import cloud, publish, stk_live, stk_run
+    from .stk_data import load_stk
+    from .store import DATA_REPO, STK_READY
+
+    research = _read_json(DATA_REPO / "stocks" / "research.json")
+    if args.co == "status":
+        if not research:
+            print("Badania Stocks jeszcze nie ma — policzy je ia5 start.")
+            return 0
+        v = research["verdict"]
+        print(f"Stocks {research['stk_version']} · {research['frozen']['label']} · werdykt {v['color']} {v['passed']}/{v['of']} · "
+              f"{research['trials']:,} konfiguracji · spółek {len(research['universe'])}")
+        st = _read_json(DATA_REPO / "stocks" / "state.json")
+        if st and st.get("today"):
+            print(f"Portfel: {st['today']['total']:,.2f} USD (start {st['capital0']:,.0f}), planów {len(st['plans'])}")
+        return 0
+    now = int(time.time())
+    if args.co == "badanie":
+        cfg = cloud.read_stocks_config() or stk_run.default_config()
+        st = cloud.read_status()
+        stk_run.sync(cloud, st, stk_run.tickers_wanted(cfg), log=log)
+        ready = load_stk(STK_READY)
+        rej = (st.get("stk") or {}).get("rejected") or {}
+        research = stk_run.research_run(ready, cfg, now, rej, log=log, publish_it=not args.lokalnie, paths=args.sciezki)
+    if not research:
+        print("Najpierw badanie: ia5 stocks badanie.")
+        return 1
+    ready = load_stk(STK_READY, set(research["universe"]))
+    st = stk_live.live_step(_read_json(DATA_REPO / "stocks" / "state.json"), research, ready, now)
+    print(f"Portfel: {(st.get('today') or {}).get('total') or st['capital0']:,.2f} USD · planów {len(st['plans'])}")
+    if not args.lokalnie:
+        publish.publish_stocks({"state.json": json.dumps(st, ensure_ascii=False, separators=(",", ":"), allow_nan=False)}, log=log)
+    return 0
 
 
 def cmd_rev(args) -> int:
@@ -988,53 +1083,6 @@ def cmd_search(args) -> int:
     return 0
 
 
-def cmd_forest(args) -> int:
-    """FOREST (D-048) ręcznie. Normalnie nic z tego nie jest potrzebne: `ia5 start` buduje las sam i liczy go co godzinę.
-    Komend `build` i `krok` używaj przy wyłączonym ia5 start, bo oba procesy zapisują ten sam stan."""
-    from . import cloud, forest_run, ready
-    from .store import READY, YAHOO
-
-    if args.co == "status":
-        if not forest_run.exists():
-            print("Lasu jeszcze nie ma — zbuduje go ia5 start albo ia5 forest build.")
-            return 0
-        st = json.loads((forest_run.public_dir() / "state.json").read_text(encoding="utf-8"))
-        print(f"Las {st['id']} · dane do {time.strftime('%Y-%m-%d %H:%M', time.gmtime(st['dataTo']))} UTC · "
-              f"decyzje {st['counts']['decyzje']:,} · w lesie {st['counts']['las']}")
-        for b, x in st["books"].items():
-            print(f"  {b.upper()} {x['name']}: {x['equity']:,.2f} USD ({x['return_pct']:+.2f}%), {x['closed']} transakcji")
-        for c in st["conclusions"]:
-            print(f"  [{c['state']}] {c['text']}")
-        return 0
-    yahoo = cloud.load_yahoo(YAHOO)
-    if not yahoo:
-        print("Brak świec na Macu — najpierw ia5 start.")
-        return 1
-    ready.build(yahoo, READY, log=log)
-    frames = ready.load(READY)
-    caffeinate = subprocess.Popen(["caffeinate", "-i", "-w", str(os.getpid())]) if sys.platform == "darwin" else None
-    try:
-        if args.co == "build":
-            st = forest_run.build(frames, zero=args.zero, seed=args.nasiono, log=log, ledger=HOME)
-        else:
-            if not forest_run.exists():
-                print("Lasu jeszcze nie ma — najpierw ia5 forest build.")
-                return 1
-            st, _ = forest_run.step(frames, log=log)
-    finally:
-        if caffeinate:
-            caffeinate.terminate()
-    print((forest_run.public_dir() / "report.md").read_text(encoding="utf-8")[:4000])
-    if not args.lokalnie:
-        try:
-            from . import publish
-
-            publish.publish_forest(forest_run.public_dir(), log=log)
-        except Exception as e:  # noqa: BLE001 — wynik jest lokalnie, publikacja się nie udała
-            log(f"  publikacja nieudana ({e}) — wynik jest lokalnie w {forest_run.public_dir()}")
-    return 0
-
-
 def cmd_status(_args) -> int:
     print(f"IA5 runner · silnik {ENGINE_VERSION}")
     print("Pary:", ", ".join(PAIRS))
@@ -1075,18 +1123,16 @@ def main(argv=None) -> int:
     p_srch.add_argument("--bez-oos", action="store_true", help="tylko IS — OOS zostaje zamknięty")
     p_srch.add_argument("--lokalnie", action="store_true", help="bez publikacji na gałąź data")
     p_srch.set_defaults(func=cmd_search)
-    p_fr = sub.add_parser("forest", help="FOREST: las 1000 inwestorów (D-048); ia5 start liczy go sam, to tylko ręczne sterowanie")
-    p_fr.add_argument("co", choices=["build", "krok", "status"],
-                      help="build = nowy las (poprzedni do archiwum), krok = nowe świece, status")
-    p_fr.add_argument("--zero", type=int, default=1, help="przebiegi na danych bez przewagi")
-    p_fr.add_argument("--nasiono", type=int, default=5)
-    p_fr.add_argument("--lokalnie", action="store_true", help="bez publikacji na gałąź data")
-    p_fr.set_defaults(func=cmd_forest)
     p_rev = sub.add_parser("rev", help="REV: badanie metody i portfel PLN (D-063); ia5 start i ia5 live robią to same")
     p_rev.add_argument("co", choices=["badanie", "krok", "status"])
     p_rev.add_argument("--lokalnie", action="store_true", help="bez publikacji na gałęzi data")
     p_rev.add_argument("--sciezki", type=int, default=None, help="liczba losowych podziałów (domyślnie 1000)")
     p_rev.set_defaults(func=cmd_rev)
+    p_stk = sub.add_parser("stocks", help="Stocks: backtest i portfel spółek (D-071); ia5 start i ia5 live robią to same")
+    p_stk.add_argument("co", choices=["badanie", "krok", "status"])
+    p_stk.add_argument("--lokalnie", action="store_true", help="bez publikacji na gałęzi data")
+    p_stk.add_argument("--sciezki", type=int, default=None, help="liczba losowych przesunięć (domyślnie 1000)")
+    p_stk.set_defaults(func=cmd_stocks)
     sub.add_parser("live", help="jeden przebieg inwestorów i maili w GitHub Actions (D-052)").set_defaults(func=cmd_live)
     sub.add_parser("status").set_defaults(func=cmd_status)
     sub.add_parser("health", help="opisowy przegląd zdrowia danych i projektu").set_defaults(func=cmd_health)

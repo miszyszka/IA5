@@ -2,6 +2,25 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-15 — FOREST usunięty, nowa zakładka Stocks (D-071), CLAUDE.md 0.59
+
+**Zrobione (na prośbę Michała: „wywalmy FOREST… dodajmy zakładkę Stocks… cotygodniowe rebalansowanie portfolio ±20%”)**
+- **FOREST usunięty:** kod (`forest*.py`), testy, zakładka, `ia5 forest`; `ia5 start` usuwa `~/.ia5/forest/` i `forest/` z gałęzi `data` (historia gita zostaje).
+- **Dane spółek:** Apps Script `tickSTK_` — lista ze strony (`stocks/config`, co 5 min), cała historia świec dziennych z dywidendami i splitami, potem nowe dni co godzinę, święta USA, nowy split = historia od nowa; test w Node (`tests/apps_script_stk.sim.js`). Mac: kopia `data/yahoo_stk/`, czyszczenie `data/stk_ready/`, publikacja `candles_stk/`, kontrola „Spółki (Stocks)” w Stats.
+- **Backtest:** 4 374 konfiguracje (27 ocen przeceny × normalizacja × siła × wygładzenie × filtr × próg), wybór po IR nadwyżki nad stałym podziałem tylko na IS, walidacja (DSR, PBO, 1000 losowych przesunięć, bootstrap, koszt × 2), werdykt, raport dla Claude. Na syntetycznych danych 27 spółek × 30 lat: ok. 10–15 s.
+- **Portfel na żywo:** plan we wtorek 08:00 z zamknięcia poprzedniej sesji, wykonanie na otwarciu wtorku (święto → środa), całe akcje, dywidendy, obok stały podział i „kup i trzymaj”; nadrabianie po przerwie = ten sam wynik (test).
+- **Zakładka Stocks:** kapitał, pasmo, lista spółek z udziałami (+ dodaj, ✕ usuń, „Rozłóż równo”, „Dopasuj do 100%”, szkic w przeglądarce), **Policz backtest**, zlecenia na wtorek, portfel dziś (słupki z pasmem), kapitał na żywo, historia transakcji z CSV, wykres skuteczności backtestu (log), rok po roku, walidacja.
+- **Naprawione przy okazji:** `alerts.yml` nie checkoutował `rev/` ani kursów PLN — portfel REV w GitHub Actions nie mógł się liczyć (liczył tylko Mac); teraz także `stocks/` i `candles_stk/`.
+
+**Następne / do zrobienia przez Michała**
+1. Firebase → Firestore → Rules: wkleić nowy `firestore.rules` (z UID) → Publish.
+2. Apps Script: wkleić nowy `Code.gs`, uruchomić `installTrigger()` — spółki pobiorą się same w kilka minut.
+3. Mac: `git pull`, `uv tool install -e runner --force`, restart `ia5 start` — pierwszy backtest dla listy startowej (równe udziały, 10 000 USD).
+4. Na stronie (Stocks): wpisać kapitał i udziały → Policz backtest.
+5. Potwierdzić interpretację: ±20% = ±20% *udziału* spółki (5% → 4–6%), nie ±20 punktów (D-071).
+
+**Znane ograniczenia:** błąd przetrwania (dzisiejsza lista spółek), tylko spółki w USD, bez podatków; backtest na udziałach ciągłych, na żywo całe akcje. Silnik i dane nie były liczone na prawdziwych notowaniach w tej sesji (piaskownica bez dostępu do Yahoo) — tylko na danych syntetycznych.
+
 ## 2026-11-13 — naprawa zamknięć D1 (D-068), limit świec na wejście (D-070), strategia składana na D1; CLAUDE.md 0.58
 
 **Zrobione (na prośbę Michała: „najlepsza, najbardziej stabilna, wzrastająca strategia na świecach dziennych… tysiące kombinacji”)**

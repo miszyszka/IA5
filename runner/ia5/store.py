@@ -12,11 +12,15 @@ D1_READY = DATA / "d1_ready"   # D-058: D1 po warstwie czyszczenia (daily.clean_
 RESULTS = HOME / "results"
 SCANS = HOME / "scans"
 SEARCHES = HOME / "searches"   # D-044: głębokie poszukiwanie (ia5 search)
-FOREST = HOME / "forest"       # D-048: las inwestorów, mapy, dziennik (current/, public/, archive/)
+FOREST_OLD = HOME / "forest"   # D-071: po FOREST (usunięty) — ia5 start kasuje ten folder
 REV = HOME / "rev"             # D-063: badania REV (research/{run}/)
 YAHOO_PLN = DATA / "yahoo_pln"   # D-063: kopia kursów złotówkowych D1 Yahoo z Firestore (surowa) — REV
 PLN_READY = DATA / "pln_ready"   # D-063: kursy PLN po warstwie REV (rev_data.clean_pln) — wejście REV
-DATA_ALLOWED = ("yahoo", "h1_ready", "yahoo_d1", "d1_ready", "yahoo_pln", "pln_ready")   # D-041, D-053, D-058, D-063: tylko dane Yahoo
+YAHOO_STK = DATA / "yahoo_stk"   # D-071: kopia świec dziennych spółek z Firestore (surowa: ceny, dywidendy, splity) — Stocks
+STK_READY = DATA / "stk_ready"   # D-071: spółki po warstwie czyszczenia (stk_data.clean_stk) — wejście Stocks
+STOCKS = HOME / "stocks"         # D-071: badania Stocks (research/{run}/)
+# D-041, D-053, D-058, D-063, D-071: tylko dane Yahoo
+DATA_ALLOWED = ("yahoo", "h1_ready", "yahoo_d1", "d1_ready", "yahoo_pln", "pln_ready", "yahoo_stk", "stk_ready")
 # D-039: pozostałości po źródle Dukascopy (usuwane przy starcie za zgodą Michała z 2026-10-31)
 LEGACY = (DATA / "m1", DATA / "h1", DATA / "h1_scan")
 SERVICE_ACCOUNT = HOME / "service-account.json"

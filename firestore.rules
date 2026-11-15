@@ -7,6 +7,22 @@ service cloud.firestore {
     match /runner/{d}   { allow read: if true;      allow write: if false; }
     match /candles/{d}  { allow read: if isOwner(); allow write: if false; }
     match /candles_d1/{d} { allow read: if isOwner(); allow write: if false; }   // D-053: świece dzienne Yahoo
+    match /candles_stk/{d} { allow read: if isOwner(); allow write: if false; }  // D-071: świece dzienne spółek
+    // D-071: Stocks — strona zapisuje spółki, udziały, kapitał i pasmo ze statusem do_policzenia; resztę pól (stan liczenia) pisze Mac.
+    match /stocks/{d} {
+      function cfgOk() {
+        let r = request.resource.data;
+        return r.status == "do_policzenia" && r.updatedBy == request.auth.uid
+          && r.tickers is list && r.tickers.size() >= 2 && r.tickers.size() <= 100
+          && r.capital is number && r.capital >= 100 && r.capital <= 1000000000
+          && r.band is number && r.band >= 0 && r.band <= 50 && r.requestedAt is number;
+      }
+      allow read: if isOwner();
+      allow create: if isOwner() && d == "config" && cfgOk()
+        && request.resource.data.keys().hasOnly(["tickers", "capital", "band", "status", "requestedAt", "updatedBy"]);
+      allow update: if isOwner() && d == "config" && cfgOk()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["tickers", "capital", "band", "status", "requestedAt", "updatedBy"]);
+    }
     match /strategies/{id} {
       allow read, delete: if isOwner();
       allow create: if isOwner()

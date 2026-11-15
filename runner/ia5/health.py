@@ -592,6 +592,41 @@ def facts(status: dict, yahoo: dict, cov: dict | None, docs: list[dict] | None, 
     return out
 
 
+def stocks_data(status: dict, wanted: list[str], now: int) -> dict:
+    """D-071: świece spółek (Stocks) — każda spółka z listy jest w bazie (albo odrzucona z powodem) i ma ostatni dzień sesji."""
+    from datetime import date
+
+    import pandas as pd
+
+    from .stk_config import TZ
+    from .stk_data import last_session_before
+
+    name = "Spółki (Stocks)"
+    stk = (status or {}).get("stk") or {}
+    have = stk.get("tickers") or {}
+    rej = stk.get("rejected") or {}
+    if not have:
+        return check("stk", name, "warn", "Nie ma jeszcze świec spółek.",
+                     fix="W Apps Script wklej nowy Code.gs (docs/SETUP.md, „Spółki”) — tick pobierze spółki sam w kilka minut.")
+    today = pd.Timestamp(int(now), unit="s", tz="UTC").tz_convert(TZ).date()
+    exp = last_session_before(today if isinstance(today, date) else today)
+    # świeca dnia trafia do bazy po północy w Nowym Jorku + pobranie co godzinę: dzień spóźnienia to jeszcze norma
+    late = [t for t in wanted if t in have and (have[t].get("lastDay") or "") < last_session_before(exp).isoformat()]
+    gone = [t for t in wanted if t not in have and t not in rej]
+    bad = [f"{t}: {rej[t]}" for t in wanted if t in rej]
+    detail = [f"czeka na pobranie: {', '.join(gone)}"] if gone else []
+    detail += [f"stoi: {t} (ostatni dzień {have[t].get('lastDay')})" for t in late] + [f"odrzucona — {x}" for x in bad]
+    if late or gone or bad:
+        parts = [f"{len(late)} spółek bez świeżej świecy" if late else "", f"{len(gone)} czeka na pobranie" if gone else "",
+                 f"{len(bad)} odrzuconych" if bad else ""]
+        text = "; ".join(x for x in parts if x)
+        return check("stk", name, "warn", text + ".", detail,
+                     fix="Odrzuconą spółkę usuń w zakładce Stocks (Yahoo jej nie zna albo nie jest notowana w USD); "
+                         "spółka bez świeżej świecy — sprawdź log Apps Script (tickSTK).")
+    n = len([t for t in wanted if t in have])
+    return check("stk", name, "ok", f"{n} spółek, ostatni dzień sesji {exp.isoformat()} jest (albo w drodze).", detail)
+
+
 def run(
     status: dict,
     yahoo: dict,
@@ -607,6 +642,7 @@ def run(
     pln: dict | None = None,
     pln_universe: list[str] | None = None,
     pln_infos: dict | None = None,
+    stk_wanted: list[str] | None = None,
 ) -> dict:
     now = now or int(time.time())
     checks = [
@@ -625,6 +661,8 @@ def run(
         checks.append(daily_candles(status, d1, now))
     if pln is not None:
         checks.append(pln_rates(status, pln, d1, now, pln_universe, pln_infos))
+    if stk_wanted is not None:
+        checks.append(stocks_data(status, stk_wanted, now))
     if code is not None:
         checks.append(code_version(code))
     if home is not None:

@@ -77,8 +77,8 @@ def test_publish_investors_add_update_remove(repo):
     assert [(e["id"], e["equity"]) for e in idx["investors"]] == [("a", 10_500.0)]
 
 
-def test_publish_forest_tylko_zmiany(tmp_path, monkeypatch):
-    """Sam nowy czas liczenia nie jest zmianą; miesiąc, którego już nie ma, znika z gałęzi."""
+def test_publish_files_tylko_zmiany(tmp_path, monkeypatch):
+    """Sam nowy czas liczenia nie jest zmianą; plik z `remove` znika z folderu."""
     import json as js
 
     from ia5 import publish as pb
@@ -88,19 +88,14 @@ def test_publish_forest_tylko_zmiany(tmp_path, monkeypatch):
     repo.mkdir()
     monkeypatch.setattr(pb, "DATA_REPO", repo)
     monkeypatch.setattr(pb, "ensure_repo", lambda: None)
+    monkeypatch.setattr(pb, "_push", lambda: None)
     monkeypatch.setattr(pb, "_git", lambda *a, check=True: commits.append(a) or "abc1234")
-    src = tmp_path / "public"
-    (src / "journal").mkdir(parents=True)
-    (src / "state.json").write_text(js.dumps({"computedAt": 1, "id": "x"}))
-    (src / "journal" / "2026-11.parquet").write_bytes(b"a")
-    assert pb.publish_forest(src, log=lambda m: None) == "abc1234"
+    assert pb.publish_stocks({"state.json": js.dumps({"computedAt": 1, "x": 1})}, log=lambda m: None) == "abc1234"
     n = len(commits)
-    (src / "state.json").write_text(js.dumps({"computedAt": 2, "id": "x"}))
-    assert pb.publish_forest(src, log=lambda m: None) is None and len(commits) == n
-    (src / "journal" / "2026-11.parquet").unlink()
-    (src / "journal" / "2026-12.parquet").write_bytes(b"b")
-    assert pb.publish_forest(src, log=lambda m: None) == "abc1234"
-    assert sorted(f.name for f in (repo / "forest" / "journal").iterdir()) == ["2026-12.parquet"]
+    assert pb.publish_stocks({"state.json": js.dumps({"computedAt": 2, "x": 1})}, log=lambda m: None) is None and len(commits) == n
+    (repo / "stocks" / "old.json").write_text("{}")
+    assert pb.publish_stocks({}, log=lambda m: None, remove=("old.json",)) == "abc1234"
+    assert not (repo / "stocks" / "old.json").exists()
 
 
 def test_publish_candles_d1_only_when_changed(repo):

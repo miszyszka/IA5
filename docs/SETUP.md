@@ -29,7 +29,7 @@ ia5 start                                    # kopia świec Yahoo z Firestore (s
 
 - Aktualizacja programu: `cd ~/IA5 && git pull`.
 - `ia5 start` można przerwać (Ctrl+C) i uruchomić ponownie w każdej chwili — kopia świec dociąga tylko brakujące miesiące.
-- Pierwszy `ia5 start` po D-048 sam buduje las FOREST (kilka minut, postęp przy wskaźniku Mac; strategie czekają w kolejce). Potem liczy go po każdej kopii świec, a po przerwie nadrabia wszystkie świece po kolei.
+- Pierwszy `ia5 start` po D-071 usuwa stan FOREST (`~/.ia5/forest/` i `forest/` na gałęzi `data`) i liczy backtest Stocks (kilka minut, postęp przy wskaźniku Mac).
 - Push na gałąź `data` używa Twoich danych logowania do GitHub (np. `gh auth login`).
 
 ### Windows (wiersz poleceń `cmd`)
@@ -83,3 +83,11 @@ ia5 start
 3. Uruchom raz `installTrigger()` (jak po każdej nowej wersji).
 4. Na Macu: `cd ~/IA5 && git pull`, `uv tool install -e runner --force`, restart `ia5 start`. Pierwsza synchronizacja skopiuje kursy PLN, zbuduje `data/pln_ready/`, opublikuje `candles_pln/` na gałęzi `data`, a potem policzy badanie REV (turniej metod). W Stats → Stan systemu pojawi się kontrola „Kursy złotówkowe (REV)”, a w zakładce REV — wynik badania i od razu pierwszy podział (D-064); dalej co wtorek 08:00.
 5. Napisz Claude'owi, że badanie się policzyło — lista przyjętych walut i daty odcinków trafią do `DECISIONS.md` (D-066).
+
+## Spółki — Stocks (D-071)
+
+1. **Reguły Firestore:** Firebase → Firestore → Rules → wklej nowy `firestore.rules` (z `<OWNER_UID>` zamienionym na Twój UID) → **Publish**. Bez tego przycisk „Policz backtest” pokaże błąd uprawnień.
+2. **Apps Script:** wklej nowy `apps_script/Code.gs` (Ctrl+A, wklej, zapisz) i uruchom raz `installTrigger()`. Nic więcej — `tick` sam przeczyta listę spółek i w kilka minut pobierze ich całą historię (po 5 spółek na minutę; w arkuszu `log` wiersze „stk backfill”). Nowa spółka dodana na stronie — tak samo, w ciągu ≤ 5 minut.
+3. **Mac:** `cd ~/IA5 && git pull`, `uv tool install -e runner --force`, restart `ia5 start`. Pierwszy start liczy backtest dla listy startowej (27 spółek, równe udziały, 10 000 USD) — gdy świec jeszcze nie ma, czeka na nie do 20 minut.
+4. **Strona → Stocks:** wpisz kapitał, udziały (suma 100%), dodaj (+) albo usuń (✕) spółki → **Policz backtest**. Mac liczy kilka minut; wynik, zlecenia na najbliższy wtorek i historia transakcji pojawią się same.
+5. Ręcznie (zwykle niepotrzebne): `ia5 stocks status`, `ia5 stocks badanie` (przy wyłączonym `ia5 start`), w Apps Script `backfillSTK()` — cała historia wszystkich spółek od nowa.

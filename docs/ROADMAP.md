@@ -1,6 +1,6 @@
 # ROADMAP — jak IA5 ma się dalej rozwijać
 
-Wersja 0.2 · 2026-11-11 · Spisane po przeglądzie całego projektu (D-054–D-058); REV (D-063). Aktualizować, gdy zmienia się kierunek.
+Wersja 0.3 · 2026-11-15 · Spisane po przeglądzie całego projektu (D-054–D-058); REV (D-063); FOREST usunięty, Stocks (D-071). Aktualizować, gdy zmienia się kierunek.
 
 ## Zasada nadrzędna
 
@@ -56,9 +56,20 @@ REV nie zmienia etapów A–C: to portfel walut wobec złotego, bez dźwigni i k
 | **R3 Zakładka REV** | słupki, linia, ranking, transakcje, badanie | wszystko na żywej stronie |
 | **R4 Później (na życzenie)** | mail we wtorek z listą przewalutowań; inflacja i stopy procentowe (zmiana D7) | decyzja Michała |
 
+## Stocks — osobny tor (D-071)
+
+Portfel spółek Michała rebalansowany co wtorek na otwarciu, w paśmie ±20% udziału docelowego. Nie zmienia etapów A–C.
+
+| Etap | Zakres | Gotowe, gdy |
+|---|---|---|
+| **S0 Dane** | `tickSTK_` w Apps Script (lista ze strony, dywidendy, splity), kopia i czyszczenie na Macu, kontrola „Spółki (Stocks)” | reguły Firestore wdrożone, 27 spółek w bazie, kontrola zielona |
+| **S1 Backtest** | turniej 4 374 konfiguracji, walidacja, werdykt, raport | wynik na stronie dla udziałów Michała |
+| **S2 Na żywo** | plan wtorek 08:00, wykonanie na otwarciu, całe akcje, dywidendy, porównania | pierwszy wtorek wykonany sam |
+| **S3 Później (na życzenie)** | mail we wtorek z listą zleceń; waluta inna niż USD; dane fundamentalne (zmiana D7) | decyzja Michała |
+
 ## Czego NIE robić (świadomie)
 
-- Nie rozbudowywać FOREST ani `ia5 search` na H1 — rzetelnie pokazały brak przewagi; kolejne przebiegi na tym samym OOS to już dopasowanie.
+- Nie wracać do FOREST (usunięty w D-071) ani nie rozbudowywać `ia5 search` na H1 — rzetelnie pokazały brak przewagi; kolejne przebiegi na tym samym OOS to już dopasowanie.
 - Nie stroić RSI 2 / Powrotu pod OOS (otwarty 2×). Ich jedynym uczciwym testem jest forward od zamrożenia.
 - Nie dokładać par spoza tabeli bez potrzeby — więcej par to więcej prób, nie więcej przewagi.
 - Nie przechodzić na M15/M5 — koszt względem ruchu rośnie, Yahoo nie ma tej historii.

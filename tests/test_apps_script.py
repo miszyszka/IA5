@@ -23,3 +23,12 @@ def test_pln_series_admission_and_tick():
                        capture_output=True, text=True, timeout=180)
     assert r.returncode == 0, r.stdout + r.stderr
     assert r.stdout.startswith("OK")
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="brak Node")
+def test_stocks_series_config_backfill_tick_split():
+    """D-071: lista spółek z stocks/config, cała historia z dywidendami i splitami, tick z nowym dniem, święto, nowy split."""
+    r = subprocess.run(["node", str(ROOT / "tests" / "apps_script_stk.sim.js"), str(ROOT / "apps_script" / "Code.gs")],
+                       capture_output=True, text=True, timeout=180)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout.startswith("OK")

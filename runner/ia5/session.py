@@ -58,7 +58,7 @@ def in_trading_hours(ts, hours=None, tz=None):
     return (hr >= a) & (hr < b)
 
 
-ROLLOVER_H = 21   # rolowanie (swap) liczone o 21:00 UTC — jak w forest_report
+ROLLOVER_H = 21   # rolowanie (swap) liczone o 21:00 UTC (D-054)
 SWAP_STRESS_PIPS = (0.5, 1.0)   # D-054: O5 zostaje 0 w modelu; to tylko stres „ile by kosztowały noce”
 
 

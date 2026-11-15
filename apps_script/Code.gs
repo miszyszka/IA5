@@ -16,6 +16,11 @@
  * notowanej daty, dla par FX ok. 2003), zapis w candles_d1/{PARA}_{RRRR}: ok. 200 zapisów jednorazowo.
  * Potem tick() po północy w Londynie dopisuje zamkniętą świecę dnia: ok. 8 zapisów świec + 1 statusu na dobę,
  * ponawia brakujące pary co 15 min. 0 odczytów.
+ *
+ * Spółki (Stocks, D-071): lista z dokumentu stocks/config (strona) — odczyt co 5 min ≈ 290 odczytów/dobę. Nowa spółka:
+ * cała historia świec dziennych + dywidendy + splity (interval=1d&events=div,split) → candles_stk/{TICKER}_{RRRR}, najwyżej
+ * 5 spółek na uruchomienie (≈ 30–60 zapisów na spółkę raz). Potem raz na godzinę, gdy brakuje dnia: ostatnie 10 dni
+ * (≈ 1 zapis na spółkę na dobę + 1 statusu). Nowy split → cała historia spółki od nowa (Yahoo przelicza ceny wstecz).
  */
 const PROJECT_ID = 'project-ia5';
 const DB = 'projects/' + PROJECT_ID + '/databases/(default)';
@@ -55,6 +60,7 @@ function tick() {
     run_('tick');
     try { tickD1_(); } catch (e) { log_('tickD1', '-', 0, null, 'BŁĄD ' + e.message); } // D1 nigdy nie zatrzymuje H1
     try { tickPLN_(); } catch (e) { log_('tickPLN', '-', 0, null, 'BŁĄD ' + e.message); } // D-063: kursy PLN nigdy nie zatrzymują H1 ani D1
+    try { tickSTK_(); } catch (e) { log_('tickSTK', '-', 0, null, 'BŁĄD ' + e.message); } // D-071: spółki nigdy nie zatrzymują reszty
   });
 }
 
@@ -768,6 +774,275 @@ function writeBarsSeries_(collection, pair, bars, tz) {
 }
 
 function writeBarsD1_(pair, bars, tz) { writeBarsSeries_('candles_d1', pair, bars, tz); }
+
+// ---------- Stocks: świece dzienne spółek, dywidendy i splity (D-071) ----------
+// Znacznik = północ dnia sesji w strefie giełdy (America/New_York) — Yahoo stempluje świece spółek godziną otwarcia
+// (09:30), dzień jest ten sam. Dzień zamknięty, gdy w Nowym Jorku zaczął się następny (+60 s, D2).
+// Lista spółek: stocks/config.tickers (pisze strona); bez dokumentu — lista startowa Michała.
+
+const STK_TZ = 'America/New_York';
+const STK_DEFAULT = ['MU', 'MSFT', 'AAPL', 'MO', 'CVX', 'JPM', 'PM', 'JNJ', 'AMZN', 'FE', 'KO', 'MMM', 'NVDA', 'MRK', 'SO',
+  'SYY', 'PPL', 'DUK', 'GPC', 'VZ', 'NEE', 'USB', 'AMT', 'FRT', 'GOOGL', 'PEP', 'O'];
+const STK_CONFIG_EVERY_S = 5 * 60;   // co tyle czytamy stocks/config (1 odczyt)
+const STK_RETRY_S = 60 * 60;         // brakujący dzień: ponowienie co godzinę (święta w USA są inne niż w kalendarzu FX)
+const STK_BACKFILL_MAX = 5;          // tyle nowych spółek (cała historia) na jedno uruchomienie
+const STK_MIN_DAYS = 60;             // krótsza historia — spółka odrzucona
+const STK_FRESH_WD = 10;             // ostatni dzień nie starszy niż 10 dni roboczych od oczekiwanego
+const STK_RE = /^[A-Z0-9][A-Z0-9.\-]{0,11}$/;
+
+function stkClean_(t) { return String(t || '').trim().toUpperCase(); }
+
+/** Stan w Script Properties: 'stk' (lista, strefa, czasy, odrzucone, ostatni dzień każdej spółki — tanio co minutę)
+ *  + 'stk:{TICKER}' (szczegóły spółki; czytane tylko, gdy coś pobieramy — limit 9 KB na wartość i dzienny limit odczytów). */
+function loadSTK_() {
+  const raw = PropertiesService.getScriptProperties().getProperty('stk');
+  const st = raw ? JSON.parse(raw) : { tz: STK_TZ, list: STK_DEFAULT.slice(), rejected: {}, configAt: 0, triedAt: 0 };
+  st.rejected = st.rejected || {};
+  st.days = st.days || {};
+  st.items = {};
+  return st;
+}
+
+function loadItemsSTK_(st, tickers) {
+  const props = PropertiesService.getScriptProperties();
+  tickers.forEach(t => {
+    if (st.items[t]) return;
+    const v = props.getProperty('stk:' + t);
+    if (v) st.items[t] = JSON.parse(v);
+  });
+}
+
+function saveSTK_(st) {
+  const props = PropertiesService.getScriptProperties();
+  const rest = Object.assign({}, st);
+  delete rest.items;
+  Object.keys(st.items).forEach(t => { props.setProperty('stk:' + t, JSON.stringify(st.items[t])); rest.days[t] = st.items[t].lastDay; });
+  props.setProperty('stk', JSON.stringify(rest));
+}
+
+function dropSTK_(st, t) {
+  delete st.items[t];
+  delete st.days[t];
+  PropertiesService.getScriptProperties().deleteProperty('stk:' + t);
+}
+
+/** stocks/config → lista tickerów (bez dokumentu: null). 1 odczyt Firestore. */
+function readStocksConfig_() {
+  const r = UrlFetchApp.fetch(API + '/documents/stocks/config', {
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'x-goog-user-project': PROJECT_ID }, muteHttpExceptions: true });
+  if (r.getResponseCode() === 404) return null;
+  if (r.getResponseCode() !== 200) throw new Error('Firestore ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 200));
+  const f = (JSON.parse(r.getContentText()).fields || {});
+  const vals = (((f.tickers || {}).arrayValue || {}).values || []);
+  const out = [];
+  vals.forEach(v => {
+    const m = (v.mapValue || {}).fields || {};
+    const t = stkClean_((m.t || {}).stringValue || v.stringValue);
+    if (STK_RE.test(t) && out.indexOf(t) < 0) out.push(t);
+  });
+  return out;
+}
+
+/** Północ dnia 'RRRR-MM-DD' w strefie tz jako epoch (s) — tylko Utilities.formatDate (działa też w atrapie). */
+function midnightTs_(day, tz) {
+  let t = Date.UTC(+day.slice(0, 4), +day.slice(5, 7) - 1, +day.slice(8, 10)) / 1000;
+  for (let i = 0; i < 3; i++) {
+    const loc = localStamp_(t, tz);
+    const asUtc = Date.UTC(+loc.slice(0, 4), +loc.slice(5, 7) - 1, +loc.slice(8, 10), +loc.slice(11, 13), +loc.slice(14, 16), +loc.slice(17, 19)) / 1000;
+    const want = Date.UTC(+day.slice(0, 4), +day.slice(5, 7) - 1, +day.slice(8, 10)) / 1000;
+    if (asUtc === want) return t;
+    t += want - asUtc;
+  }
+  return t;
+}
+
+function parseYahooSTK_(j) {
+  const res = j && j.chart && j.chart.result && j.chart.result[0];
+  if (!res) throw new Error('brak danych w odpowiedzi');
+  const meta = res.meta || {};
+  if (meta.dataGranularity && meta.dataGranularity !== '1d') throw new Error('Yahoo zwróciło interwał ' + meta.dataGranularity + ' zamiast 1d');
+  const tz = meta.exchangeTimezoneName || STK_TZ;
+  const out = { tz: tz, currency: meta.currency || '', name: meta.longName || meta.shortName || '', bars: [], div: [], split: [] };
+  const ev = res.events || {};
+  Object.keys(ev.dividends || {}).forEach(k => { const d = ev.dividends[k]; if (d && d.amount > 0) out.div.push({ ts: d.date || +k, v: d.amount }); });
+  Object.keys(ev.splits || {}).forEach(k => {
+    const d = ev.splits[k];
+    const r = d && d.numerator > 0 && d.denominator > 0 ? d.numerator / d.denominator : 0;
+    if (r > 0 && r !== 1) out.split.push({ ts: d.date || +k, v: r });
+  });
+  if (!res.timestamp) return out;
+  const q = res.indicators.quote[0];
+  for (let i = 0; i < res.timestamp.length; i++) {
+    const o = q.open[i], h = q.high[i], l = q.low[i], c = q.close[i];
+    if ([o, h, l, c].some(v => v === null || v === undefined)) continue;
+    out.bars.push({ ts: res.timestamp[i], o: o, h: h, l: l, c: c });
+  }
+  return out;
+}
+
+/** Ostatni dzień roboczy przed dzisiejszym w Nowym Jorku (święta giełdy USA wykrywa tick — żadna spółka nie ma tego dnia). */
+function expectedDaySTK_(now, tz) {
+  let d = prevDay_(localStamp_(now - 60, tz).slice(0, 10));
+  for (let i = 0; i < 10; i++) {
+    const w = new Date(d + 'T12:00:00Z').getUTCDay();
+    if (w >= 1 && w <= 5) break;
+    d = prevDay_(d);
+  }
+  return d;
+}
+
+/** Z tick(): lista z stocks/config co 5 min; nowe spółki → cała historia; brakujący dzień → ostatnie 10 dni co godzinę. */
+function tickSTK_() {
+  const now = nowSec();
+  const st = loadSTK_();
+  if (now - (st.configAt || 0) >= STK_CONFIG_EVERY_S) {
+    const list = readStocksConfig_();
+    st.list = list && list.length ? list : (list ? [] : STK_DEFAULT.slice());
+    st.configAt = now;
+    saveSTK_(st);
+  }
+  const fresh = st.list.filter(t => !st.days[t] && !st.rejected[t]).slice(0, STK_BACKFILL_MAX);
+  if (fresh.length) { runSTK_('backfill', fresh, st, now); return; }
+  const tz = st.tz || STK_TZ;
+  const exp = expectedDaySTK_(now, tz);
+  const todo = st.list.filter(t => st.days[t] && !(st.days[t] >= exp));
+  if (!todo.length || st.holiday === exp || now - (st.triedAt || 0) < STK_RETRY_S) return;
+  st.triedAt = now;
+  loadItemsSTK_(st, todo);
+  saveSTK_(st);
+  runSTK_('tick', todo.filter(t => st.items[t]), st, now, exp);
+}
+
+/** Ręcznie (D-071): cała historia wszystkich spółek z listy od nowa (upsert). Zwykle niepotrzebne — nowe spółki pobiera tick. */
+function backfillSTK() {
+  withLock_(() => {
+    const st = loadSTK_();
+    const list = readStocksConfig_();
+    if (list) st.list = list;
+    st.rejected = {};
+    loadItemsSTK_(st, st.list);
+    runSTK_('backfill', st.list, st, nowSec());
+  });
+}
+
+/** R1-podobnie (D-071): null = przyjęta, inaczej powód po polsku. */
+function stkAdmission_(got, bars, now) {
+  if (!bars.length) return 'Yahoo nie zwraca notowań';
+  if (got.currency && got.currency !== 'USD') return 'notowana w ' + got.currency + ' — Stocks liczy tylko spółki w USD';
+  if (bars.length < STK_MIN_DAYS) return 'historia tylko ' + bars.length + ' dni (potrzeba ' + STK_MIN_DAYS + ')';
+  const behind = workdaysBetween_(bars[bars.length - 1].day, expectedDaySTK_(now, got.tz));
+  if (behind > STK_FRESH_WD) return 'brak świeżych notowań (ostatni dzień ' + bars[bars.length - 1].day + ')';
+  return null;
+}
+
+function runSTK_(mode, todo, st, now, exp) {
+  const errors = [], updated = {}, dropped = [];
+  const rejectedBefore = JSON.stringify(st.rejected);
+  let withExp = 0, fetched = 0;
+  const refetch = [];
+  todo.forEach(t => {
+    try {
+      const full = mode === 'backfill';
+      const params = 'interval=1d&events=div%2Csplit&' + (full ? 'period1=0&period2=' + now : 'range=10d');
+      const got = fetchYahooRaw_(t, params, parseYahooSTK_);
+      fetched++;
+      const tz = st.tz = got.tz || STK_TZ;
+      const today = localStamp_(now - 60, tz).slice(0, 10);
+      const flags = [];
+      const byDay = {};
+      got.bars.forEach(b => {
+        b.day = localStamp_(b.ts, tz).slice(0, 10);
+        if (b.day >= today) return;                       // dzień w trakcie (D2) — nigdy do bazy
+        if (!(b.o > 0 && b.h > 0 && b.l > 0 && b.c > 0)) { flags.push('cena<=0@' + b.day); return; }
+        if (b.h < Math.max(b.o, b.c) || b.l > Math.min(b.o, b.c)) flags.push('ohlc@' + b.day);
+        b.ts = midnightTs_(b.day, tz);
+        byDay[b.day] = b;                                  // ostatni wpis dnia wygrywa
+      });
+      const bars = Object.keys(byDay).sort().map(d => byDay[d]);
+      const ev = list => list.map(e => { const day = localStamp_(e.ts, tz).slice(0, 10); return { day: day, ts: midnightTs_(day, tz), v: e.v }; })
+        .filter(e => e.day < today);
+      const div = ev(got.div), split = ev(got.split);
+      if (full) {
+        const why = stkAdmission_(got, bars, now);
+        if (why) {
+          st.rejected[t] = why;
+          if (st.days[t]) dropped.push(t);
+          dropSTK_(st, t);
+          log_('stk ' + mode, t, 0, null, 'odrzucona: ' + why);
+          return;
+        }
+        delete st.rejected[t];
+      }
+      const ps = full ? { lastTs: 0, count: 0 } : st.items[t];
+      const lastSplit = split.length ? split[split.length - 1].day : '';
+      if (!full && lastSplit && lastSplit > (ps.splitDay || '')) { refetch.push(t); return; }   // nowy split → cała historia od nowa
+      const from = full ? 0 : ps.lastTs - D1_KEEP * 86400;
+      const keep = bars.filter(b => b.ts >= from);
+      if (exp && keep.some(b => b.day === exp)) withExp++;
+      const newBars = keep.filter(b => b.ts > ps.lastTs);
+      if (!full && !newBars.length) return;               // nic nowego — bez zapisu (Z4)
+      writeBarsSTK_(t, keep, div.filter(e => e.ts >= from), split.filter(e => e.ts >= from), tz, got.currency);
+      const newest = keep[keep.length - 1];
+      ps.count = full ? keep.length : ps.count + newBars.length;
+      if (full || !ps.firstDay) ps.firstDay = keep[0].day;
+      ps.lastTs = Math.max(ps.lastTs, newest.ts);
+      ps.lastDay = ps.lastDay && ps.lastDay > newest.day ? ps.lastDay : newest.day;
+      if (full) ps.splitDay = lastSplit;
+      ps.currency = got.currency || 'USD';
+      st.items[t] = ps;
+      updated[t] = { firstDay: ps.firstDay, lastTs: ps.lastTs, lastDay: ps.lastDay, count: ps.count, splitDay: ps.splitDay || null,
+        currency: ps.currency, name: (got.name || '').slice(0, 60), flags: flags.slice(-10), savedAt: nowSec() };
+      log_('stk ' + mode, t, newBars.length, null, (ps.firstDay + ' – ' + ps.lastDay + ' ' + flags.slice(0, 5).join(' ')).trim());
+    } catch (e) {
+      if (e.notFound && mode === 'backfill') {
+        st.rejected[t] = 'Yahoo nie zna tickera ' + t;
+        if (st.days[t]) dropped.push(t);
+        dropSTK_(st, t);
+        log_('stk ' + mode, t, 0, null, 'odrzucona: ' + st.rejected[t]);
+        return;
+      }
+      errors.push(t + ': ' + e.message);
+      log_('stk ' + mode, t, 0, null, 'BŁĄD ' + e.message);
+    }
+  });
+  // święto giełdy USA: pobrane spółki i żadna nie ma oczekiwanego dnia → nie ponawiamy do następnego dnia
+  if (mode === 'tick' && exp && fetched >= Math.max(1, todo.length / 2) && withExp === 0 && !Object.keys(updated).length) st.holiday = exp;
+  refetch.forEach(t => dropSTK_(st, t));   // następny tick: cała historia
+  saveSTK_(st);
+  const rejectedChanged = JSON.stringify(st.rejected) !== rejectedBefore;
+  if (!Object.keys(updated).length && !dropped.length && !errors.length && !rejectedChanged) return;
+  const fields = { tz: st.tz || STK_TZ, list: st.list, rejected: st.rejected,
+    lastRun: { mode: mode, at: nowSec(), ok: !errors.length, error: errors.join('; ') || null }, tickers: updated };
+  const paths = ['stk.tz', 'stk.list', 'stk.rejected', 'stk.lastRun']
+    .concat(Object.keys(updated).concat(dropped).map(k => 'stk.tickers.`' + k + '`'));
+  commit_([{ update: { name: DB + '/documents/meta/status', fields: { stk: toValue_(fields) } }, updateMask: { fieldPaths: paths } }]);
+}
+
+/** candles_stk/{TICKER}_{RRRR}: pair, year, tz, currency, bars { ts: [o, h, l, c] }, div { ts: kwota }, split { ts: mnożnik } — upsert (D3). */
+function writeBarsSTK_(t, bars, div, split, tz, currency) {
+  const groups = {};
+  const add = (y) => (groups[y] = groups[y] || { bars: [], div: [], split: [] });
+  bars.forEach(b => add(b.day.slice(0, 4)).bars.push(b));
+  div.forEach(e => add(e.day.slice(0, 4)).div.push(e));
+  split.forEach(e => add(e.day.slice(0, 4)).split.push(e));
+  commit_(Object.keys(groups).map(y => {
+    const g = groups[y];
+    const fb = {}, fd = {}, fs = {};
+    const paths = ['pair', 'year', 'tz', 'currency'];
+    g.bars.forEach(b => { fb[String(b.ts)] = { arrayValue: { values: [b.o, b.h, b.l, b.c].map(v => ({ doubleValue: v })) } }; paths.push('bars.`' + b.ts + '`'); });
+    g.div.forEach(e => { fd[String(e.ts)] = { doubleValue: e.v }; paths.push('div.`' + e.ts + '`'); });
+    g.split.forEach(e => { fs[String(e.ts)] = { doubleValue: e.v }; paths.push('split.`' + e.ts + '`'); });
+    return {
+      update: {
+        name: DB + '/documents/candles_stk/' + t + '_' + y,
+        fields: { pair: { stringValue: t }, year: { stringValue: y }, tz: { stringValue: tz }, currency: { stringValue: currency || 'USD' },
+          bars: { mapValue: { fields: fb } }, div: { mapValue: { fields: fd } }, split: { mapValue: { fields: fs } } },
+      },
+      updateMask: { fieldPaths: paths },
+      updateTransforms: [{ fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' }],
+    };
+  }));
+}
 
 // ---------- Firestore (REST, upsert przez commit z updateMask — D3, bez odczytów) ----------
 

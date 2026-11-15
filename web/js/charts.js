@@ -65,25 +65,6 @@ export function equityChart(el, curve, dd, marks = []) {
   });
 }
 
-/** Kilka krzywych kapitału na jednej osi (księgi FOREST). series: [{name, ts, equity, color}], marks jak w equityChart. */
-export function equityLines(el, series, marks = []) {
-  const b = base();
-  const ax = b.axisDefaults;
-  return chart(el, {
-    ...b,
-    grid: { left: 72, right: 24, top: 36, bottom: 36 },
-    legend: { top: 0, textStyle: { color: ax.axisLabel.color } },
-    tooltip: { ...b.tooltip, trigger: 'axis', valueFormatter: (v) => (v == null ? '—' : v.toLocaleString('pl-PL', { maximumFractionDigits: 0 })) },
-    xAxis: { type: 'time', ...ax, splitLine: { show: false }, axisLabel: { ...ax.axisLabel, formatter: (v) => fmtDate(v) } },
-    yAxis: { type: 'value', scale: true, ...ax, name: 'USD', nameTextStyle: { color: ax.axisLabel.color },
-      axisLabel: { ...ax.axisLabel, formatter: (v) => v.toLocaleString('pl-PL', { maximumFractionDigits: 0 }) } },
-    series: series.map((s, i) => ({ name: s.name, type: 'line', step: 'end', showSymbol: false, data: s.ts.map((t, k) => [t * 1000, s.equity[k]]),
-      lineStyle: { color: css(s.color), width: i === 0 ? 1.75 : 1.25 }, itemStyle: { color: css(s.color) },
-      markLine: i === 0 ? { symbol: 'none', silent: true, label: { color: css('--muted'), formatter: '{b}' }, lineStyle: { color: css('--muted'), type: 'dashed' },
-        data: marks.map((m) => ({ name: m.label, xAxis: m.ts * 1000 })) } : undefined })),
-  });
-}
-
 /** REV (D-063): gdzie jest kapitał — słupki pionowe obok siebie (% kapitału), linia limitu `cap` (%). rows: [{label, value, pct}]. */
 export function bars(el, rows, cap = 50) {
   const b = base();
@@ -105,7 +86,7 @@ export function bars(el, rows, cap = 50) {
 }
 
 /** REV (D-063): kapitał w złotówkach dzień po dniu. series: [{name, ts, values, color, dash?}], marks: ts przewalutowań. */
-export function plnLines(el, series, rebalances = [], marks = []) {
+export function plnLines(el, series, rebalances = [], marks = [], unit = 'zł') {
   const b = base();
   const ax = b.axisDefaults;
   const first = series[0];
@@ -114,9 +95,9 @@ export function plnLines(el, series, rebalances = [], marks = []) {
     ...b,
     grid: { left: 72, right: 24, top: 36, bottom: 36 },
     legend: { top: 0, textStyle: { color: ax.axisLabel.color } },
-    tooltip: { ...b.tooltip, trigger: 'axis', valueFormatter: (v) => (v == null ? '—' : `${v.toLocaleString('pl-PL', { maximumFractionDigits: 2 })} zł`) },
+    tooltip: { ...b.tooltip, trigger: 'axis', valueFormatter: (v) => (v == null ? '—' : `${v.toLocaleString('pl-PL', { maximumFractionDigits: 2 })} ${unit}`) },
     xAxis: { type: 'time', ...ax, splitLine: { show: false }, axisLabel: { ...ax.axisLabel, formatter: (v) => fmtDate(v) } },
-    yAxis: { type: 'value', scale: true, ...ax, name: 'zł', nameTextStyle: { color: ax.axisLabel.color },
+    yAxis: { type: 'value', scale: true, ...ax, name: unit, nameTextStyle: { color: ax.axisLabel.color },
       axisLabel: { ...ax.axisLabel, formatter: (v) => v.toLocaleString('pl-PL', { maximumFractionDigits: 0 }) } },
     series: [
       ...series.map((s, i) => ({ name: s.name, type: 'line', showSymbol: false, data: s.ts.map((t, k) => [t * 1000, s.values[k]]),
@@ -126,6 +107,64 @@ export function plnLines(el, series, rebalances = [], marks = []) {
       ...(rebalances.length ? [{ name: 'przewalutowanie', type: 'scatter', symbolSize: 6, itemStyle: { color: css('--accent'), borderColor: css('--bg'), borderWidth: 1 },
         data: rebalances.map((t) => [t * 1000, valueAt(t)]).filter((p) => p[1] != null), tooltip: { valueFormatter: () => 'wtorek 08:00' } }] : []),
     ],
+  });
+}
+
+/** Stocks (D-071): kapitał w czasie, oś logarytmiczna opcjonalnie (długa historia backtestu). series jak w plnLines. */
+export function moneyLines(el, series, marks = [], { unit = 'USD', log = false } = {}) {
+  const b = base();
+  const ax = b.axisDefaults;
+  return chart(el, {
+    ...b,
+    grid: { left: 80, right: 24, top: 36, bottom: 36 },
+    legend: { top: 0, textStyle: { color: ax.axisLabel.color } },
+    tooltip: { ...b.tooltip, trigger: 'axis', valueFormatter: (v) => (v == null ? '—' : `${v.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} ${unit}`) },
+    xAxis: { type: 'time', ...ax, splitLine: { show: false }, axisLabel: { ...ax.axisLabel, formatter: (v) => fmtDate(v) } },
+    yAxis: { type: log ? 'log' : 'value', scale: true, min: log ? (v) => v.min * 0.9 : undefined, ...ax, name: unit + (log ? ' (skala log.)' : ''), nameTextStyle: { color: ax.axisLabel.color },
+      axisLabel: { ...ax.axisLabel, formatter: (v) => v.toLocaleString('pl-PL', { maximumFractionDigits: 0 }) } },
+    series: series.map((s, i) => ({ name: s.name, type: 'line', showSymbol: false, data: s.ts.map((t, k) => [t * 1000, s.values[k]]),
+      lineStyle: { color: css(s.color), width: i === 0 ? 1.75 : 1.25, type: s.dash ? 'dashed' : 'solid' }, itemStyle: { color: css(s.color) },
+      markLine: i === 0 && marks.length ? { symbol: 'none', silent: true, label: { color: css('--muted'), formatter: '{b}' },
+        lineStyle: { color: css('--muted'), type: 'dashed' }, data: marks.map((m) => ({ name: m.label, xAxis: m.ts * 1000 })) } : undefined })),
+  });
+}
+
+/** Stocks (D-071): udział spółki teraz (słupek), pasmo ±B wokół udziału docelowego (kreski) i cel metody (romb). rows w %. */
+export function stockBars(el, rows) {
+  const b = base();
+  const ax = b.axisDefaults;
+  const accent = css('--accent'), muted = css('--muted'), text = css('--text');
+  const fmt = (v) => `${v.toLocaleString('pl-PL', { maximumFractionDigits: 2 })}%`;
+  const dash = (key, name) => ({ name, type: 'scatter', symbol: 'rect', symbolSize: [18, 2], itemStyle: { color: muted }, data: rows.map((r) => +r[key].toFixed(3)), z: 3 });
+  return chart(el, {
+    ...b,
+    grid: { left: 48, right: 16, top: 36, bottom: 64 },
+    legend: { top: 0, textStyle: { color: ax.axisLabel.color }, data: ['udział teraz', 'cel metody', 'pasmo'] },
+    tooltip: { ...b.tooltip, trigger: 'axis', axisPointer: { type: 'shadow' },
+      formatter: (ps) => { const r = rows[ps[0].dataIndex]; return `<b>${r.t}</b><br>teraz ${fmt(r.weightPct)} · cel metody ${fmt(r.targetPct)}<br>docelowo ${fmt(r.basePct)} (pasmo ${fmt(r.loPct)} – ${fmt(r.hiPct)})`; } },
+    xAxis: { type: 'category', data: rows.map((r) => r.t), ...ax, axisLabel: { ...ax.axisLabel, interval: 0, rotate: rows.length > 12 || el.clientWidth < 560 ? 45 : 0 } },
+    yAxis: { type: 'value', min: 0, ...ax, axisLabel: { ...ax.axisLabel, formatter: (v) => `${v}%` } },
+    series: [
+      { name: 'udział teraz', type: 'bar', barMaxWidth: 26, data: rows.map((r) => +r.weightPct.toFixed(3)), itemStyle: { color: accent, borderRadius: [3, 3, 0, 0] } },
+      { name: 'cel metody', type: 'scatter', symbol: 'diamond', symbolSize: 9, itemStyle: { color: text }, data: rows.map((r) => +r.targetPct.toFixed(3)), z: 4 },
+      { ...dash('hiPct', 'pasmo') }, { ...dash('loPct', 'pasmo') },
+    ],
+  });
+}
+
+/** Stocks (D-071): wynik roczny metody i porównań (słupki obok siebie, %). years: [{year, winner, fixed, hold}]. */
+export function yearBars(el, years) {
+  const b = base();
+  const ax = b.axisDefaults;
+  const ser = [['winner', 'metoda', '--accent'], ['fixed', 'stały podział', '--muted'], ['hold', 'kup i trzymaj', '--dim']];
+  return chart(el, {
+    ...b,
+    grid: { left: 48, right: 16, top: 36, bottom: 36 },
+    legend: { top: 0, textStyle: { color: ax.axisLabel.color } },
+    tooltip: { ...b.tooltip, trigger: 'axis', axisPointer: { type: 'shadow' }, valueFormatter: (v) => `${v > 0 ? '+' : ''}${v.toLocaleString('pl-PL', { maximumFractionDigits: 1 })}%` },
+    xAxis: { type: 'category', data: years.map((y) => String(y.year)), ...ax },
+    yAxis: { type: 'value', ...ax, axisLabel: { ...ax.axisLabel, formatter: (v) => `${v}%` } },
+    series: ser.map(([k, name, color]) => ({ name, type: 'bar', barMaxWidth: 10, data: years.map((y) => +(y[k] ?? 0).toFixed(2)), itemStyle: { color: css(color) } })),
   });
 }
 

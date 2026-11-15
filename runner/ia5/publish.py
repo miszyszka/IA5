@@ -104,7 +104,7 @@ def publish_candles(h1: dict[str, pd.DataFrame], source: str, log=print) -> str 
 
 
 def publish_candles_d1(d1: dict[str, pd.DataFrame], tz: str, log=print, folder: str = "candles_d1", label: str = "D1",
-                       meta: dict | None = None) -> str | None:
+                       meta: dict | None = None, cols: tuple[str, ...] = ("ts", "open", "high", "low", "close")) -> str | None:
     """D-053: candles_d1/{PARA}.parquet (cała historia pary w jednym pliku, ok. 6 tys. świec) + candles_d1/manifest.json.
     Plik pary zapisywany tylko, gdy się zmienił (zwykle raz na dobę). Zwraca SHA lub None.
     D-063: ta sama funkcja publikuje kursy PLN (folder="candles_pln") — publish_candles_pln."""
@@ -118,7 +118,7 @@ def publish_candles_d1(d1: dict[str, pd.DataFrame], tz: str, log=print, folder: 
         if df is None or df.empty:
             continue
         rel = f"{folder}/{pair}.parquet"
-        part = df[["ts", "open", "high", "low", "close"]].reset_index(drop=True)
+        part = df[list(cols)].reset_index(drop=True)
         h = frame_hash(part)
         if manifest["files"].get(rel, {}).get("hash") == h:
             continue
@@ -149,6 +149,13 @@ def publish_candles_pln(pln: dict[str, pd.DataFrame], tz: str, log=print) -> str
     from .rev_config import TICKER
 
     return publish_candles_d1(pln, tz, log=log, folder="candles_pln", label="PLN", meta={"series": "pln", "ticker": TICKER})
+
+
+def publish_candles_stk(stk: dict[str, pd.DataFrame], tz: str, log=print) -> str | None:
+    """D-071: candles_stk/{TICKER}.parquet (cała historia spółki: ceny, dywidendy, splity) + manifest.json."""
+    from .stk_data import RAW_COLS
+
+    return publish_candles_d1(stk, tz, log=log, folder="candles_stk", label="spółek", meta={"series": "stk"}, cols=tuple(RAW_COLS))
 
 
 def publish_coverage(cov: dict, log=print) -> str | None:
@@ -306,54 +313,11 @@ def publish_investors(states: dict[str, dict], removed: list[str], log=print, ex
     return sha
 
 
-def publish_forest(folder: Path, log=print) -> str | None:
-    """D-048: forest/ na gałęzi data (state.json, investors.json, report.md, journal/{RRRR-MM}.parquet). Tylko pliki, które się
-    zmieniły; sam nowy czas liczenia nie jest zmianą. Zwraca SHA lub None."""
-    import shutil
-
+def publish_files(folder: str, label: str, files: dict[str, str], log=print, remove: tuple[str, ...] = ()) -> str | None:
+    """{folder}/{nazwa} na gałęzi data. Zapis tylko plików, które się zmieniły; sam nowy czas liczenia (`computedAt`
+    w JSON) nie jest zmianą. `remove` = pliki do usunięcia z folderu. Zwraca SHA lub None."""
     ensure_repo()
-    dst = DATA_REPO / "forest"
-    (dst / "journal").mkdir(parents=True, exist_ok=True)
-
-    def same_state(a: Path, b: Path) -> bool:
-        if not b.exists():
-            return False
-        x, y = json.loads(a.read_text(encoding="utf-8")), json.loads(b.read_text(encoding="utf-8"))
-        x.pop("computedAt", None)
-        y.pop("computedAt", None)
-        return x == y
-
-    changed = 0
-    for f in sorted(folder.rglob("*")):
-        if not f.is_file():
-            continue
-        rel = f.relative_to(folder)
-        t = dst / rel
-        same = same_state(f, t) if rel.name == "state.json" else t.exists() and t.read_bytes() == f.read_bytes()
-        if not same:
-            t.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(f, t)
-            changed += 1
-    for f in (dst / "journal").glob("*.parquet"):
-        if not (folder / "journal" / f.name).exists():
-            f.unlink()
-            changed += 1
-    if not changed:
-        log("  FOREST: bez zmian")
-        return None
-    _git("add", "-A")
-    _git("commit", "-q", "-m", f"FOREST: {changed} plików")
-    _push()
-    sha = _git("rev-parse", "HEAD")
-    log(f"  FOREST: opublikowany, {sha[:7]}")
-    return sha
-
-
-def publish_rev(files: dict[str, str], log=print) -> str | None:
-    """D-063: rev/{nazwa} na gałęzi data (research.json, report.md, state.json). Zapis tylko plików, które się zmieniły;
-    sam nowy czas liczenia (`computedAt` w JSON) nie jest zmianą. Zwraca SHA lub None."""
-    ensure_repo()
-    dst = DATA_REPO / "rev"
+    dst = DATA_REPO / folder
     dst.mkdir(parents=True, exist_ok=True)
 
     def same(name: str, text: str) -> bool:
@@ -366,22 +330,51 @@ def publish_rev(files: dict[str, str], log=print) -> str | None:
                 a, b = json.loads(old), json.loads(text)
             except ValueError:
                 return False
-            a.pop("computedAt", None)
-            b.pop("computedAt", None)
+            if isinstance(a, dict) and isinstance(b, dict):
+                a.pop("computedAt", None)
+                b.pop("computedAt", None)
             return a == b
         return old == text
 
     changed = [n for n, text in files.items() if not same(n, text)]
-    if not changed:
-        log("  REV: bez zmian")
+    gone = [n for n in remove if (dst / n).exists()]
+    if not changed and not gone:
+        log(f"  {label}: bez zmian")
         return None
     for n in changed:
+        (dst / n).parent.mkdir(parents=True, exist_ok=True)
         (dst / n).write_text(files[n], encoding="utf-8")
+    for n in gone:
+        (dst / n).unlink()
     _git("add", "-A")
-    _git("commit", "-q", "-m", f"REV: {', '.join(changed)}")
+    _git("commit", "-q", "-m", f"{label}: {', '.join(changed + gone)}"[:200])
     _push()
     sha = _git("rev-parse", "HEAD")
-    log(f"  REV: opublikowane ({', '.join(changed)}), {sha[:7]}")
+    log(f"  {label}: opublikowane ({', '.join(changed + gone)[:120]}), {sha[:7]}")
+    return sha
+
+
+def publish_rev(files: dict[str, str], log=print) -> str | None:
+    """D-063: rev/{nazwa} na gałęzi data (research.json, report.md, state.json)."""
+    return publish_files("rev", "REV", files, log=log)
+
+
+def publish_stocks(files: dict[str, str], log=print, remove: tuple[str, ...] = ()) -> str | None:
+    """D-071: stocks/{nazwa} na gałęzi data (research.json, report.md, state.json, candles.json)."""
+    return publish_files("stocks", "Stocks", files, log=log, remove=remove)
+
+
+def purge_forest(log=print) -> str | None:
+    """D-071 (Michał, 2026-11-15: „wywalmy FOREST i wszystko, co z nim związane”): folder forest/ znika z gałęzi data
+    (historia gita zostaje). Bez folderu — nic."""
+    ensure_repo()
+    if not (DATA_REPO / "forest").exists():
+        return None
+    _git("rm", "-r", "-q", "forest")
+    _git("commit", "-q", "-m", "FOREST usunięty (D-071)")
+    _push()
+    sha = _git("rev-parse", "HEAD")
+    log(f"  Gałąź data: usunięto forest/ (D-071), {sha[:7]}")
     return sha
 
 

@@ -4,6 +4,8 @@ Budżet (Z4): heartbeat co 30 s ≈ 2 880 zapisów/dobę, gdy program działa; k
 za pierwszym razem, potem 16 (poprzedni i bieżący miesiąc × 8 par) co godzinę ≈ 400 odczytów/dobę;
 przegląd zdrowia: 1 odczyt meta/status + lista strategii (kilka–kilkanaście) co godzinę;
 świece dzienne (D-053): ok. 200 odczytów za pierwszym razem, potem ok. 16 raz na dobę (gdy przybył nowy dzień).
+Stocks (D-071): świece spółek ≈ 30–60 odczytów na spółkę raz, potem ≈ 1 na spółkę na dobę; stocks/config: nasłuch
+(1 odczyt + zmiany), zapis stanu liczenia ≈ 3–5 zapisów na jedno „Policz backtest”.
 """
 from __future__ import annotations
 
@@ -163,6 +165,110 @@ def sync_yahoo_pln(folder, status: dict | None, log=print) -> dict[str, pd.DataF
     (waluta pomijana, gdy kopia = status; inaczej tylko lata od ostatniej świecy)."""
     return sync_yahoo_d1(folder, status, log=log, names=admitted_pln(status), collection="candles_pln", field="pln",
                          key="currencies", label="PLN")
+
+
+# ---------- Stocks (D-071) ----------
+
+def _stk_df(docs) -> pd.DataFrame:
+    """Dokumenty candles_stk → ts, open, high, low, close, div, split (dywidenda z dnia bez świecy = wiersz bez cen)."""
+    rows = {}
+    for d in docs:
+        div = d.get("div") or {}
+        split = d.get("split") or {}
+        for ts, (o, h, lo, c) in (d.get("bars") or {}).items():
+            rows[int(ts)] = [int(ts), o, h, lo, c, float(div.get(ts) or 0.0), float(split.get(ts) or 1.0)]
+        for ts, v in div.items():
+            if int(ts) not in rows:
+                nan = float("nan")
+                rows[int(ts)] = [int(ts), nan, nan, nan, nan, float(v or 0.0), float(split.get(ts) or 1.0)]
+        for ts, v in split.items():
+            if int(ts) not in rows:
+                rows[int(ts)] = [int(ts), float("nan"), float("nan"), float("nan"), float("nan"), 0.0, float(v or 1.0)]
+    from .stk_data import RAW_COLS
+
+    df = pd.DataFrame(sorted(rows.values()), columns=RAW_COLS)
+    df["ts"] = df["ts"].astype("int64")
+    return df
+
+
+def sync_yahoo_stk(folder, status: dict | None, tickers, log=print) -> dict[str, pd.DataFrame]:
+    """D-071: kopia świec spółek (`candles_stk/{TICKER}_{RRRR}`) do folder/{TICKER}.parquet — jak D1: spółka pomijana,
+    gdy jej ostatnia świeca i liczba świec w kopii = `meta/status.stk.tickers` (0 odczytów); inaczej lata od ostatniej
+    świecy kopii (zwykle 1 dokument); niezgodna liczba świec po doczytaniu (nowy split → Apps Script pobrał historię od
+    nowa) = pełny odczyt spółki. Pierwszy raz ≈ 30–60 dokumentów na spółkę."""
+    from . import daily
+    from .stk_config import TZ
+    from .stk_data import RAW_COLS
+
+    folder.mkdir(parents=True, exist_ok=True)
+    remote = ((status or {}).get("stk") or {}).get("tickers") or {}
+    tz = ((status or {}).get("stk") or {}).get("tz") or TZ
+    now = int(datetime.now(timezone.utc).timestamp())
+    out = {}
+
+    def bars(df):
+        return int(df["close"].notna().sum()) if df is not None else 0
+
+    for t in tickers:
+        path = folder / f"{t}.parquet"
+        old = pd.read_parquet(path) if path.exists() else None
+        if old is not None and old.empty:
+            old = None
+        r = remote.get(t) or {}
+        if not r:
+            if old is not None:
+                out[t] = old
+            continue
+        same_last = old is not None and int(r.get("lastTs") or 0) == int(old.loc[old["close"].notna(), "ts"].max())
+        if same_last and int(r.get("count") or 0) == bars(old):
+            out[t] = old
+            continue
+        years = None if old is None else daily.years_to_read(int(old["ts"].max()), now, tz)
+        new = _stk_df(yahoo_d1_docs(t, years, "candles_stk"))
+        if years is None or old is None:
+            df = new
+        else:
+            keep = old[~pd.Series(daily.day_of(old["ts"], tz)).str[:4].isin(years).to_numpy()]
+            df = pd.concat([keep, new])
+        df = df[RAW_COLS].drop_duplicates("ts", keep="last").sort_values("ts").reset_index(drop=True)
+        if years is not None and r.get("count") and int(r["count"]) != bars(df):
+            df = _stk_df(yahoo_d1_docs(t, None, "candles_stk"))
+        if df.empty:
+            continue
+        df["ts"] = df["ts"].astype("int64")
+        tmp = path.with_suffix(".tmp")
+        df.to_parquet(tmp, index=False)
+        tmp.replace(path)
+        out[t] = df
+        first, last = daily.day_of([df.ts.iloc[0], df.ts.iloc[-1]], tz)
+        log(f"  Yahoo spółka {t}: {bars(df):,} świec, {first} – {last}, dywidendy {int((df['div'] > 0).sum())}")
+    return out
+
+
+def load_yahoo_stk(folder, tickers=None) -> dict[str, pd.DataFrame]:
+    from pathlib import Path
+
+    return {f.stem: pd.read_parquet(f) for f in sorted(Path(folder).glob("*.parquet")) if tickers is None or f.stem in tickers}
+
+
+def read_stocks_config() -> dict | None:
+    """stocks/config (1 odczyt)."""
+    snap = db().collection("stocks").document("config").get()
+    return snap.to_dict() if snap.exists else None
+
+
+def write_stocks_config(fields: dict) -> None:
+    """Stan liczenia w stocks/config (status, wynik, błąd) — 1 zapis na zmianę stanu (kilka na jedno liczenie)."""
+    db().collection("stocks").document("config").set(fields, merge=True)
+
+
+def watch_stocks_config(on_change):
+    """Nasłuch stocks/config (1 dokument; odczyt przy starcie + przy każdej zmianie)."""
+    def cb(snaps, _changes, _read_time):
+        for s in snaps:
+            on_change(s.to_dict() if s.exists else None)
+
+    return db().collection("stocks").document("config").on_snapshot(cb)
 
 
 def load_yahoo_pln(folder) -> dict[str, pd.DataFrame]:

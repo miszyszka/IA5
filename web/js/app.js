@@ -1,12 +1,12 @@
-// IA5 — dashboard. Router: #/ (strategie), #/s/{id} (karta), #/stats, #/inwestorzy, #/inwestorzy/{id} (D-045), #/forest (D-048), #/rev (D-063).
+// IA5 — dashboard. Router: #/ (strategie), #/s/{id} (karta), #/stats, #/inwestorzy, #/inwestorzy/{id} (D-045), #/rev (D-063), #/stocks (D-071).
 import { openCard } from './card.js';
 import { getJSON, refreshData } from './data.js';
 import { login, logout, onUser, watchInvestors, watchStrategies } from './fb.js';
-import { initForest, loadForest, renderForest } from './forest.js';
 import { initInvestors, loadInvestors, renderInvestors } from './investors.js';
 import { initList, renderList } from './list.js';
 import { initRev, loadRev, renderRev } from './rev.js';
 import { initStats, renderStats } from './stats.js';
+import { initStocks, loadStocks, renderStocks } from './stocks.js';
 import { initStatus } from './status.js';
 import { $, $$, copy, h, store, toast } from './util.js';
 
@@ -16,18 +16,18 @@ function route() {
   const mi = hash.match(/^#\/inwestorzy\/(.+)$/);
   const r = m ? { view: 'card', id: decodeURIComponent(m[1]) }
     : mi ? { view: 'investors', id: decodeURIComponent(mi[1]) }
-      : hash.startsWith('#/inwestorzy') ? { view: 'investors' } : hash.startsWith('#/forest') ? { view: 'forest' } : hash.startsWith('#/rev') ? { view: 'rev' }
+      : hash.startsWith('#/inwestorzy') ? { view: 'investors' } : hash.startsWith('#/rev') ? { view: 'rev' } : hash.startsWith('#/stocks') ? { view: 'stocks' }
         : hash.startsWith('#/stats') ? { view: 'stats' } : { view: 'list' };
   store.set('route', r);
   $$('.view').forEach((v) => { v.hidden = v.id !== `view-${r.view}`; });
-  const tab = { investors: 'investors', stats: 'stats', forest: 'forest', rev: 'rev' }[r.view] || 'strategies';
+  const tab = { investors: 'investors', stats: 'stats', rev: 'rev', stocks: 'stocks' }[r.view] || 'strategies';
   $$('nav [data-tab]').forEach((b) => { b.classList.toggle('on', b.dataset.tab === tab); if (b.dataset.tab === tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   if (r.view === 'list') renderList();
   if (r.view === 'card') openCard(r.id);
   if (r.view === 'stats') renderStats();
   if (r.view === 'investors') renderInvestors();
-  if (r.view === 'forest') renderForest();
   if (r.view === 'rev') renderRev();
+  if (r.view === 'stocks') renderStocks();
   window.scrollTo(0, 0);
 }
 
@@ -63,14 +63,14 @@ async function start() {
   initList();
   initStats();
   initInvestors();
-  initForest();
   initRev();
+  initStocks();
   window.addEventListener('hashchange', route);
   route();
   loadIndex();
   loadInvestors();
-  loadForest();
   loadRev();
+  loadStocks();
   onUser(async (user) => {
     store.set('user', user);
     renderAuth(user);
@@ -103,9 +103,9 @@ async function start() {
   });
   // gdy Mac skończy liczyć, heartbeat wraca do „idle” — odśwież wyniki
   let prev = null;
-  store.on('beat', (b) => { if (prev === 'computing' && b?.state === 'idle') { refreshData(); loadIndex(); loadInvestors(); loadForest(); loadRev(); } prev = b?.state; });
+  store.on('beat', (b) => { if (prev === 'computing' && b?.state === 'idle') { refreshData(); loadIndex(); loadInvestors(); loadRev(); loadStocks(); } prev = b?.state; });
   // inwestorzy przeliczani co godzinę po kopii świec — co 10 min sprawdzamy, czy na gałęzi data jest nowy stan
-  setInterval(() => { refreshData(); loadInvestors(); loadForest(); loadRev(); }, 10 * 60 * 1000);
+  setInterval(() => { refreshData(); loadInvestors(); loadRev(); loadStocks(); }, 10 * 60 * 1000);
 }
 
 start();
