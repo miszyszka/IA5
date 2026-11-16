@@ -275,12 +275,13 @@ function render() {
       h('p', {}, 'Mac policzy go sam po starcie (ia5 start) — dla listy powyżej. Świece spółek pobiera Apps Script: wklej nowy Code.gs (docs/SETUP.md, „Spółki”).')));
     return;
   }
+  const partial = res.missing?.length ? h('div', { class: 'banner warn' }, `Ten backtest liczono bez: ${res.missing.join(', ')} (brak danych) — policzy się od nowa, gdy dane będą.`) : '';
   const red = res.verdict.color === 'red' ? h('div', { class: 'banner warn' }, 'Metoda nie pokonała stałego podziału na sprawdzianie — portfel działa, ale traktuj go ostrożnie; obok widać stały podział i „kup i trzymaj”.') : '';
   const hp = st ? holdingsPanel(st) : { p: '', draw: () => {} };
   const lp = st ? livePanel(st) : { p: '', draw: () => {} };
   const bp = backtestPanel(res);
   const waiting = !st?.plans?.length ? h('div', { class: 'empty small' }, 'Portfel na żywo wystartuje po najbliższym przeliczeniu (Mac albo GitHub Actions) — pierwsze zakupy na otwarciu najbliższej sesji.') : '';
-  root.replaceChildren(header(st, res, doc), err, runBanner, red, settings, st ? planPanel(st) : '', waiting, hp.p, lp.p, st ? ledgerPanel(st) : '', bp.p,
+  root.replaceChildren(header(st, res, doc), err, runBanner, partial, red, settings, st ? planPanel(st) : '', waiting, hp.p, lp.p, st ? ledgerPanel(st) : '', bp.p,
     (st?.archive || []).length ? panel('Poprzednie portfele', 'po zmianie metody albo ustawień portfel startuje od nowa', h('ul', { class: 'plain small' },
       ...st.archive.map((x) => h('li', {}, `${x.method?.label || x.method?.id}: ${fmtWarsaw(x.start_ts).slice(0, 10)} – ${x.end_ts ? fmtWarsaw(x.end_ts).slice(0, 10) : '—'}, ${usd(x.final, 0)} z ${usd(x.capital0, 0)} (stały podział ${usd(x.fixed_final, 0)})`)))) : '');
   hp.draw(); lp.draw(); bp.draw();

@@ -16,8 +16,18 @@ import time
 from .stk_config import DEFAULT_BAND, DEFAULT_CAPITAL, DEFAULT_TICKERS, RANDOM_PATHS, STK_VERSION, TZ
 from .store import DATA_REPO, HOME, STK_READY, STOCKS, YAHOO_STK
 
-WAIT_DATA_S = 20 * 60     # tyle czekamy na nowe spółki z Apps Script
+WAIT_DATA_S = 20 * 60     # tyle czekamy na nowe spółki z Apps Script (potem ponowienie co godzinę, bez liczenia na niepełnej liście)
 WAIT_POLL_S = 60
+PENDING = ("do_policzenia", "liczy_sie", "czeka_na_dane")
+
+
+def _now_have(cloud, tickers) -> bool:
+    """Czy któraś z pominiętych spółek ma już świece w bazie (1 odczyt meta/status)."""
+    try:
+        have = ((cloud.read_status().get("stk") or {}).get("tickers")) or {}
+    except Exception:  # noqa: BLE001
+        return False
+    return any(t in have for t in tickers)
 
 
 def default_config() -> dict:
@@ -99,12 +109,16 @@ def handle(cloud, state: dict, cfg_doc: dict | None, want_research: bool, source
     research = _read(DATA_REPO / "stocks" / "research.json")
     fresh = False
     if source == "mac":
-        need = want_research or research is None or research.get("stk_version") != STK_VERSION
+        pending = bool(cfg_doc) and cfg_doc.get("status") in PENDING      # żądanie ze strony jeszcze niepoliczone (także po restarcie)
+        stale = research is not None and bool(research.get("missing")) and _now_have(cloud, research["missing"])
+        if stale:
+            log(f"Stocks: backtest liczony bez {', '.join(research['missing'])} — dane już są, liczę od nowa.")
+        need = want_research or pending or stale or research is None or research.get("stk_version") != STK_VERSION
         if need:
             cfg = cfg_doc if cfg_doc and cfg_doc.get("tickers") else default_config()
             if not cfg_doc:
                 cloud.write_stocks_config({**default_config(), "status": "do_policzenia", "requestedAt": now, "updatedBy": "mac"})
-            research = _compute(cloud, state, cfg, now, log, beat, wait=want_research) or research
+            research = _compute(cloud, state, cfg, now, log, beat, wait=want_research or stale) or research
             fresh = research is not None
     if research is None:
         log("Stocks: badania jeszcze nie ma — policzy je Mac (ia5 start).")
@@ -146,6 +160,7 @@ def _compute(cloud, state: dict, cfg: dict, now: int, log, beat, wait: bool = Tr
             return None
         cloud.write_stocks_config({"status": "liczy_sie", "startedAt": now, "error": None, "waiting": []})
         t0 = time.time()
+        missing = []
         while True:
             st = cloud.read_status()
             stk = st.get("stk") or {}
@@ -158,9 +173,22 @@ def _compute(cloud, state: dict, cfg: dict, now: int, log, beat, wait: bool = Tr
             job["phase"] = f"czeka na dane: {', '.join(missing)[:40]}"
             beat("computing", job)
             time.sleep(WAIT_POLL_S)
-        cloud.write_stocks_config({"status": "liczy_sie", "waiting": []})
+        if missing:   # nigdy nie liczymy na niepełnej liście — udziały pozostałych spółek byłyby przeskalowane
+            log(f"Stocks: wciąż brak danych: {', '.join(missing)} — backtest poczeka (sprawdzę przy następnej synchronizacji).")
+            cloud.write_stocks_config({"status": "czeka_na_dane", "waiting": missing,
+                                       "error": "Apps Script jeszcze pobiera: " + ", ".join(missing)
+                                                + " — backtest policzy się sam, gdy dane będą."})
+            return None
+        cloud.write_stocks_config({"status": "liczy_sie", "waiting": [], "error": None})
         sync(cloud, st, list(dict.fromkeys(want + tickers_wanted(None))), log=log)
         ready = load_stk(STK_READY, set(want))
+        gone = [t for t in want if t not in ready and t not in rej]
+        if gone:      # w bazie są, a kopii na Macu nie ma (np. błąd pobrania) — też bez liczenia na niepełnej liście
+            log(f"Stocks: brak kopii na Macu: {', '.join(gone)} — backtest poczeka.")
+            cloud.write_stocks_config({"status": "czeka_na_dane", "waiting": gone,
+                                       "error": "Mac nie ma jeszcze kopii: " + ", ".join(gone)
+                                                + " — ponowię przy następnej synchronizacji."})
+            return None
         job.update({"progress": 30, "phase": "turniej konfiguracji"})
         beat("computing", job)
         res = research_run(ready, cfg, now, rej, log=log)

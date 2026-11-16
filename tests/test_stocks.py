@@ -278,3 +278,42 @@ def test_clean_normalizes_yahoo_open_stamps_and_dedupes_days():
     assert len(out) == len(r) and info["duplicates"] == len(r)
     assert (out.ts.to_numpy() == r.ts.to_numpy()).all()
     assert out.day.tolist() == list(sd.day_str(r.ts))
+
+
+def test_mac_flow_never_computes_on_incomplete_list(tmp_path, monkeypatch):
+    """Spółka bez danych (nie odrzucona) = backtest czeka, a nie liczy się z przeskalowanymi udziałami pozostałych.
+    Gdy dane dojdą — liczy się przy następnym przebiegu (status czeka_na_dane)."""
+    from ia5 import publish, stk_run
+
+    raw = universe(4, revert=0.003, end="2026-11-13")
+    for k, v in (("DATA_REPO", tmp_path / "repo"), ("STK_READY", tmp_path / "ready"), ("STOCKS", tmp_path / "stocks"),
+                 ("HOME", tmp_path), ("RANDOM_PATHS", 20), ("WAIT_DATA_S", 0)):
+        monkeypatch.setattr(stk_run, k, v)
+    published = {}
+
+    def fake_publish(files, log=print, remove=()):
+        (tmp_path / "repo" / "stocks").mkdir(parents=True, exist_ok=True)
+        for k, v in files.items():
+            (tmp_path / "repo" / "stocks" / k).write_text(v)
+            published[k] = v
+        return "abc"
+
+    monkeypatch.setattr(publish, "publish_stocks", fake_publish)
+    monkeypatch.setattr(publish, "ensure_repo", lambda: None)
+    cloud = FakeCloud(raw)
+    late = cloud.status["stk"]["tickers"].pop("T3")
+    doc = {"tickers": [{"t": t, "w": 25} for t in raw], "capital": 10000, "band": 20, "status": "do_policzenia", "updatedBy": "u1"}
+    stk_run.handle(cloud, {}, doc, True, "mac", log=lambda m: None)
+    assert "research.json" not in published
+    assert cloud.cfg_writes[-1]["status"] == "czeka_na_dane" and cloud.cfg_writes[-1]["waiting"] == ["T3"]
+    cloud.status["stk"]["tickers"]["T3"] = late          # Apps Script dociągnął spółkę
+    stk_run.handle(cloud, {}, {**doc, "status": "czeka_na_dane"}, False, "mac", log=lambda m: None)
+    res = json.loads(published["research.json"])
+    assert res["universe"] == list(raw) and res["missing"] == []
+
+
+def test_plan_after_open_executes_next_session():
+    """Plan zrobiony po otwarciu sesji (np. poniedziałek 16:58 w Polsce = 10:58 w NY) wykonuje się na następnym otwarciu."""
+    assert sl.exec_from(ts_utc("2026-11-16 15:58")) == "2026-11-17"
+    assert sl.exec_from(ts_utc("2026-11-17 07:00")) == "2026-11-17"   # wtorek 08:00 w Polsce = 02:00 w NY
+    assert sl.exec_from(ts_utc("2026-11-15 12:00")) == "2026-11-15"   # niedziela → pierwszy dzień sesji ≥ niedziela = poniedziałek

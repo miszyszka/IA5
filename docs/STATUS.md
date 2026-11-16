@@ -2,6 +2,12 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-16 (wieczór) — Stocks: bez liczenia na niepełnej liście, STK_VERSION 2, CLAUDE.md 0.61
+
+- Pierwszy backtest Michała (14 spółek, 12 300 USD) policzył się na 5 spółkach (reszta jeszcze się pobierała) z przeskalowanymi udziałami — werdykt 🔴 0/5 dotyczył więc innego portfela. Teraz backtest czeka na komplet danych i sam się liczy, gdy dojdą; pobrane już są wszystkie 14 spółek, więc po `git pull` i restarcie `ia5 start` policzy się od razu.
+- Wykonanie pierwszego podziału zrobionego po otwarciu sesji — na następnym otwarciu (nie na otwarciu sprzed planu).
+- Apps Script: status spółki od razu po jej pobraniu; 2 spółki / 60 s na `tick()`.
+
 ## 2026-11-16 — poprawka Stocks po pierwszym uruchomieniu, CLAUDE.md 0.60
 
 - **Apps Script:** `tick()` dochodził do limitu 6 min (backfill spółek formatował strefę czasu dla każdej świecy, stan zapisywany dopiero na końcu → wieczne zaczynanie od nowa). Teraz: bez formatowania na świecę, najwyżej 3 spółki i 90 s na uruchomienie, stan po każdej spółce. Test w Node sprawdza liczbę wywołań formatowania i zapis stanu.

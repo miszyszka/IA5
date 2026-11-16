@@ -31,6 +31,15 @@ def _ny_date(ts: int) -> date:
     return pd.Timestamp(int(ts), unit="s", tz="UTC").tz_convert(TZ).date()
 
 
+def exec_from(plan_ts: int) -> str:
+    """Pierwszy dzień, którego otwarcie (09:30 w NY) jest po planie: dzień planu, gdy plan przed 09:30 NY, inaczej następny."""
+    t = pd.Timestamp(int(plan_ts), unit="s", tz="UTC").tz_convert(TZ)
+    d = t.date()
+    if (t.hour, t.minute) >= (9, 30):
+        d = d + pd.Timedelta(days=1)
+    return d.isoformat()
+
+
 def _close_time(day_ts: int) -> int:
     return int(day_ts) + CLOSE_S
 
@@ -177,7 +186,7 @@ def live_step(prev: dict | None, res: dict, ready: dict[str, pd.DataFrame], now:
                                 "value_plan": vals["method"], "targets": {t: float(v) for t, v in zip(uni, tgt)},
                                 "base": {t: float(v) for t, v in zip(uni, base)}, "scores": {t: float(v) for t, v in zip(uni, s)},
                                 "orders": orders["method"], "ref_orders": {"fixed": orders["fixed"], "hold": orders["hold"]},
-                                "exec_from": _ny_date(x).isoformat(), "exec_day": None})
+                                "exec_from": exec_from(x), "exec_day": None})
             continue
         i = x
         d = p.days[i]

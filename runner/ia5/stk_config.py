@@ -5,8 +5,8 @@ podbicie CLEAN_STK_VERSION.
 """
 from __future__ import annotations
 
-STK_VERSION = "1"
-CLEAN_STK_VERSION = "1"
+STK_VERSION = "2"   # 2: wykonanie na pierwszym otwarciu PO planie; bez liczenia na niepełnej liście spółek
+CLEAN_STK_VERSION = "2"   # 2: znacznik do liczenia = północ dnia sesji w NY, jeden wiersz na dzień (2026-11-16)
 
 TZ = "America/New_York"          # strefa giełdy: znacznik świecy = północ dnia sesji w Nowym Jorku
 DECISION_TZ = "Europe/Warsaw"    # plan zleceń widać we wtorek od 08:00 czasu polskiego…

@@ -84,7 +84,8 @@ ctx.Utilities.formatDate = (d, tz) => { fmtCalls++; return origFmt(d, tz); };
 
 // 1) pierwsze ticki: lista z config, cała historia nowych spółek (najwyżej 3 na uruchomienie)
 G.tickSTK_();
-assert.strictEqual(urls.filter(u => u.includes('period1=0')).length, 3, 'najwyżej 3 spółki na tick');
+assert.strictEqual(urls.filter(u => u.includes('period1=0')).length, 2, 'najwyżej 2 spółki na tick');
+assert.ok(all().some(w => w.update.name.endsWith('/meta/status') && w.updateMask.fieldPaths.includes('stk.tickers.`MU`')), 'status spółki zapisany od razu');
 NOW += 60;
 G.tickSTK_();
 assert.ok(urls.some(u => u.endsWith('/documents/stocks/config')), 'czyta stocks/config');

@@ -787,8 +787,8 @@ const STK_DEFAULT = ['MU', 'MSFT', 'AAPL', 'MO', 'CVX', 'JPM', 'PM', 'JNJ', 'AMZ
   'SYY', 'PPL', 'DUK', 'GPC', 'VZ', 'NEE', 'USB', 'AMT', 'FRT', 'GOOGL', 'PEP', 'O'];
 const STK_CONFIG_EVERY_S = 5 * 60;   // co tyle czytamy stocks/config (1 odczyt)
 const STK_RETRY_S = 60 * 60;         // brakujący dzień: ponowienie co godzinę (święta w USA są inne niż w kalendarzu FX)
-const STK_BACKFILL_MAX = 3;          // najwyżej tyle nowych spółek (cała historia) na jedno uruchomienie…
-const STK_BUDGET_MS = 90 * 1000;     // …i najwyżej tyle czasu na spółki w jednym tick() (limit Apps Script: 6 min na całość)
+const STK_BACKFILL_MAX = 2;          // najwyżej tyle nowych spółek (cała historia) na jedno uruchomienie…
+const STK_BUDGET_MS = 60 * 1000;     // …i najwyżej tyle czasu na spółki w jednym tick() (limit Apps Script: 6 min na całość)
 const STK_MIN_DAYS = 60;             // krótsza historia — spółka odrzucona
 const STK_FRESH_WD = 10;             // ostatni dzień nie starszy niż 10 dni roboczych od oczekiwanego
 const STK_RE = /^[A-Z0-9][A-Z0-9.\-]{0,11}$/;
@@ -987,6 +987,12 @@ function runSTK_(mode, todo, st, now, exp, t0) {
       saveSTK_(st);                                        // stan po każdej spółce — przerwane uruchomienie nie zaczyna od nowa
       updated[t] = { firstDay: ps.firstDay, lastTs: ps.lastTs, lastDay: ps.lastDay, count: ps.count, splitDay: ps.splitDay || null,
         currency: ps.currency, name: (got.name || '').slice(0, 60), flags: flags.slice(-10), savedAt: nowSec() };
+      if (full) {   // status spółki od razu — Mac widzi ją, nawet gdy dalsza część uruchomienia przekroczy limit czasu (1 zapis)
+        const one = {};
+        one[t] = updated[t];
+        commit_([{ update: { name: DB + '/documents/meta/status', fields: { stk: toValue_({ tz: tz, list: st.list, tickers: one }) } },
+          updateMask: { fieldPaths: ['stk.tz', 'stk.list', 'stk.tickers.`' + t + '`'] } }]);
+      }
       log_('stk ' + mode, t, newBars.length, null, (ps.firstDay + ' – ' + ps.lastDay + ' ' + flags.slice(0, 5).join(' ')).trim());
     } catch (e) {
       if (e.notFound && mode === 'backfill') {
