@@ -6,10 +6,10 @@
   "nachylenie": 0.15,
   "szok": 0
  },
- "oos_trades": 158,
- "oos_mean_pips": 4.025911,
- "oos_mean_r": 0.187029,
- "is_mean_r": 0.390716,
+ "oos_trades": 157,
+ "oos_mean_pips": 3.986555,
+ "oos_mean_r": 0.18003,
+ "is_mean_r": 0.392723,
  "pinned_variant": true,
  "rank_is": 2,
  "forward": {
@@ -34,19 +34,19 @@
  "benchmark": {
   "sims": 1000,
   "actual_mean_pips": 5.373324,
-  "percentile": 99.9,
-  "p5": -5.037857,
-  "p50": -1.061351,
-  "p95": 2.729569
+  "percentile": 99.8,
+  "p5": -5.239007,
+  "p50": -0.842081,
+  "p95": 2.691071
  },
  "dsr": {
-  "dsr": 0.755567,
-  "sharpe": 0.227325,
-  "sharpe0": 0.185207,
+  "dsr": 0.76095,
+  "sharpe": 0.22868,
+  "sharpe0": 0.185487,
   "trials": 24,
-  "trades": 445,
-  "skew": -2.294642,
-  "kurtosis": 10.488005
+  "trades": 446,
+  "skew": -2.298311,
+  "kurtosis": 10.509686
  },
  "pbo": {
   "pbo": 0.159984,
@@ -96,9 +96,9 @@
    "n": 603
   },
   "oos": {
-   "low": 0.412676,
-   "high": 7.529884,
-   "n": 158
+   "low": 0.210046,
+   "high": 7.51147,
+   "n": 157
   }
  },
  "spread": {
@@ -188,12 +188,12 @@
    {
     "test": "expectancy netto OOS > 0",
     "ok": true,
-    "value": 4.025911
+    "value": 3.986555
    },
    {
     "test": "percentyl benchmarku ≥ 95",
     "ok": true,
-    "value": 99.9
+    "value": 99.8
    },
    {
     "test": "PBO < 0,3",
@@ -203,7 +203,7 @@
    {
     "test": "DSR ≥ 0,95",
     "ok": false,
-    "value": 0.755567
+    "value": 0.76095
    },
    {
     "test": "dodatni przy spreadzie ×1,5",
