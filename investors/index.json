@@ -6,8 +6,8 @@
    "capital": 10000.0,
    "pct": 5.0,
    "start": 1794406672,
-   "computedAt": 1794862910,
-   "dataTo": 1794862800,
+   "computedAt": 1794866515,
+   "dataTo": 1794866400,
    "equity": 10000.0,
    "return_pct": 0.0,
    "closed": 0,
@@ -23,8 +23,8 @@
    "capital": 10000.0,
    "pct": 5.0,
    "start": 1794516343,
-   "computedAt": 1794862912,
-   "dataTo": 1794862800,
+   "computedAt": 1794866518,
+   "dataTo": 1794866400,
    "equity": 10000.0,
    "return_pct": 0.0,
    "closed": 0,
@@ -40,8 +40,8 @@
    "capital": 10000.0,
    "pct": 10.0,
    "start": 1794328948,
-   "computedAt": 1794862914,
-   "dataTo": 1794862800,
+   "computedAt": 1794866522,
+   "dataTo": 1794866400,
    "equity": 9868.78,
    "return_pct": -1.312,
    "closed": 1,
@@ -50,7 +50,7 @@
     "RSI 2",
     "Powrót"
    ],
-   "errors": 1
+   "errors": 0
   }
  ]
 }
