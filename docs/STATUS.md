@@ -2,6 +2,13 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-16 — poprawka Stocks po pierwszym uruchomieniu, CLAUDE.md 0.60
+
+- **Apps Script:** `tick()` dochodził do limitu 6 min (backfill spółek formatował strefę czasu dla każdej świecy, stan zapisywany dopiero na końcu → wieczne zaczynanie od nowa). Teraz: bez formatowania na świecę, najwyżej 3 spółki i 90 s na uruchomienie, stan po każdej spółce. Test w Node sprawdza liczbę wywołań formatowania i zapis stanu.
+- **Mac:** znacznik spółki do liczenia = północ dnia sesji (Yahoo stempluje 09:30); porównanie z Firestore po liczbie dni (wpisy z przerwanych uruchomień nie wymuszają pełnego odczytu).
+- **Stan systemu:** „Dane lokalne” nie zgłasza już folderów kursów PLN i spółek jako obcych.
+- **Do zrobienia:** wkleić nowy `Code.gs` w Apps Script (Ctrl+A, wklej, zapisz) — wyzwalacz zostaje; na Macu `git pull` i restart `ia5 start`.
+
 ## 2026-11-15 — FOREST usunięty, nowa zakładka Stocks (D-071), CLAUDE.md 0.59
 
 **Zrobione (na prośbę Michała: „wywalmy FOREST… dodajmy zakładkę Stocks… cotygodniowe rebalansowanie portfolio ±20%”)**

@@ -32,6 +32,12 @@ def day_str(ts, tz: str = TZ) -> np.ndarray:
     return pd.to_datetime(np.asarray(ts, "int64"), unit="s", utc=True).tz_convert(tz).strftime("%Y-%m-%d").to_numpy()
 
 
+def midnight_ts(days, tz: str = TZ) -> np.ndarray:
+    """Północ dnia 'RRRR-MM-DD' w strefie tz jako epoch (s)."""
+    d = pd.DatetimeIndex(pd.to_datetime(pd.Series(np.asarray(days, dtype=str)))).tz_localize(tz)
+    return d.tz_convert("UTC").as_unit("s").asi8.astype("int64")
+
+
 def empty_raw() -> pd.DataFrame:
     return pd.DataFrame({c: pd.Series(dtype="int64" if c == "ts" else "float64") for c in RAW_COLS})
 
@@ -42,7 +48,7 @@ def clean_stk(raw: pd.DataFrame, tz: str = TZ) -> tuple[pd.DataFrame, dict]:
         if c not in df:
             df[c] = 0.0 if c == "div" else (1.0 if c == "split" else np.nan)
     df = df.sort_values("ts").drop_duplicates("ts", keep="last").reset_index(drop=True)
-    df["day"] = day_str(df["ts"], tz)
+    df["day"] = day_str(df["ts"], tz)   # Yahoo stempluje spółki otwarciem sesji (09:30); starsze wpisy bywają o północy — ten sam dzień
     wd = pd.to_datetime(df["day"]).dt.weekday.to_numpy()
     div_all = df[["ts", "day", "div"]][df["div"].fillna(0) > 0].copy()
     split_all = df[["ts", "day", "split"]][(df["split"].fillna(1) > 0) & (df["split"].fillna(1) != 1)].copy()
@@ -52,6 +58,7 @@ def clean_stk(raw: pd.DataFrame, tz: str = TZ) -> tuple[pd.DataFrame, dict]:
     dup = df["day"].duplicated(keep="last").to_numpy()
     keep = ~(bad | off | dup)
     out = df.loc[keep, ["ts", "day", "open", "high", "low", "close"]].reset_index(drop=True)
+    out["ts"] = midnight_ts(out["day"], tz) if len(out) else out["ts"]   # znacznik do liczenia = północ dnia sesji w NY
     info = {"version": CLEAN_STK_VERSION, "tz": tz, "raw_bars": int(len(df)), "rejected": int(bad.sum()), "off_session": int(off.sum()),
             "duplicates": int(dup.sum()), "spikes": 0, "rescaled": [], "dividends": 0, "splits": int(len(split_all))}
     # dywidendy na dzień sesji (ten sam albo najbliższy następny)

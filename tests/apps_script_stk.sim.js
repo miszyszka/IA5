@@ -65,7 +65,7 @@ const ctx = {
   LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
 };
 vm.createContext(ctx);
-vm.runInContext(fs.readFileSync(process.argv[2], 'utf8') + '\nthis.__ = { tickSTK_, midnightTs_, STK_DEFAULT };', ctx);
+vm.runInContext(fs.readFileSync(process.argv[2], 'utf8') + '\nthis.__ = { tickSTK_, stkDay_, STK_DEFAULT };', ctx);
 const G = ctx.__;
 ctx.Date.now = () => NOW * 1000;
 const all = () => writes.flatMap(w => w.writes);
@@ -73,26 +73,40 @@ const stkDocs = () => all().filter(w => w.update.name.includes('/candles_stk/'))
 const lastStatus = () => all().filter(w => w.update.name.endsWith('/meta/status')).pop().update.fields.stk.mapValue.fields;
 
 assert.strictEqual(G.STK_DEFAULT.length, 27);
-assert.strictEqual(stamp(G.midnightTs_('2026-07-01', 'America/New_York'), 'America/New_York'), '2026-07-01 00:00:00');
-assert.strictEqual(stamp(G.midnightTs_('2026-01-05', 'America/New_York'), 'America/New_York'), '2026-01-05 00:00:00');
+assert.strictEqual(G.stkDay_(nyOpen('2026-07-01')), '2026-07-01');          // 09:30 latem
+assert.strictEqual(G.stkDay_(nyOpen('2026-01-05')), '2026-01-05');          // 09:30 zimą
+assert.strictEqual(G.stkDay_(Date.UTC(2026, 6, 1, 4, 0) / 1000), '2026-07-01');   // północ w NY latem
+assert.strictEqual(G.stkDay_(Date.UTC(2026, 0, 5, 5, 0) / 1000), '2026-01-05');   // północ w NY zimą
+// formatowanie strefy nie dla każdej świecy (limit czasu Apps Script)
+let fmtCalls = 0;
+const origFmt = ctx.Utilities.formatDate;
+ctx.Utilities.formatDate = (d, tz) => { fmtCalls++; return origFmt(d, tz); };
 
-// 1) pierwszy tick: lista z config, cała historia nowych spółek
+// 1) pierwsze ticki: lista z config, cała historia nowych spółek (najwyżej 3 na uruchomienie)
+G.tickSTK_();
+assert.strictEqual(urls.filter(u => u.includes('period1=0')).length, 3, 'najwyżej 3 spółki na tick');
+NOW += 60;
 G.tickSTK_();
 assert.ok(urls.some(u => u.endsWith('/documents/stocks/config')), 'czyta stocks/config');
 const names = stkDocs().map(w => w.update.name.split('/').pop());
 assert.ok(names.includes('KO_1990') && names.includes('KO_2026') && names.includes('MU_2010'), 'cała historia');
+assert.ok(fmtCalls < 100, 'formatDate wywołane ' + fmtCalls + ' razy przy backfillu — ma być stała liczba, nie na świecę');
 assert.ok(!names.some(n => n.startsWith('CDR.WA_') || n.startsWith('NOPE_')), 'odrzucone bez zapisu');
 const st1 = lastStatus();
 const rej = st1.rejected.mapValue.fields;
 assert.ok(/PLN/.test(rej['CDR.WA'].stringValue) && /nie zna/.test(rej.NOPE.stringValue), 'powody odrzucenia');
 const ko = stkDocs().filter(w => w.update.name.endsWith('/KO_2026'))[0].update.fields;
 const keys = Object.keys(ko.bars.mapValue.fields).map(Number);
-assert.ok(keys.every(t => stamp(t, 'America/New_York').endsWith('00:00:00')), 'znacznik = północ w Nowym Jorku');
+assert.ok(keys.every(t => stamp(t, 'America/New_York').endsWith('09:30:00')), 'znacznik = czas z Yahoo (otwarcie sesji)');
 const nyToday = stamp(NOW - 60, 'America/New_York').slice(0, 10);
 assert.ok(keys.every(t => stamp(t, 'America/New_York').slice(0, 10) < nyToday), 'dzień w trakcie nie trafia do bazy');
 assert.ok(Object.keys(ko.div.mapValue.fields).length === 1, 'dywidenda zapisana');
 assert.ok(stkDocs().some(w => w.update.name.endsWith('/KO_2020') && Object.keys(w.update.fields.split.mapValue.fields).length === 1), 'split zapisany');
-assert.ok(st1.tickers.mapValue.fields.KO.mapValue.fields.lastDay.stringValue === '2026-11-10');
+const koSt = all().filter(w => w.update.name.endsWith('/meta/status')).map(w => w.update.fields.stk.mapValue.fields.tickers.mapValue.fields.KO).filter(Boolean);
+assert.ok(koSt.length && koSt[0].mapValue.fields.lastDay.stringValue === '2026-11-10');
+
+// 1b) limit czasu: przy wyczerpanym budżecie spółki czekają na następny tick, stan zostaje zapisany po każdej spółce
+assert.ok(props['stk:KO'] && props['stk:MU'], 'stan zapisany po każdej spółce');
 
 // 2) ten sam dzień — bez zapytań i zapisów
 let n = writes.length, nu = urls.length;

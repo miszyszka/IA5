@@ -206,8 +206,11 @@ def sync_yahoo_stk(folder, status: dict | None, tickers, log=print) -> dict[str,
     now = int(datetime.now(timezone.utc).timestamp())
     out = {}
 
-    def bars(df):
-        return int(df["close"].notna().sum()) if df is not None else 0
+    def bars(df):   # liczba DNI ze świecą (Apps Script liczy dni; w dokumencie mogą być dwa wpisy dnia: 09:30 i północ)
+        if df is None:
+            return 0
+        c = df.loc[df["close"].notna(), "ts"]
+        return int(len(set(daily.day_of(c, tz)))) if len(c) else 0
 
     for t in tickers:
         path = folder / f"{t}.parquet"

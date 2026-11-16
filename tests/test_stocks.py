@@ -267,3 +267,14 @@ def test_mac_flow_without_stock_data_does_not_wait(tmp_path, monkeypatch):
     stk_run.handle(cloud, {}, None, False, "mac", log=lambda m: None)
     assert cloud.cfg_writes[0]["status"] == "do_policzenia" and cloud.cfg_writes[0]["updatedBy"] == "mac"   # lista startowa
     assert cloud.cfg_writes[-1]["status"] == "czeka_na_dane" and "Code.gs" in cloud.cfg_writes[-1]["error"]
+
+
+def test_clean_normalizes_yahoo_open_stamps_and_dedupes_days():
+    """D-071: Yahoo stempluje świece spółek 09:30 NY; stare wpisy o północy — ten sam dzień, jeden wiersz, ts = północ."""
+    r = raw_stock(5, start="2026-03-02", end="2026-03-20")
+    open_ts = r.ts + int(9.5 * 3600)
+    both = pd.concat([r.assign(ts=open_ts), r.assign(close=r.close * 1.0)]).reset_index(drop=True)
+    out, info = sd.clean_stk(both)
+    assert len(out) == len(r) and info["duplicates"] == len(r)
+    assert (out.ts.to_numpy() == r.ts.to_numpy()).all()
+    assert out.day.tolist() == list(sd.day_str(r.ts))

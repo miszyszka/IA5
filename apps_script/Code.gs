@@ -776,8 +776,10 @@ function writeBarsSeries_(collection, pair, bars, tz) {
 function writeBarsD1_(pair, bars, tz) { writeBarsSeries_('candles_d1', pair, bars, tz); }
 
 // ---------- Stocks: świece dzienne spółek, dywidendy i splity (D-071) ----------
-// Znacznik = północ dnia sesji w strefie giełdy (America/New_York) — Yahoo stempluje świece spółek godziną otwarcia
-// (09:30), dzień jest ten sam. Dzień zamknięty, gdy w Nowym Jorku zaczął się następny (+60 s, D2).
+// Znacznik = czas z Yahoo (dla spółek USA: otwarcie sesji 09:30 w Nowym Jorku); dzień sesji = data UTC znacznika − 4 h
+// (działa i dla 09:30, i dla północy w Nowym Jorku, zimą i latem) — bez formatowania strefy dla każdej świecy, które przy
+// 60 latach historii przekraczało limit 6 min Apps Script. Mac sprowadza znacznik do północy dnia (stk_data.clean_stk).
+// Dzień zamknięty, gdy w Nowym Jorku zaczął się następny (+60 s, D2).
 // Lista spółek: stocks/config.tickers (pisze strona); bez dokumentu — lista startowa Michała.
 
 const STK_TZ = 'America/New_York';
@@ -785,7 +787,8 @@ const STK_DEFAULT = ['MU', 'MSFT', 'AAPL', 'MO', 'CVX', 'JPM', 'PM', 'JNJ', 'AMZ
   'SYY', 'PPL', 'DUK', 'GPC', 'VZ', 'NEE', 'USB', 'AMT', 'FRT', 'GOOGL', 'PEP', 'O'];
 const STK_CONFIG_EVERY_S = 5 * 60;   // co tyle czytamy stocks/config (1 odczyt)
 const STK_RETRY_S = 60 * 60;         // brakujący dzień: ponowienie co godzinę (święta w USA są inne niż w kalendarzu FX)
-const STK_BACKFILL_MAX = 5;          // tyle nowych spółek (cała historia) na jedno uruchomienie
+const STK_BACKFILL_MAX = 3;          // najwyżej tyle nowych spółek (cała historia) na jedno uruchomienie…
+const STK_BUDGET_MS = 90 * 1000;     // …i najwyżej tyle czasu na spółki w jednym tick() (limit Apps Script: 6 min na całość)
 const STK_MIN_DAYS = 60;             // krótsza historia — spółka odrzucona
 const STK_FRESH_WD = 10;             // ostatni dzień nie starszy niż 10 dni roboczych od oczekiwanego
 const STK_RE = /^[A-Z0-9][A-Z0-9.\-]{0,11}$/;
@@ -843,18 +846,8 @@ function readStocksConfig_() {
   return out;
 }
 
-/** Północ dnia 'RRRR-MM-DD' w strefie tz jako epoch (s) — tylko Utilities.formatDate (działa też w atrapie). */
-function midnightTs_(day, tz) {
-  let t = Date.UTC(+day.slice(0, 4), +day.slice(5, 7) - 1, +day.slice(8, 10)) / 1000;
-  for (let i = 0; i < 3; i++) {
-    const loc = localStamp_(t, tz);
-    const asUtc = Date.UTC(+loc.slice(0, 4), +loc.slice(5, 7) - 1, +loc.slice(8, 10), +loc.slice(11, 13), +loc.slice(14, 16), +loc.slice(17, 19)) / 1000;
-    const want = Date.UTC(+day.slice(0, 4), +day.slice(5, 7) - 1, +day.slice(8, 10)) / 1000;
-    if (asUtc === want) return t;
-    t += want - asUtc;
-  }
-  return t;
-}
+/** Dzień sesji spółki z USA z czasu Yahoo: data UTC (ts − 4 h). 09:30 NY i 00:00 NY dają ten sam dzień przez cały rok. */
+function stkDay_(ts) { return new Date((ts - 4 * 3600) * 1000).toISOString().slice(0, 10); }
 
 function parseYahooSTK_(j) {
   const res = j && j.chart && j.chart.result && j.chart.result[0];
@@ -894,6 +887,7 @@ function expectedDaySTK_(now, tz) {
 /** Z tick(): lista z stocks/config co 5 min; nowe spółki → cała historia; brakujący dzień → ostatnie 10 dni co godzinę. */
 function tickSTK_() {
   const now = nowSec();
+  const t0 = Date.now();
   const st = loadSTK_();
   if (now - (st.configAt || 0) >= STK_CONFIG_EVERY_S) {
     const list = readStocksConfig_();
@@ -902,7 +896,7 @@ function tickSTK_() {
     saveSTK_(st);
   }
   const fresh = st.list.filter(t => !st.days[t] && !st.rejected[t]).slice(0, STK_BACKFILL_MAX);
-  if (fresh.length) { runSTK_('backfill', fresh, st, now); return; }
+  if (fresh.length) { runSTK_('backfill', fresh, st, now, null, t0); return; }
   const tz = st.tz || STK_TZ;
   const exp = expectedDaySTK_(now, tz);
   const todo = st.list.filter(t => st.days[t] && !(st.days[t] >= exp));
@@ -910,7 +904,7 @@ function tickSTK_() {
   st.triedAt = now;
   loadItemsSTK_(st, todo);
   saveSTK_(st);
-  runSTK_('tick', todo.filter(t => st.items[t]), st, now, exp);
+  runSTK_('tick', todo.filter(t => st.items[t]), st, now, exp, t0);
 }
 
 /** Ręcznie (D-071): cała historia wszystkich spółek z listy od nowa (upsert). Zwykle niepotrzebne — nowe spółki pobiera tick. */
@@ -935,12 +929,14 @@ function stkAdmission_(got, bars, now) {
   return null;
 }
 
-function runSTK_(mode, todo, st, now, exp) {
+function runSTK_(mode, todo, st, now, exp, t0) {
   const errors = [], updated = {}, dropped = [];
   const rejectedBefore = JSON.stringify(st.rejected);
   let withExp = 0, fetched = 0;
   const refetch = [];
+  let stopped = 0;
   todo.forEach(t => {
+    if (t0 && Date.now() - t0 > STK_BUDGET_MS) { stopped++; return; }   // reszta w następnym tick()
     try {
       const full = mode === 'backfill';
       const params = 'interval=1d&events=div%2Csplit&' + (full ? 'period1=0&period2=' + now : 'range=10d');
@@ -951,16 +947,14 @@ function runSTK_(mode, todo, st, now, exp) {
       const flags = [];
       const byDay = {};
       got.bars.forEach(b => {
-        b.day = localStamp_(b.ts, tz).slice(0, 10);
+        b.day = stkDay_(b.ts);
         if (b.day >= today) return;                       // dzień w trakcie (D2) — nigdy do bazy
         if (!(b.o > 0 && b.h > 0 && b.l > 0 && b.c > 0)) { flags.push('cena<=0@' + b.day); return; }
         if (b.h < Math.max(b.o, b.c) || b.l > Math.min(b.o, b.c)) flags.push('ohlc@' + b.day);
-        b.ts = midnightTs_(b.day, tz);
         byDay[b.day] = b;                                  // ostatni wpis dnia wygrywa
       });
       const bars = Object.keys(byDay).sort().map(d => byDay[d]);
-      const ev = list => list.map(e => { const day = localStamp_(e.ts, tz).slice(0, 10); return { day: day, ts: midnightTs_(day, tz), v: e.v }; })
-        .filter(e => e.day < today);
+      const ev = list => list.map(e => ({ day: stkDay_(e.ts), ts: e.ts, v: e.v })).filter(e => e.day < today);
       const div = ev(got.div), split = ev(got.split);
       if (full) {
         const why = stkAdmission_(got, bars, now);
@@ -990,6 +984,7 @@ function runSTK_(mode, todo, st, now, exp) {
       if (full) ps.splitDay = lastSplit;
       ps.currency = got.currency || 'USD';
       st.items[t] = ps;
+      saveSTK_(st);                                        // stan po każdej spółce — przerwane uruchomienie nie zaczyna od nowa
       updated[t] = { firstDay: ps.firstDay, lastTs: ps.lastTs, lastDay: ps.lastDay, count: ps.count, splitDay: ps.splitDay || null,
         currency: ps.currency, name: (got.name || '').slice(0, 60), flags: flags.slice(-10), savedAt: nowSec() };
       log_('stk ' + mode, t, newBars.length, null, (ps.firstDay + ' – ' + ps.lastDay + ' ' + flags.slice(0, 5).join(' ')).trim());
@@ -1006,7 +1001,8 @@ function runSTK_(mode, todo, st, now, exp) {
     }
   });
   // święto giełdy USA: pobrane spółki i żadna nie ma oczekiwanego dnia → nie ponawiamy do następnego dnia
-  if (mode === 'tick' && exp && fetched >= Math.max(1, todo.length / 2) && withExp === 0 && !Object.keys(updated).length) st.holiday = exp;
+  if (mode === 'tick' && !stopped && exp && fetched >= Math.max(1, todo.length / 2) && withExp === 0 && !Object.keys(updated).length) st.holiday = exp;
+  if (mode === 'tick' && stopped) st.triedAt = 0;                       // nie wszystkie spółki zdążyły — dokończ w następnym tick()
   refetch.forEach(t => dropSTK_(st, t));   // następny tick: cała historia
   saveSTK_(st);
   const rejectedChanged = JSON.stringify(st.rejected) !== rejectedBefore;

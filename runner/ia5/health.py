@@ -150,8 +150,10 @@ def local_data(home: Path, yahoo: dict) -> dict:
     """D-041: lokalnie tylko świece Yahoo (data/yahoo) i dane do liczenia zbudowane z nich (data/h1_ready, źródło yahoo)."""
     import json
 
+    from .store import DATA_ALLOWED
+
     data = home / "data"
-    foreign = [f.name for f in data.iterdir() if f.name not in ("yahoo", "h1_ready", "yahoo_d1", "d1_ready")] if data.exists() else []
+    foreign = [f.name for f in data.iterdir() if f.name not in DATA_ALLOWED] if data.exists() else []   # D-063, D-071: PLN i spółki też
     for sub in ("yahoo", "yahoo_d1"):   # D-053: obok H1 także kopia świec dziennych Yahoo
         if (data / sub).exists():
             foreign += [f"{sub}/{f.name}" for f in (data / sub).iterdir() if f.suffix != ".parquet" or f.stem not in PAIRS]
