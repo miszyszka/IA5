@@ -1,15 +1,15 @@
 # FOREST v2 (D-049) — las bef7f80ca8f2
 
-- Dane do 2026-11-13. Założenia ustalone na świecach do 2026-05-03. HISTORIA = do tej daty, TEST = do budowy (2026-11-03), LIVE = później.
+- Dane do 2026-11-16. Założenia ustalone na świecach do 2026-05-03. HISTORIA = do tej daty, TEST = do budowy (2026-11-03), LIVE = później.
 - Inwestorzy: reguły lustrzane, horyzonty [24, 48] świec. Bramki: t ≥ 2.5, ≥ 30 zdarzeń, 3/4 bloków dodatnich, |ρ| ≤ 0.6. Odświeżenie co 4 tygodnie.
-- Manager: ≥ 5 głosów i ≥ 90% zgody. W lesie teraz 83 inwestorów.
+- Manager: ≥ 5 głosów i ≥ 90% zgody. W lesie teraz 62 inwestorów.
 
 ## Wnioski
 
 - [bad] Manager (TEST): 377 transakcji, −1,28 pipsa netto na transakcję, pewność t = −0,3. Żeby uznać to za przewagę, t musi wynosić co najmniej 2.
 - [bad] Po doliczeniu nocy (0,5 pipsa za noc, średnio 2,8 nocy na transakcję): −2,65 pipsa. Model silnika nocy nie liczy.
 - [bad] Progi (5 głosów, 90% zgody) kontra bez progów (TEST): −1,28 vs +1,22 pipsa netto.
-- [warn] Szczęście: warunki spełnia średnio 601 reguł na prawdziwych danych i 161 na danych bez przewagi. Około 27% wyboru mogło być przypadkiem. Spełnienie warunków nie oznacza zysku na kolejnych świecach.
+- [warn] Szczęście: warunki spełnia średnio 571 reguł na prawdziwych danych i 161 na danych bez przewagi. Około 28% wyboru mogło być przypadkiem. Spełnienie warunków nie oznacza zysku na kolejnych świecach.
 
 ## Księgi
 
@@ -165,6 +165,7 @@
 | 2026-08-24 | 313 | 247 | 73 | 58 |
 | 2026-09-21 | 398 | 290 | 89 | 46 |
 | 2026-10-19 | 96 | 83 | 17 | 224 |
+| 2026-11-16 | 66 | 62 | 29 | 50 |
 
 ## Dane bez przewagi (nasiono 1000)
 
