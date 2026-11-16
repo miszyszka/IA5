@@ -8,11 +8,51 @@
    "last_day": "2026-11-13",
    "to": 1794546000
   },
+  "candles_stk/AMZN.parquet": {
+   "bars": 7422,
+   "first_day": "1997-05-15",
+   "from": 863668800,
+   "hash": "62e8519ccb314f48",
+   "last_day": "2026-11-13",
+   "to": 1794546000
+  },
   "candles_stk/CVX.parquet": {
    "bars": 14340,
    "first_day": "1970-01-02",
    "from": 104400,
    "hash": "d95e7c7ebe97ee0f",
+   "last_day": "2026-11-13",
+   "to": 1794546000
+  },
+  "candles_stk/GOOGL.parquet": {
+   "bars": 5596,
+   "first_day": "2004-08-19",
+   "from": 1092888000,
+   "hash": "bea50c2e889f2579",
+   "last_day": "2026-11-13",
+   "to": 1794546000
+  },
+  "candles_stk/JNJ.parquet": {
+   "bars": 14340,
+   "first_day": "1970-01-02",
+   "from": 104400,
+   "hash": "4eeb77e45cbc9fc7",
+   "last_day": "2026-11-13",
+   "to": 1794546000
+  },
+  "candles_stk/JPM.parquet": {
+   "bars": 11762,
+   "first_day": "1980-03-17",
+   "from": 322117200,
+   "hash": "717163c60e474fe5",
+   "last_day": "2026-11-13",
+   "to": 1794546000
+  },
+  "candles_stk/MMM.parquet": {
+   "bars": 14340,
+   "first_day": "1970-01-02",
+   "from": 104400,
+   "hash": "0fc971d7f247f490",
    "last_day": "2026-11-13",
    "to": 1794546000
   },
@@ -37,6 +77,38 @@
    "first_day": "1984-06-01",
    "from": 454910400,
    "hash": "bdb5e892b8077dae",
+   "last_day": "2026-11-13",
+   "to": 1794546000
+  },
+  "candles_stk/NVDA.parquet": {
+   "bars": 6998,
+   "first_day": "1999-01-22",
+   "from": 916981200,
+   "hash": "37d4553fc06baa0a",
+   "last_day": "2026-11-13",
+   "to": 1794546000
+  },
+  "candles_stk/O.parquet": {
+   "bars": 8073,
+   "first_day": "1994-10-18",
+   "from": 782452800,
+   "hash": "6d9d0d520ab532bb",
+   "last_day": "2026-11-13",
+   "to": 1794546000
+  },
+  "candles_stk/PM.parquet": {
+   "bars": 4697,
+   "first_day": "2008-03-17",
+   "from": 1205726400,
+   "hash": "f61834f6b1c0fb68",
+   "last_day": "2026-11-13",
+   "to": 1794546000
+  },
+  "candles_stk/SO.parquet": {
+   "bars": 11309,
+   "first_day": "1981-12-31",
+   "from": 378622800,
+   "hash": "b8eaa65a51609772",
    "last_day": "2026-11-13",
    "to": 1794546000
   }
