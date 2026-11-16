@@ -1,0 +1,49 @@
+{
+ "files": {
+  "candles_stk/AAPL.parquet": {
+   "bars": 11574,
+   "first_day": "1980-12-12",
+   "from": 345445200,
+   "hash": "4142a49a9f40b9fe",
+   "last_day": "2026-11-13",
+   "to": 1794546000
+  },
+  "candles_stk/CVX.parquet": {
+   "bars": 14340,
+   "first_day": "1970-01-02",
+   "from": 104400,
+   "hash": "d95e7c7ebe97ee0f",
+   "last_day": "2026-11-13",
+   "to": 1794546000
+  },
+  "candles_stk/MO.parquet": {
+   "bars": 14340,
+   "first_day": "1970-01-02",
+   "from": 104400,
+   "hash": "72fc6c5218463c1f",
+   "last_day": "2026-11-13",
+   "to": 1794546000
+  },
+  "candles_stk/MSFT.parquet": {
+   "bars": 10248,
+   "first_day": "1986-03-13",
+   "from": 511074000,
+   "hash": "f57eb01de09840c7",
+   "last_day": "2026-11-13",
+   "to": 1794546000
+  },
+  "candles_stk/MU.parquet": {
+   "bars": 10697,
+   "first_day": "1984-06-01",
+   "from": 454910400,
+   "hash": "bdb5e892b8077dae",
+   "last_day": "2026-11-13",
+   "to": 1794546000
+  }
+ },
+ "interval": "1d",
+ "series": "stk",
+ "source": "yahoo",
+ "ts": "czas otwarcia = p\u00f3\u0142noc dnia w strefie tz (D1, D-053)",
+ "tz": "America/New_York"
+}
