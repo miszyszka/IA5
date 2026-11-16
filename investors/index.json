@@ -6,8 +6,8 @@
    "capital": 10000.0,
    "pct": 5.0,
    "start": 1794406672,
-   "computedAt": 1794852128,
-   "dataTo": 1794852000,
+   "computedAt": 1794855717,
+   "dataTo": 1794855600,
    "equity": 10000.0,
    "return_pct": 0.0,
    "closed": 0,
@@ -23,8 +23,8 @@
    "capital": 10000.0,
    "pct": 5.0,
    "start": 1794516343,
-   "computedAt": 1794852130,
-   "dataTo": 1794852000,
+   "computedAt": 1794855719,
+   "dataTo": 1794855600,
    "equity": 10000.0,
    "return_pct": 0.0,
    "closed": 0,
@@ -32,7 +32,7 @@
    "strategies": [
     "RSI - Dzienne v.1"
    ],
-   "errors": 1
+   "errors": 0
   },
   {
    "id": "Zed3yb2lC8KLH5LgwOuF",
@@ -40,8 +40,8 @@
    "capital": 10000.0,
    "pct": 10.0,
    "start": 1794328948,
-   "computedAt": 1794852135,
-   "dataTo": 1794852000,
+   "computedAt": 1794855722,
+   "dataTo": 1794855600,
    "equity": 9868.78,
    "return_pct": -1.312,
    "closed": 1,
