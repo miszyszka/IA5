@@ -1,12 +1,12 @@
 {
  "files": {
   "candles_stk/AAPL.parquet": {
-   "bars": 11574,
+   "bars": 11584,
    "first_day": "1980-12-12",
    "from": 345445200,
-   "hash": "4142a49a9f40b9fe",
-   "last_day": "2026-11-13",
-   "to": 1794546000
+   "hash": "7edf5e3b1d3cfe4b",
+   "last_day": "2026-11-20",
+   "to": 1795185000
   },
   "candles_stk/AMZN.parquet": {
    "bars": 7422,
@@ -17,12 +17,12 @@
    "to": 1794546000
   },
   "candles_stk/CVX.parquet": {
-   "bars": 14340,
+   "bars": 14350,
    "first_day": "1970-01-02",
    "from": 104400,
-   "hash": "d95e7c7ebe97ee0f",
-   "last_day": "2026-11-13",
-   "to": 1794546000
+   "hash": "32bbc1666e03d3ff",
+   "last_day": "2026-11-20",
+   "to": 1795185000
   },
   "candles_stk/GOOGL.parquet": {
    "bars": 5596,
@@ -57,28 +57,28 @@
    "to": 1794546000
   },
   "candles_stk/MO.parquet": {
-   "bars": 14340,
+   "bars": 14350,
    "first_day": "1970-01-02",
    "from": 104400,
-   "hash": "72fc6c5218463c1f",
-   "last_day": "2026-11-13",
-   "to": 1794546000
+   "hash": "82114177a54fde83",
+   "last_day": "2026-11-20",
+   "to": 1795185000
   },
   "candles_stk/MSFT.parquet": {
-   "bars": 10248,
+   "bars": 10258,
    "first_day": "1986-03-13",
    "from": 511074000,
-   "hash": "f57eb01de09840c7",
-   "last_day": "2026-11-13",
-   "to": 1794546000
+   "hash": "68cd456b038da6dd",
+   "last_day": "2026-11-20",
+   "to": 1795185000
   },
   "candles_stk/MU.parquet": {
-   "bars": 10697,
+   "bars": 10707,
    "first_day": "1984-06-01",
    "from": 454910400,
-   "hash": "bdb5e892b8077dae",
-   "last_day": "2026-11-13",
-   "to": 1794546000
+   "hash": "9a3371bb7a727c70",
+   "last_day": "2026-11-20",
+   "to": 1795185000
   },
   "candles_stk/NVDA.parquet": {
    "bars": 6998,
