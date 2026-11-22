@@ -6,38 +6,38 @@
   "nachylenie": 0.15,
   "szok": 0
  },
- "oos_trades": 157,
- "oos_mean_pips": 3.986555,
- "oos_mean_r": 0.18003,
+ "oos_trades": 161,
+ "oos_mean_pips": 4.604096,
+ "oos_mean_r": 0.210292,
  "is_mean_r": 0.392723,
  "pinned_variant": true,
  "rank_is": 2,
  "forward": {
   "since": 1793447191,
-  "trades": 4,
+  "trades": 8,
   "pre_trades": 599,
   "expected_pips": 5.427376,
   "expected_r": 0.341041,
-  "mean_pips": -2.721001,
-  "mean_r": -0.21613,
-  "sum_pips": -10.884005,
-  "win_rate": 0.5,
-  "t_stat": -0.436435,
-  "z_vs_expected": -0.505369,
+  "mean_pips": 13.060802,
+  "mean_r": 0.59097,
+  "sum_pips": 104.486412,
+  "win_rate": 0.75,
+  "t_stat": 1.969082,
+  "z_vs_expected": 0.669534,
   "bootstrap": {
-   "low": null,
-   "high": null,
-   "n": 4
+   "low": -0.228318,
+   "high": 24.277507,
+   "n": 8
   },
   "nights_mean": 0.0
  },
  "benchmark": {
   "sims": 1000,
-  "actual_mean_pips": 5.373324,
-  "percentile": 99.7,
-  "p5": -5.197726,
-  "p50": -1.181703,
-  "p95": 2.878983
+  "actual_mean_pips": 5.527982,
+  "percentile": 99.9,
+  "p5": -5.051211,
+  "p50": -1.209129,
+  "p95": 2.746852
  },
  "dsr": {
   "dsr": 0.76095,
@@ -49,7 +49,7 @@
   "kurtosis": 10.509686
  },
  "pbo": {
-  "pbo": 0.159984,
+  "pbo": 0.160451,
   "variants": 24,
   "combinations": 12870,
   "blocks": 16,
@@ -58,127 +58,127 @@
  "walk_forward": {
   "windows": [
    {
-    "from": 1756013760,
-    "to": 1768785840,
+    "from": 1756319040,
+    "to": 1769243760,
     "variant_id": 12,
     "train_r": 0.239822,
-    "test_trades": 106,
-    "test_r": 0.727092,
-    "test_pips": 10.235302
+    "test_trades": 109,
+    "test_r": 0.66693,
+    "test_pips": 8.31965
    },
    {
-    "from": 1768785840,
-    "to": 1781557920,
+    "from": 1769243760,
+    "to": 1782168480,
     "variant_id": 12,
-    "train_r": 0.373632,
-    "test_trades": 100,
-    "test_r": 0.414064,
-    "test_pips": 4.65497
+    "train_r": 0.3595,
+    "test_trades": 97,
+    "test_r": 0.471987,
+    "test_pips": 6.635022
    },
    {
-    "from": 1781557920,
-    "to": 1794330001,
+    "from": 1782168480,
+    "to": 1795093201,
     "variant_id": 15,
     "train_r": 0.404896,
-    "test_trades": 94,
-    "test_r": 0.292254,
-    "test_pips": 4.209762
+    "test_trades": 98,
+    "test_r": 0.337389,
+    "test_pips": 5.215184
    }
   ],
-  "trades": 300,
-  "mean_r": 0.4865,
-  "mean_pips": 6.487189
+  "trades": 304,
+  "mean_r": 0.498494,
+  "mean_pips": 6.781338
  },
  "bootstrap": {
   "all": {
-   "low": 2.645057,
-   "high": 8.020742,
-   "n": 603
+   "low": 2.950268,
+   "high": 8.009123,
+   "n": 607
   },
   "oos": {
-   "low": 0.210046,
-   "high": 7.51147,
-   "n": 157
+   "low": 0.983876,
+   "high": 8.090175,
+   "n": 161
   }
  },
  "spread": {
-  "x1": 5.373324,
-  "x1_5": 4.561052,
-  "x2": 3.74878
+  "x1": 5.527981,
+  "x1_5": 4.714143,
+  "x2": 3.900304
  },
  "swap": {
-  "nights_mean": 0.804312,
+  "nights_mean": 0.799012,
   "nights_total": 485.0,
-  "overnight_pct": 40.13267,
-  "x0_5": 4.971168,
-  "x1": 4.569012
+  "overnight_pct": 39.868204,
+  "x0_5": 5.128476,
+  "x1": 4.72897
  },
  "ambiguous_pct": 0.0,
  "equity": {
   "5.0": {
-   "final": 21225.128906,
-   "return_pct": 112.251289,
-   "cagr_pct": 45.889465,
+   "final": 21633.197763,
+   "return_pct": 116.331978,
+   "cagr_pct": 46.274105,
    "max_dd_pct": -10.02362,
    "max_dd_mae_pct": -15.72484,
-   "calmar": 4.578133,
-   "sharpe": 1.790736,
-   "sortino": 1.084317,
+   "calmar": 4.616506,
+   "sharpe": 1.81372,
+   "sortino": 1.091344,
    "longest_underwater_days": 89.708333,
-   "taken": 598,
+   "taken": 602,
    "skipped_margin": 5
   },
   "10.0": {
-   "final": 31099.460065,
-   "return_pct": 210.994601,
-   "cagr_pct": 76.717317,
+   "final": 32296.598934,
+   "return_pct": 222.965989,
+   "cagr_pct": 78.214398,
    "max_dd_pct": -16.598404,
    "max_dd_mae_pct": -29.414968,
-   "calmar": 4.621969,
-   "sharpe": 1.67651,
-   "sortino": 0.983388,
+   "calmar": 4.712164,
+   "sharpe": 1.707424,
+   "sortino": 0.996385,
    "longest_underwater_days": 105.041667,
-   "taken": 532,
+   "taken": 536,
    "skipped_margin": 71
   },
   "15.0": {
-   "final": 27683.200721,
-   "return_pct": 176.832007,
-   "cagr_pct": 66.693343,
+   "final": 28648.11433,
+   "return_pct": 186.481143,
+   "cagr_pct": 67.990279,
    "max_dd_pct": -23.827976,
    "max_dd_mae_pct": -31.831557,
-   "calmar": 2.798951,
-   "sharpe": 1.288433,
-   "sortino": 0.748128,
+   "calmar": 2.85338,
+   "sharpe": 1.312712,
+   "sortino": 0.757023,
    "longest_underwater_days": 140.875,
-   "taken": 437,
-   "skipped_margin": 166
+   "taken": 440,
+   "skipped_margin": 167
   },
   "20.0": {
-   "final": 22759.248685,
-   "return_pct": 127.592487,
-   "cagr_pct": 51.089139,
+   "final": 23816.963989,
+   "return_pct": 138.16964,
+   "cagr_pct": 53.374112,
    "max_dd_pct": -28.873558,
    "max_dd_mae_pct": -35.622507,
-   "calmar": 1.769409,
-   "sharpe": 0.975835,
-   "sortino": 0.528838,
+   "calmar": 1.848546,
+   "sharpe": 1.008603,
+   "sortino": 0.543247,
    "longest_underwater_days": 180.708333,
-   "taken": 362,
-   "skipped_margin": 241
+   "taken": 365,
+   "skipped_margin": 242
   },
   "30.0": {
-   "final": 15489.815036,
-   "return_pct": 54.89815,
-   "cagr_pct": 24.557897,
+   "final": 16062.215955,
+   "return_pct": 60.62216,
+   "cagr_pct": 26.308677,
    "max_dd_pct": -37.318797,
    "max_dd_mae_pct": -46.354676,
-   "calmar": 0.658057,
-   "sharpe": 0.580688,
-   "sortino": 0.278847,
+   "calmar": 0.704971,
+   "sharpe": 0.603467,
+   "sortino": 0.287559,
    "longest_underwater_days": 235.833333,
-   "taken": 265,
-   "skipped_margin": 338
+   "taken": 267,
+   "skipped_margin": 340
   }
  },
  "verdict": {
@@ -188,17 +188,17 @@
    {
     "test": "expectancy netto OOS > 0",
     "ok": true,
-    "value": 3.986555
+    "value": 4.604096
    },
    {
     "test": "percentyl benchmarku ≥ 95",
     "ok": true,
-    "value": 99.7
+    "value": 99.9
    },
    {
     "test": "PBO < 0,3",
     "ok": true,
-    "value": 0.159984
+    "value": 0.160451
    },
    {
     "test": "DSR ≥ 0,95",
@@ -208,7 +208,7 @@
    {
     "test": "dodatni przy spreadzie ×1,5",
     "ok": true,
-    "value": 4.561052
+    "value": 4.714143
    }
   ]
  }
