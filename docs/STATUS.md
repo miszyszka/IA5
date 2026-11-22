@@ -2,6 +2,12 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-22 — Stocks: dane od 2010, rozliczenie gotówki, odliczanie i transakcje jako zdania (STK_VERSION 3), CLAUDE.md 0.62
+
+- Komunikat „Ten backtest liczono bez: …” — Mac nadal działał na kodzie sprzed 2026-11-16 (badanie wersji 1 na 5 spółkach; ostatnie przeliczenie portfela przez Maca 2026-11-22 11:50). Po `git pull` i restarcie `ia5 start` badanie liczy się od nowa na 14 spółkach.
+- Dane od 2010; wykres zwykły; reszta gotówki zainwestowana w paśmie; sprzedaże przed kupnami, kupno zmniejszane przy braku gotówki; rozliczenie gotówki w planie i wykonaniu; „Portfel dziś” z wierszem gotówki i sumą 100%; odliczanie do rebalansu; transakcje jako zdania.
+- Sprawdzone na prawdziwych notowaniach 14 spółek Michała (12 300 USD): backtest 2011–2026 🔴 2/5 — nadwyżka OOS +0,17% r. nad stałym podziałem, ale percentyl losowych 79, DSR 0,13, PBO 0,48; pierwszy podział zostawia ok. 5 USD gotówki.
+
 ## 2026-11-16 (wieczór) — Stocks: bez liczenia na niepełnej liście, STK_VERSION 2, CLAUDE.md 0.61
 
 - Pierwszy backtest Michała (14 spółek, 12 300 USD) policzył się na 5 spółkach (reszta jeszcze się pobierała) z przeskalowanymi udziałami — werdykt 🔴 0/5 dotyczył więc innego portfela. Teraz backtest czeka na komplet danych i sam się liczy, gdy dojdą; pobrane już są wszystkie 14 spółek, więc po `git pull` i restarcie `ia5 start` policzy się od razu.

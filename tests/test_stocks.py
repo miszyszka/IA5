@@ -317,3 +317,24 @@ def test_plan_after_open_executes_next_session():
     assert sl.exec_from(ts_utc("2026-11-16 15:58")) == "2026-11-17"
     assert sl.exec_from(ts_utc("2026-11-17 07:00")) == "2026-11-17"   # wtorek 08:00 w Polsce = 02:00 w NY
     assert sl.exec_from(ts_utc("2026-11-15 12:00")) == "2026-11-15"   # niedziela → pierwszy dzień sesji ≥ niedziela = poniedziałek
+
+
+def test_money_always_adds_up(uni):
+    """Michał: suma zainwestowanych pieniędzy musi się zgadzać — gotówka + akcje = kapitał; w każdym rebalansie
+    gotówka przed + sprzedaż − kupno − koszty = gotówka po; udziały + gotówka = 100%; gotówka nigdy ujemna."""
+    t0 = ts_utc("2026-11-15 12:00")
+    cfg = {"tickers": [{"t": t, "w": w} for t, w in zip(uni, [30, 20, 20, 10, 10, 10])], "capital": 12300, "band": 20}
+    res = sr.run_research(cut(uni, t0), cfg, t0, paths=20, log=lambda m: None)
+    assert res["data_from"] == "2010-01-01" and sd.day_str([res["periods"]["start_ts"]])[0] >= "2010-01-01"
+    st = sl.live_step(None, res, cut(uni, t0 + 30 * 86400), t0 + 30 * 86400)
+    for p in st["plans"]:
+        s = p["summary_plan"]
+        assert s["cash_before"] + s["sold"] - s["bought"] - s["cost"] == pytest.approx(s["cash_after"])
+        assert s["cash_after"] >= -1e-6
+        if p["status"] == "wykonane":
+            e = p["summary_exec"]
+            assert e["cash_after"] >= -1e-6 and e["cash_before"] + e["sold"] - e["bought"] - e["cost"] == pytest.approx(e["cash_after"])
+    t = st["today"]
+    assert t["invested"] + t["cash"] == pytest.approx(t["total"])
+    assert sum(r["weight"] for r in t["rows"]) + t["cash_weight"] == pytest.approx(1.0)
+    assert st["plans"][0]["summary_plan"]["value"] == pytest.approx(12300)

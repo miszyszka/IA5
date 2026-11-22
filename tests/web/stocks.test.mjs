@@ -60,3 +60,19 @@ test('transakcje, CSV, wynik od startu', () => {
   assert.ok(Math.abs(s.pct - 10) < 1e-9 && Math.abs(s.fixedPct - 5) < 1e-9 && Math.abs(s.holdPct + 1) < 1e-9);
   assert.deepEqual(holdingRows(st).map((r) => r.t), ['PEP', 'KO']);
 });
+
+test('odliczanie do rebalansu i zdania transakcji', async () => {
+  const { nextRebalance, nyOpenMs, orderSentence, holdingsWithCash } = await import('../../web/js/stklogic.js');
+  assert.equal(nyOpenMs('2026-11-24'), Date.parse('2026-11-24T14:30:00Z'));          // zimą 09:30 NY = 14:30 UTC
+  assert.equal(nyOpenMs('2026-07-07'), Date.parse('2026-07-07T13:30:00Z'));          // latem 13:30 UTC
+  assert.equal(nyOpenMs('2026-11-21'), Date.parse('2026-11-23T14:30:00Z'));          // sobota → poniedziałek
+  const r = nextRebalance({ plans: [{ status: 'wykonane' }], next: { plan_ts: Date.parse('2026-11-24T07:00:00Z') / 1000 } }, 0);
+  assert.equal(r.execMs, Date.parse('2026-11-24T14:30:00Z'));
+  assert.equal(r.pending, false);
+  const p = nextRebalance({ plans: [{ status: 'zaplanowane', plan_ts: 1, exec_from: '2026-11-24' }] }, 0);
+  assert.equal(p.pending, true);
+  assert.equal(orderSentence({ side: 'kupno', t: 'KO', shares: 3, price_plan: 61.2, value_plan: 183.6 }, true), 'Kup 3 akcje KO po 61,20 USD = 183,60 USD');
+  assert.equal(orderSentence({ side: 'sprzedaż', t: 'MU', shares: 5, price: 100, value: -500 }, false), 'Sprzedaj 5 akcji MU po 100,00 USD = 500,00 USD');
+  const h = holdingsWithCash({ today: { total: 1000, cash: 100, rows: [{ t: 'A', value: 900, weight: 0.9, base: 1, lo: 0.8, hi: 1.2, target: 1 }] } });
+  assert.ok(h.ok && Math.abs(h.sumPct - 100) < 1e-9 && h.cashPct === 10);
+});

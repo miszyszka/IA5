@@ -6,11 +6,11 @@ import { getJSON, getText, refreshData } from './data.js';
 import { saveStocksConfig, watchStocksConfig } from './fb.js';
 import { countdown, fmtWarsaw, VERDICT_ICON } from './revlogic.js';
 import { heartbeatState } from './status.js';
-import { addTicker, currentPlan, draftFrom, equalize, fitTo100, holdingRows, ledgerByDay, ledgerCSV, liveSummary, nextPlanText, removeTicker, runStatus, sameConfig, setWeight, sumW, validateDraft, yearRows } from './stklogic.js';
+import { addTicker, currentPlan, draftFrom, equalize, fitTo100, holdingsWithCash, ledgerByDay, ledgerCSV, liveSummary, nextRebalance, orderSentence, removeTicker, runStatus, sameConfig, setWeight, sumW, validateDraft, yearRows } from './stklogic.js';
 import { $, ago, cls, copy, download, h, num, signed, store, toast } from './util.js';
 
 const DRAFT_KEY = 'ia5.stocks.draft';
-const ui = { more: 4, allTop: false, log: true };
+const ui = { more: 4, allTop: false };
 const kpi = (label, val, c = '') => h('div', { class: 'kpi' }, h('small', {}, label), h('b', { class: c }, val));
 const panel = (title, hint, ...body) => h('section', { class: 'panel' }, h('div', { class: 'phead' }, h('h3', {}, title), hint ? h('span', { class: 'hint' }, hint) : null), ...body);
 const usd = (x, d = 2) => (x == null ? '—' : `${num(x, d)} USD`);
@@ -72,7 +72,32 @@ function header(st, res, doc) {
     st?.plans?.length ? h('div', { class: 'kpis small' },
       kpi('Kapitał teraz', usd(s.total), cls(s.change)), kpi('Od startu', `${signed(s.change, 2)} USD (${signed(s.pct, 2)}%)`, cls(s.change)),
       kpi('Stały podział', `${usd(s.fixed, 0)} (${signed(s.fixedPct, 2)}%)`, cls(s.fixedPct)), kpi('Kup i trzymaj', `${usd(s.hold, 0)} (${signed(s.holdPct, 2)}%)`, cls(s.holdPct)),
-      kpi('Gotówka', usd(s.cash)), kpi('Następny plan', pend ? 'czeka na wykonanie' : `${nextPlanText(st, now)} · ${countdown((st.next?.plan_ts || 0) * 1000 - now)}`)) : '');
+      kpi('Gotówka', usd(s.cash))) : '',
+    st?.plans?.length ? countdownBox(st, now, pend) : '');
+}
+
+function countdownBox(st, now, pend) {
+  const r = nextRebalance(st, now);
+  if (!r.execMs) return '';
+  const when = (ms) => fmtWarsaw(ms / 1000);
+  return h('div', { class: 'stk-next' },
+    h('div', {}, h('small', {}, pend ? 'Zlecenia czekają na otwarcie sesji' : 'Do następnego rebalansu'), h('b', { class: 'stk-cd' }, countdown(r.execMs - now))),
+    h('div', { class: 'muted small' }, pend
+      ? `Wykonanie: ${when(r.execMs)} czasu polskiego (otwarcie sesji w Nowym Jorku) · lista zleceń niżej`
+      : `Plan zleceń: ${when(r.planMs)} (z zamknięcia poprzedniej sesji) · wykonanie: ${when(r.execMs)} czasu polskiego (otwarcie sesji w Nowym Jorku)`));
+}
+
+function reconcile(sm, exec) {
+  if (!sm) return '';
+  const line = (label, v, c = '') => h('tr', {}, h('td', { class: 'txt' }, label), h('td', { class: `r ${c}` }, v));
+  return h('table', { class: 'data compact static stk-rec' }, h('tbody', {},
+    sm.value != null ? line('Kapitał przed rebalansem (akcje + gotówka)', usd(sm.value)) : '',
+    line('Gotówka przed', usd(sm.cash_before)),
+    line(`+ sprzedaż (${sm.n_sell})`, `+${num(sm.sold, 2)} USD`, sm.sold ? 'pos' : ''),
+    line(`− kupno (${sm.n_buy})`, `−${num(sm.bought, 2)} USD`, sm.bought ? 'neg' : ''),
+    line('− koszty transakcji (0,10%)', `−${num(sm.cost, 2)} USD`, sm.cost ? 'neg' : ''),
+    h('tr', { class: 'sum' }, h('td', { class: 'txt' }, h('b', {}, exec ? 'Gotówka po wykonaniu' : 'Gotówka po zleceniach (reszta z zaokrągleń do całych akcji)')), h('td', { class: 'r' }, h('b', {}, usd(sm.cash_after)))),
+    sm.value_after != null ? line('Kapitał po wykonaniu (ceny otwarcia)', usd(sm.value_after)) : ''));
 }
 
 // ---------- ustawienia ----------
@@ -168,26 +193,35 @@ function planPanel(st) {
   if (!pl) return '';
   const pend = pl.status === 'zaplanowane';
   const rows = pend ? pl.orders : (pl.fills || []).filter((f) => f.filled);
-  const title = pend ? `Zlecenia na otwarcie sesji ${pl.exec_from} (15:30 czasu polskiego)` : `Ostatni rebalans — wykonany ${pl.exec_day}`;
+  const title = pend ? `Zlecenia do wykonania — otwarcie sesji ${pl.exec_from} (15:30 czasu polskiego)` : `Ostatni rebalans — wykonany ${pl.exec_day}`;
   const hint = `plan ${fmtWarsaw(pl.plan_ts)} z cen zamknięcia ${pl.signal_day}` + (pl.late ? ' (świeca poprzedniej sesji spóźniona — użyta starsza)' : '');
   const sorted = [...rows].sort((a, b) => (a.side === b.side ? Math.abs(b.value ?? b.value_plan) - Math.abs(a.value ?? a.value_plan) : a.side === 'sprzedaż' ? -1 : 1));
-  return panel(title, hint, sorted.length ? h('div', { class: 'tablewrap' }, h('table', { class: 'data compact static' },
-    h('thead', {}, h('tr', {}, ...['spółka', 'ruch', 'sztuk', pend ? `cena (zamknięcie ${pl.signal_day})` : 'cena wykonania', 'wartość'].map((l) => h('th', {}, l)))),
-    h('tbody', {}, ...sorted.map((o) => h('tr', {}, h('td', { class: 'txt' }, h('b', {}, o.t)), h('td', { class: `txt ${o.side === 'kupno' ? 'pos' : 'neg'}` }, o.side),
-      h('td', { class: 'r' }, h('b', {}, num(o.shares, 0))), h('td', { class: 'r' }, num(pend ? o.price_plan : o.price, 2)),
-      h('td', { class: `r ${cls(o.value ?? o.value_plan)}` }, `${signed(o.value ?? o.value_plan, 2)} USD`)))))) : h('div', { class: 'empty small' }, 'Bez transakcji — wszystkie spółki są w paśmie.'));
+  const notFilled = pend ? [] : (pl.fills || []).filter((f) => !f.filled);
+  return panel(title, hint,
+    sorted.length ? h('ol', { class: 'stk-orders' }, ...sorted.map((o) => h('li', { class: o.side === 'kupno' ? 'buy' : 'sell' }, orderSentence(o, pend))))
+      : h('div', { class: 'empty small' }, 'Bez transakcji — różnice między stanem a celem są mniejsze niż próg metody.'),
+    notFilled.length ? h('p', { class: 'neg small' }, `Niewykonane: ${notFilled.map((f) => `${f.t} (${f.why || 'brak ceny otwarcia'})`).join(', ')}`) : '',
+    !pend && rows.some((f) => f.planned_shares) ? h('p', { class: 'muted small' }, `Zmniejszone przy wykonaniu (cena otwarcia wyższa niż w planie, zabrakło gotówki): ${rows.filter((f) => f.planned_shares).map((f) => `${f.t} ${f.shares} zamiast ${f.planned_shares}`).join(', ')}`) : '',
+    h('h3', {}, 'Rozliczenie gotówki'),
+    reconcile(pend ? pl.summary_plan : pl.summary_exec || pl.summary_plan, !pend));
 }
 
 function holdingsPanel(st) {
-  const rows = holdingRows(st);
+  const H = holdingsWithCash(st);
+  const rows = H.rows;
   if (!rows.length) return { p: '', draw: () => {} };
   const el = h('div', { class: 'chart tall' });
   const t = h('div', { class: 'tablewrap' }, h('table', { class: 'data compact static' },
-    h('thead', {}, h('tr', {}, ...['spółka', 'sztuk', 'cena', 'wartość', 'udział', 'docelowo', 'pasmo', 'cel metody', 'przecena'].map((l) => h('th', {}, l)))),
+    h('thead', {}, h('tr', {}, ...['spółka', 'sztuk', 'cena', 'wartość USD', 'udział', 'docelowo', 'pasmo', 'cel metody', 'przecena'].map((l) => h('th', {}, l)))),
     h('tbody', {}, ...rows.map((r) => h('tr', {}, h('td', { class: 'txt' }, h('b', {}, r.t)), h('td', { class: 'r' }, num(r.shares, 0)), h('td', { class: 'r' }, num(r.price, 2)),
       h('td', { class: 'r' }, num(r.value, 2)), h('td', { class: 'r' }, h('b', {}, pctf(r.weightPct, 2))), h('td', { class: 'r' }, pctf(r.basePct, 2)),
       h('td', { class: 'r muted' }, `${num(r.loPct, 2)} – ${num(r.hiPct, 2)}%`), h('td', { class: `r ${cls(r.targetPct - r.basePct)}` }, pctf(r.targetPct, 2)),
-      h('td', { class: `r ${cls(r.score)}` }, signed(r.score, 2)))))));
+      h('td', { class: `r ${cls(r.score)}` }, signed(r.score, 2)))),
+      h('tr', {}, h('td', { class: 'txt' }, h('b', {}, 'Gotówka')), h('td', {}), h('td', {}), h('td', { class: 'r' }, num(H.cash, 2)), h('td', { class: 'r' }, h('b', {}, pctf(H.cashPct, 2))),
+        h('td', { colspan: 4, class: 'txt muted' }, 'reszta z zaokrągleń do całych akcji i dywidendy — wchodzi do następnego rebalansu')),
+      h('tr', { class: 'sum' }, h('td', { class: 'txt' }, h('b', {}, 'Razem')), h('td', {}), h('td', {}), h('td', { class: 'r' }, h('b', {}, num(H.total, 2))),
+        h('td', { class: `r ${Math.abs(H.sumPct - 100) < 0.01 ? '' : 'neg'}` }, h('b', {}, pctf(H.sumPct, 2))),
+        h('td', { colspan: 4, class: `txt ${H.ok ? 'muted' : 'neg'}` }, H.ok ? `akcje ${num(H.invested, 2)} + gotówka ${num(H.cash, 2)} = ${num(H.total, 2)} USD ✓` : 'suma się nie zgadza — zgłoś Claude\'owi')))));
   const p = panel('Portfel dziś', `wycena z zamknięcia ${st.today.day} · słupek = udział teraz, kreski = pasmo, romb = cel metody · przecena > 0 = tania`, el, t);
   return { p, draw: () => stockBars(el, rows) };
 }
@@ -204,17 +238,19 @@ function livePanel(st) {
 
 function ledgerPanel(st) {
   const groups = ledgerByDay(st);
-  const body = groups.slice(0, ui.more).flatMap((g) => [
-    h('tr', { class: 'grp' }, h('td', { colspan: 6, class: 'txt' }, h('b', {}, `${g.day} · ${g.rows.length} transakcji · kupiono za ${num(g.bought, 0)} USD, sprzedano za ${num(g.sold, 0)} USD · koszt ${num(g.cost, 2)} USD`))),
-    ...g.rows.map((r) => h('tr', {}, h('td', { class: 'txt' }, h('b', {}, r.t)), h('td', { class: `txt ${r.side === 'kupno' ? 'pos' : 'neg'}` }, r.side),
-      h('td', { class: 'r' }, num(r.shares, 0)), h('td', { class: 'r' }, num(r.price, 2)), h('td', { class: 'r muted' }, num(r.price_plan, 2)),
-      h('td', { class: `r ${cls(r.value)}` }, `${signed(r.value, 2)} USD`)))]);
+  const plans = new Map((st.plans || []).filter((p) => p.exec_day).map((p) => [p.exec_day, p]));
+  const blocks = groups.slice(0, ui.more).map((g) => {
+    const sm = plans.get(g.day)?.summary_exec;
+    return h('div', { class: 'stk-day' },
+      h('div', { class: 'row between' }, h('b', {}, `Rebalans ${g.day} (otwarcie sesji) · ${g.rows.length} transakcji`),
+        sm ? h('span', { class: 'muted small' }, `gotówka ${num(sm.cash_before, 2)} + sprzedaż ${num(sm.sold, 2)} − kupno ${num(sm.bought, 2)} − koszty ${num(sm.cost, 2)} = ${num(sm.cash_after, 2)} USD`) : ''),
+      h('ol', { class: 'stk-orders' }, ...g.rows.map((r) => h('li', { class: r.side === 'kupno' ? 'buy' : 'sell' }, orderSentence(r, false),
+        h('span', { class: 'muted' }, ` · plan po ${num(r.price_plan, 2)} · koszt ${num(r.cost, 2)}`)))));
+  });
   const divs = (st.dividends || []).slice(-8).reverse();
-  return panel('Historia transakcji', 'wszystkie rebalanse — cena wykonania z otwarcia, obok cena z planu (zamknięcie poprzedniej sesji)',
+  return panel('Historia transakcji', 'każdy rebalans: co system kupił i sprzedał, po jakiej cenie i jak zmieniła się gotówka',
     h('div', { class: 'row end' }, h('button', { class: 'btn ghost small', onclick: () => download('stocks-transakcje.csv', ledgerCSV(st), 'text/csv') }, 'Pobierz CSV')),
-    groups.length ? h('div', { class: 'tablewrap' }, h('table', { class: 'data compact static' },
-      h('thead', {}, h('tr', {}, ...['spółka', 'ruch', 'sztuk', 'cena wykonania', 'cena z planu', 'wartość'].map((l) => h('th', {}, l)))), h('tbody', {}, ...body)))
-      : h('div', { class: 'empty small' }, 'Jeszcze bez transakcji — pierwsze zakupy na najbliższym otwarciu sesji.'),
+    groups.length ? h('div', { class: 'stk-days' }, ...blocks) : h('div', { class: 'empty small' }, 'Jeszcze bez transakcji — pierwsze zakupy na najbliższym otwarciu sesji.'),
     groups.length > ui.more ? h('button', { class: 'btn ghost small', onclick: () => { ui.more += 8; render(); } }, `Pokaż starsze (${groups.length - ui.more})`) : '',
     divs.length ? h('p', { class: 'muted small' }, 'Ostatnie dywidendy (do gotówki): ' + divs.map((x) => `${x.day} ${x.t} ${num(x.amount, 2)} USD`).join(' · ')) : '');
 }
@@ -227,7 +263,7 @@ function backtestPanel(res) {
   const el = h('div', { class: 'chart tall' }), yel = h('div', { class: 'chart' });
   const series = [{ name: 'metoda (zwycięzca)', ts: hist.ts, values: hist.winner, color: '--accent' }, { name: 'stały podział (co tydzień do celu)', ts: hist.ts, values: hist.fixed, color: '--muted' },
     { name: 'kup i trzymaj', ts: hist.ts, values: hist.hold, color: '--dim', dash: true }];
-  const draw = () => { moneyLines(el, series, [{ ts: p.is_end_ts, label: 'sprawdzian (OOS)' }], { log: ui.log }); yearBars(yel, yearRows(res)); };
+  const draw = () => { moneyLines(el, series, [{ ts: p.is_end_ts, label: 'sprawdzian (OOS)' }]); yearBars(yel, yearRows(res)); };
   const cmp = (label, m, mo) => h('tr', {}, h('td', { class: 'txt' }, label), h('td', { class: `r ${cls(m.cagr_pct)}` }, signed(m.cagr_pct, 2)), h('td', { class: `r ${cls(mo.cagr_pct)}` }, signed(mo.cagr_pct, 2)),
     h('td', { class: 'r' }, num(mo.sharpe, 2)), h('td', { class: 'r neg' }, pctf(mo.max_dd_pct, 1)), h('td', { class: 'r' }, pctf(mo.turnover_yr, 0)));
   const top = ui.allTop ? res.top : res.top.slice(0, 8);
@@ -239,7 +275,7 @@ function backtestPanel(res) {
       h('p', {}, h('b', {}, 'Zwycięzca: '), w.label),
       h('div', { class: 'kpis small' }, kpi('Nadwyżka OOS', `${signed(w.oos.excess_pct_yr, 2)}% rocznie`, cls(w.oos.excess_pct_yr)), kpi('IR nadwyżki IS / OOS', `${num(w.is.ir, 2)} / ${num(w.oos.ir, 2)}`),
         kpi('Lepsze od losowych', pctf(v.random_pct, 0)), kpi('Konfiguracji z OOS > 0', pctf(res.distribution.oos_positive_pct, 0)), kpi('Otwarcia OOS', res.oos_openings ?? '—')),
-      h('div', { class: 'row between' }, h('h3', {}, 'Skuteczność w backteście'), h('button', { class: 'btn ghost small', onclick: () => { ui.log = !ui.log; draw(); } }, ui.log ? 'Skala zwykła' : 'Skala logarytmiczna')),
+      h('h3', {}, `Skuteczność w backteście (${num(res.config.capital, 0)} USD na start, dane od ${res.data_from || '2010-01-01'})`),
       el,
       h('div', { class: 'tablewrap' }, h('table', { class: 'data compact static' }, h('thead', {}, h('tr', {}, ...['', 'CAGR IS %', 'CAGR OOS %', 'Sharpe OOS', 'maks. spadek OOS', 'obrót OOS / rok'].map((l) => h('th', {}, l)))),
         h('tbody', {}, cmp('metoda', w.is, w.oos), cmp('stały podział', b.fixed.is, b.fixed.oos), cmp('kup i trzymaj', b.hold.is, b.hold.oos)))),
@@ -276,7 +312,7 @@ function render() {
     return;
   }
   const partial = res.missing?.length ? h('div', { class: 'banner warn' }, `Ten backtest liczono bez: ${res.missing.join(', ')} (brak danych) — policzy się od nowa, gdy dane będą.`) : '';
-  const red = res.verdict.color === 'red' ? h('div', { class: 'banner warn' }, 'Metoda nie pokonała stałego podziału na sprawdzianie — portfel działa, ale traktuj go ostrożnie; obok widać stały podział i „kup i trzymaj”.') : '';
+  const red = res.verdict.color === 'red' ? h('div', { class: 'banner warn' }, 'Werdykt 🔴: backtest nie potwierdził przewagi metody nad stałym podziałem — portfel działa, ale traktuj go ostrożnie; obok widać stały podział i „kup i trzymaj”.') : '';
   const hp = st ? holdingsPanel(st) : { p: '', draw: () => {} };
   const lp = st ? livePanel(st) : { p: '', draw: () => {} };
   const bp = backtestPanel(res);

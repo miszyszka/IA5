@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .stk_config import CLEAN_STK_VERSION, MIN_HISTORY_DAYS, TZ
+from .stk_config import CLEAN_STK_VERSION, DATA_FROM, MIN_HISTORY_DAYS, TZ
 
 RAW_COLS = ["ts", "open", "high", "low", "close", "div", "split"]
 COLS = ["ts", "day", "open", "high", "low", "close", "div", "spike"]
@@ -161,7 +161,7 @@ class Panel:
 
     def __init__(self, ready: dict[str, pd.DataFrame], tickers: list[str]):
         self.tickers = list(tickers)
-        frames = {t: ready[t] for t in self.tickers if t in ready and len(ready[t])}
+        frames = {t: f for t in self.tickers if t in ready and len(f := ready[t][ready[t]["day"] >= DATA_FROM])}   # tylko od 2010
         days = sorted(set().union(*[set(f["day"]) for f in frames.values()])) if frames else []
         self.days = np.array(days, dtype="U10")
         self.ts = np.zeros(len(days), "int64")

@@ -67,8 +67,10 @@ def summary(st: dict) -> dict:
 
 
 def _orders(shares: dict, cash: float, universe: list[str], px: np.ndarray, target: np.ndarray, base: np.ndarray,
-            thr: float, hold_mode: bool = False) -> list[dict]:
-    """Zlecenia w sztukach z cen zamknięcia dnia planu. Próg i wejścia/wyjścia jak w symulacji badania."""
+            thr: float, hold_mode: bool = False, band: float = 0.0) -> list[dict]:
+    """Zlecenia w sztukach z cen zamknięcia dnia planu. Próg i wejścia/wyjścia jak w symulacji badania.
+    Reszta gotówki z zaokrągleń do całych akcji idzie na dokupienie po 1 akcji (najpierw spółki najdalej poniżej celu),
+    dopóki spółka nie przekroczy górnej granicy pasma (udział docelowy × (1 + band)) i starcza gotówki."""
     sh = np.array([shares.get(t, 0) for t in universe], float)
     p = np.where(np.isfinite(px) & (px > 0), px, np.nan)
     val = np.nan_to_num(sh * p)
@@ -95,6 +97,19 @@ def _orders(shares: dict, cash: float, universe: list[str], px: np.ndarray, targ
     while cash_after(d) < -1e-9 and (d > 0).any():     # kupna przycinane od największego, aż gotówka ≥ 0
         j = int(np.nanargmax(np.where(d > 0, d * p, -np.inf)))
         d[j] -= 1
+    # reszta gotówki z zaokrągleń: dokupujemy po 1 akcji tam, gdzie najwięcej brakuje do celu (w granicach pasma),
+    # dopóki starcza gotówki — kapitał ma być zainwestowany, a suma musi się zgadzać (Michał, 2026-11-22)
+    can = trade if not hold_mode else entry & np.isfinite(p)
+    tgt_val = np.nan_to_num(target * V)
+    for _ in range(1000):
+        free = cash_after(d)
+        gap = tgt_val - np.nan_to_num((sh + d) * p)
+        upper = np.nan_to_num(base * (1 + band) * V)
+        ok = can & np.isfinite(p) & (p * (1 + COST) <= free + 1e-9) & (np.nan_to_num((sh + d + 1) * p) <= upper + 1e-9)
+        if not ok.any():
+            break
+        j = int(np.argmax(np.where(ok, gap / np.where(np.isfinite(p), p, 1), -np.inf)))
+        d[j] += 1
     out = []
     for j, t in enumerate(universe):
         if d[j] != 0:
@@ -103,20 +118,52 @@ def _orders(shares: dict, cash: float, universe: list[str], px: np.ndarray, targ
     return out
 
 
+def _summary(rows: list[dict], cash_before: float, value: float | None, after: float | None = None,
+             value_after: float | None = None) -> dict:
+    """Rozliczenie rebalansu (Michał: „suma zainwestowanych pieniędzy musi się zgadzać”): gotówka przed + sprzedaż − kupno
+    − koszty = gotówka po. Z planu (ceny zamknięcia) albo z wykonania (ceny otwarcia, `after` = gotówka po w księdze)."""
+    from .stk_config import COST as _C
+
+    val = lambda r: float(r.get("value", r.get("value_plan", 0.0)))   # noqa: E731
+    sold = -sum(val(r) for r in rows if val(r) < 0)
+    bought = sum(val(r) for r in rows if val(r) > 0)
+    cost = sum(float(r["cost"]) if "cost" in r else _C * abs(val(r)) for r in rows)
+    calc = cash_before + sold - bought - cost
+    out = {"cash_before": float(cash_before), "sold": float(sold), "bought": float(bought), "cost": float(cost), "cash_after": float(calc),
+           "n_buy": sum(1 for r in rows if val(r) > 0), "n_sell": sum(1 for r in rows if val(r) < 0)}
+    if value is not None:
+        out["value"] = float(value)
+    if after is not None:
+        assert abs(after - calc) < 1e-6 * max(1.0, abs(after)), "rozliczenie gotówki się nie zgadza"
+    if value_after is not None:
+        out["value_after"] = float(value_after)
+    return out
+
+
 def _fill(book: dict, orders: list[dict], opens: dict[str, float]) -> list[dict]:
+    """Wykonanie po cenach otwarcia: najpierw sprzedaże, potem kupna. Kupno, na które po otwarciu (cena inna niż w planie)
+    nie starcza gotówki, jest zmniejszane o tyle akcji, ile trzeba — gotówka nigdy nie spada poniżej zera."""
     fills = []
-    for o in orders:
+    for o in sorted(orders, key=lambda o: o["side"] == "kupno"):
         px = opens.get(o["t"])
         if px is None or not np.isfinite(px) or px <= 0:
             fills.append({**o, "filled": False})
             continue
         q = o["shares"] if o["side"] == "kupno" else -o["shares"]
         q = max(q, -book["shares"].get(o["t"], 0))
+        if q > 0:
+            q = min(q, int(np.floor(max(book["cash"], 0.0) / (px * (1 + COST)) + 1e-9)))
+        if q == 0:
+            fills.append({**o, "filled": False, "why": "brak gotówki po cenie otwarcia"})
+            continue
         val = q * px
         cost = COST * abs(val)
         book["shares"][o["t"]] = int(book["shares"].get(o["t"], 0) + q)
         book["cash"] = float(book["cash"] - val - cost)
-        fills.append({**o, "filled": True, "price": float(px), "value": float(val), "cost": float(cost)})
+        f = {**o, "filled": True, "shares": int(abs(q)), "price": float(px), "value": float(val), "cost": float(cost)}
+        if abs(q) != o["shares"]:
+            f["planned_shares"] = int(o["shares"])
+        fills.append(f)
     return fills
 
 
@@ -177,13 +224,16 @@ def live_step(prev: dict | None, res: dict, ready: dict[str, pd.DataFrame], now:
             tgt, s = sm.targets_live(Wk, cfg, band, k, group=0)
             px = p.cfill[si]
             base = Wk.w[k]
-            orders = {"method": _orders(st["books"]["method"]["shares"], st["books"]["method"]["cash"], uni, px, tgt, base, cfg.threshold),
-                      "fixed": _orders(st["books"]["fixed"]["shares"], st["books"]["fixed"]["cash"], uni, px, base, base, 0.0),
+            mb = st["books"]["method"]
+            orders = {"method": _orders(mb["shares"], mb["cash"], uni, px, tgt, base, cfg.threshold, band=band),
+                      "fixed": _orders(st["books"]["fixed"]["shares"], st["books"]["fixed"]["cash"], uni, px, base, base, 0.0, band=band),
                       "hold": _orders(st["books"]["hold"]["shares"], st["books"]["hold"]["cash"], uni, px, base, base, 0.0,
                                       hold_mode=bool(st["plans"]))}
             vals = {b: _value(st["books"][b], uni, px) for b in BOOKS}
             st["plans"].append({"plan_ts": int(x), "signal_day": sday, "late": sday < exp, "status": "zaplanowane",
-                                "value_plan": vals["method"], "targets": {t: float(v) for t, v in zip(uni, tgt)},
+                                "value_plan": vals["method"], "cash_plan": float(st["books"]["method"]["cash"]),
+                                "summary_plan": _summary(orders["method"], float(st["books"]["method"]["cash"]), vals["method"]),
+                                "targets": {t: float(v) for t, v in zip(uni, tgt)},
                                 "base": {t: float(v) for t, v in zip(uni, base)}, "scores": {t: float(v) for t, v in zip(uni, s)},
                                 "orders": orders["method"], "ref_orders": {"fixed": orders["fixed"], "hold": orders["hold"]},
                                 "exec_from": exec_from(x), "exec_day": None})
@@ -202,10 +252,15 @@ def live_step(prev: dict | None, res: dict, ready: dict[str, pd.DataFrame], now:
         pend = [pl for pl in st["plans"] if pl["status"] == "zaplanowane" and d > pl["signal_day"] and d >= pl["exec_from"]]
         for pl in pend:
             opens = {t: float(p.open[i, j]) for j, t in enumerate(uni) if np.isfinite(p.open[i, j])}
+            cash0 = float(st["books"]["method"]["cash"])
             fills = _fill(st["books"]["method"], pl["orders"], opens)
             _fill(st["books"]["fixed"], pl["ref_orders"]["fixed"], opens)
             _fill(st["books"]["hold"], pl["ref_orders"]["hold"], opens)
             pl["fills"], pl["exec_day"], pl["status"] = fills, d, "wykonane"
+            ox = np.array([opens.get(t, np.nan) for t in uni], float)
+            ox = np.where(np.isfinite(ox), ox, p.cfill[i - 1] if i > 0 else ox)
+            pl["summary_exec"] = _summary([f for f in fills if f["filled"]], cash0, None,
+                                          after=float(st["books"]["method"]["cash"]), value_after=_value(st["books"]["method"], uni, ox))
             for f in fills:
                 if f["filled"]:
                     st["ledger"].append({"exec_day": d, "plan_ts": pl["plan_ts"], "t": f["t"], "side": f["side"], "shares": f["shares"],
@@ -253,5 +308,6 @@ def _today(st: dict, p: Panel, uni: list[str]) -> None:
                      "weight": float(v / tot) if tot > 0 else 0.0, "base": b, "lo": b * (1 - band), "hi": b * (1 + band),
                      "target": last["targets"].get(t, 0.0), "score": last["scores"].get(t, 0.0)})
     st["today"] = {"day": p.days[i], "ts": int(p.ts[i]), "total": float(tot), "cash": float(bk["cash"]), "rows": rows,
+                   "invested": float(sum(r["value"] for r in rows)), "cash_weight": float(bk["cash"] / tot) if tot > 0 else 0.0,
                    "fixed_total": _value(st["books"]["fixed"], uni, px), "hold_total": _value(st["books"]["hold"], uni, px)}
 

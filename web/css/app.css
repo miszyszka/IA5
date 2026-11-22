@@ -468,3 +468,12 @@ input.w-pct { width: 84px; padding: 3px 6px; }
 .stk-table tr.addrow td { background: transparent; }
 .warn-t { color: var(--warn); }
 #stk-settings .row.between { margin-top: 10px; gap: 12px; }
+
+.stk-next { display: flex; flex-wrap: wrap; gap: 6px 24px; align-items: baseline; border: 1px solid var(--accent-line); border-radius: var(--r-ctl); padding: 10px 14px; }
+.stk-next small { display: block; color: var(--muted); font-size: 11px; }
+.stk-cd { font: 600 22px var(--mono); color: var(--accent); }
+ol.stk-orders { margin: 6px 0 10px; padding-left: 22px; display: grid; gap: 3px; font-family: var(--mono); font-size: 13px; }
+ol.stk-orders li.buy::marker, ol.stk-orders li.buy { color: var(--ok); } ol.stk-orders li.sell::marker, ol.stk-orders li.sell { color: var(--bad); }
+ol.stk-orders li span { font-family: Inter, system-ui, sans-serif; font-size: 12px; }
+table.stk-rec { max-width: 560px; } table.data tr.sum td { border-top: 1px solid var(--line-2); }
+.stk-days { display: grid; gap: 12px; } .stk-day { border-top: 1px solid var(--line); padding-top: 8px; }

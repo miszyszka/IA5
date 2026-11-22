@@ -134,3 +134,61 @@ export function nextPlanText(st, nowMs) {
 export function yearRows(res) {
   return (res?.years || []).map((y) => ({ ...y, excess: y.winner - y.fixed }));
 }
+
+// ---------- odliczanie do rebalansu (D-071, prośba Michała 2026-11-22) ----------
+
+function zoneParts(ms, tz) {
+  const f = new Intl.DateTimeFormat('en-GB', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', weekday: 'short', hourCycle: 'h23' });
+  const o = {};
+  for (const p of f.formatToParts(new Date(ms))) if (p.type !== 'literal') o[p.type] = p.type === 'weekday' ? p.value : +p.value;
+  return o;
+}
+
+/** Czas lokalny w strefie tz → ms UTC. */
+export function zonedToUtc(tz, y, m, d, hh = 0, mm = 0) {
+  const guess = Date.UTC(y, m - 1, d, hh, mm);
+  const off = (t) => { const p = zoneParts(t, tz); return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - Math.floor(t / 60000) * 60000; };
+  let t = guess - off(guess);
+  t = guess - off(t);
+  return t;
+}
+
+/** Otwarcie sesji (09:30 w Nowym Jorku) w dniu 'RRRR-MM-DD' albo w najbliższy następny dzień roboczy. */
+export function nyOpenMs(day) {
+  let d = new Date(`${day}T12:00:00Z`);
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d = new Date(d.getTime() + 86400000);
+  return zonedToUtc('America/New_York', d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), 9, 30);
+}
+
+/** Najbliższy rebalans: { planMs, execMs, pending }. pending = zlecenia już policzone, czekają na otwarcie sesji. */
+export function nextRebalance(st, nowMs) {
+  const pend = (st?.plans || []).find((p) => p.status === 'zaplanowane');
+  if (pend) return { planMs: pend.plan_ts * 1000, execMs: nyOpenMs(pend.exec_from), pending: true };
+  const planMs = st?.next?.plan_ts ? st.next.plan_ts * 1000 : null;
+  if (!planMs) return { planMs: null, execMs: null, pending: false };
+  const p = zoneParts(planMs, 'America/New_York');
+  const day = `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
+  let exec = nyOpenMs(day);
+  if (exec <= planMs) exec = nyOpenMs(new Date(Date.parse(`${day}T12:00:00Z`) + 86400000).toISOString().slice(0, 10));
+  return { planMs, execMs: exec, pending: false };
+}
+
+/** Zdanie o transakcji: „Kup 3 akcje KO po 61,20 USD = 183,60 USD”. */
+export function orderSentence(o, pending) {
+  const px = pending ? o.price_plan : (o.price ?? o.price_plan);
+  const val = Math.abs(pending ? o.value_plan : (o.value ?? o.value_plan));
+  const n = o.shares;
+  const word = n === 1 ? 'akcję' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) ? 'akcje' : 'akcji';
+  const fmt = (x) => x.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${o.side === 'kupno' ? 'Kup' : 'Sprzedaj'} ${n} ${word} ${o.t} po ${fmt(px)} USD = ${fmt(val)} USD`;
+}
+
+/** Tabela portfela dziś z gotówką i sumą — udziały + gotówka = 100%, wartości = kapitał. */
+export function holdingsWithCash(st) {
+  const rows = holdingRows(st);
+  const t = st?.today || {};
+  const cash = t.cash ?? 0, total = t.total ?? 0;
+  const inv = rows.reduce((s, r) => s + r.value, 0);
+  return { rows, cash, cashPct: total > 0 ? (cash / total) * 100 : 0, invested: inv, total,
+    sumPct: rows.reduce((s, r) => s + r.weightPct, 0) + (total > 0 ? (cash / total) * 100 : 0), ok: Math.abs(inv + cash - total) < 0.01 };
+}

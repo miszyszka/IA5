@@ -22,6 +22,7 @@ from .stk_config import (
     CLEAN_STK_VERSION,
     COST,
     CSCV_BLOCKS,
+    DATA_FROM,
     IS_FRACTION,
     RANDOM_HOLD,
     RANDOM_PATHS,
@@ -224,12 +225,12 @@ def run_research(ready: dict, cfg: dict, now: int, paths: int = RANDOM_PATHS, lo
         families.append({"signal": s, "label": sm.signal_label(s), "best_id": sm.CONFIGS[b].id, "is_ir": float(is_ir[b]),
                          "oos_ir": float(oos_ir[b]), "oos_excess_pct_yr": float(oos_ex[b]),
                          "share_oos_positive": float(np.mean(oos_ex[ii] > 0) * 100)})
-    first_days = {t: (ready[t]["day"].iloc[0] if len(ready[t]) else None) for t in universe}
+    first_days = {t: (max(str(ready[t]["day"].iloc[0]), DATA_FROM) if len(ready[t]) else None) for t in universe}
     res = {
         "stk_version": STK_VERSION, "clean_version": CLEAN_STK_VERSION, "code_hash": code_hash(), "computedAt": int(now),
         "config": cfg, "config_hash": config_hash(cfg), "universe": universe, "weights": {t: float(x) for t, x in zip(universe, w_user)},
         "missing": missing, "rejected": {k: v for k, v in (rejected or {}).items() if k in want}, "first_days": first_days, "tz": TZ,
-        "cost": COST, "band": band,
+        "cost": COST, "band": band, "data_from": DATA_FROM,
         "periods": {"start_ts": int(ts[0]), "is_end_ts": int(ts[is_n]), "oos_end_ts": int(ts_end), "weeks": int(weeks),
                     "is_weeks": int(is_n), "oos_weeks": int(weeks - is_n)},
         "trials": int(K), "winner": win.id,
@@ -318,7 +319,8 @@ def report_md(res: dict) -> str:
          + (", ".join(f"{k} ({x})" for k, x in res["rejected"].items()) or "—"),
          f"- Kapitał {res['config']['capital']:,.0f} USD · pasmo ±{res['band'] * 100:g}% udziału docelowego · "
          f"koszt {res['cost'] * 100:.2f}% od strony transakcji",
-         f"- Świece dzienne Yahoo (ceny po splitach, dywidendy z dniem bez prawa), czyszczenie wersja {res['clean_version']}",
+         f"- Świece dzienne Yahoo od {DATA_FROM} (ceny po splitach, dywidendy z dniem bez prawa), "
+         f"czyszczenie wersja {res['clean_version']}",
          "- Ocena na zamknięciu dnia sesji przed wtorkiem, wykonanie na otwarciu wtorku (święto → następny dzień sesji); "
          "spółka gra po roku notowań",
          f"- Odcinki: {_d(p['start_ts'])} → IS do {_d(p['is_end_ts'])} ({p['is_weeks']} tyg.) → "
