@@ -25,7 +25,7 @@ import numpy as np
 import pandas as pd
 
 from . import indicators as ind
-from .config import PAIRS
+from .config import instrument
 from .session import in_trading_hours, nights
 
 W = 120  # najdłuższe trzymanie pozycji w świecach
@@ -180,7 +180,7 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     cols = ["exit_i", "exit_ts", "exit_px", "reason", "pips_gross", "r", "risk_pips", "mae", "mfe", "bars", "nights", "ambiguous"]
     if m == 0:
         return pd.DataFrame(columns=cols)
-    pip = PAIRS[pair].pip
+    pip = instrument(pair).pip
     e = ent["entry_i"].to_numpy()
     d = ent["dir"].to_numpy().astype(int)
     n_bars = len(P["o"])
@@ -478,7 +478,7 @@ def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray],
     if not outcomes.empty:
         meta = entries.set_index("entry_id")[["pair", "sample"]]
         outcomes = outcomes.join(meta, on="entry_id")
-        spread = outcomes["pair"].map({p: c.spread_pips for p, c in PAIRS.items()})
+        spread = outcomes["pair"].map(lambda q: instrument(q).spread_pips)
         outcomes["pips_net"] = outcomes["pips_gross"] - spread  # B3: spread jednorazowo
         outcomes["r_net"] = outcomes["pips_net"] / outcomes["risk_pips"]  # R po spreadzie
     variants = pd.DataFrame([

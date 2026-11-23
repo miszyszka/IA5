@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from . import oos_log
 from .config import LEVERAGE, PAIRS, START_CAPITAL
 
 VERDICT = {"green": "🟢 ZIELONY", "yellow": "🟡 ŻÓŁTY", "red": "🔴 CZERWONY"}
@@ -64,7 +65,8 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
         "## Dane i model wykonania",
         f"- Pary: {', '.join(m['pairs'])}; świece {tf} od {_d(m['data_from'])} do {_d(m['data_to'])}; źródło: {m['data_source']}"
         + ("; tło D1 (świece dzienne, cała historia Yahoo) w signals() — D-058" if m.get("d1_background") else "") + ".",
-        f"- In-sample do {_d(m['oos_cutoff'])}, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS.",
+        f"- In-sample do {_d(m['oos_cutoff'])}, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS."
+        + (f" {oos_log.line(m['oos_views'])}" if m.get("oos_views") else ""),
         ("- Świece dzienne (D-058): sygnał na zamknięciu dnia (północ w Londynie), wejście na open następnego dnia; okno B11 nie dotyczy; "
          if tf == "D1" else
          "- Wejście na open świecy po sygnale, o dowolnej godzinie (strategia wyłączyła okno handlu, HOURS = False, D-034); "

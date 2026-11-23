@@ -101,6 +101,7 @@ function render() {
         h('button', { class: 'btn ghost small', onclick: () => fold?.setAll(false) }, 'Rozwiń wszystko'))),
     h('section', { id: 'card-head', class: 'card-head' }),
     h('section', { class: 'grid2' }, h('div', { id: 'verdict', class: 'panel' }), h('div', { id: 'valid', class: 'panel' })),
+    h('section', { id: 'explore', class: 'panel' }, h('div', { class: 'phead' }, h('h3', {}, 'Eksploracja Maca')), h('p', { class: 'hint' }, 'Wczytywanie…')),
     h('section', { id: 'filters', class: 'filters panel' }),
     h('section', { class: 'panel' },
       h('div', { class: 'phead' }, h('h3', {}, 'Ranking wariantów'), h('span', { class: 'hint' },
@@ -127,6 +128,65 @@ function render() {
   renderFilters();
   renderRank();
   renderTimeCurve();
+  renderExplore();
+}
+
+// ---------- D-072: eksploracja Maca i OOS na akcjach ----------
+
+const STK = { green: 'ok', yellow: 'warn', red: 'bad', mute: '' };
+
+function stocksCell(s) {
+  if (!s) return h('span', { class: 'hint' }, '—');
+  if (s.na) return h('span', { class: 'hint', title: s.na }, 'nie dotyczy');
+  const b = s.benchmark || {};
+  return h('span', { class: `chip ${STK[s.verdict?.color] || ''}`,
+    title: `${s.trades} transakcji na ${s.tickers_traded}/${s.tickers} spółkach od ${s.from}; koszt ${num(s.cost_pct_side, 2)}% na stronę; `
+      + `long ${signed(s.long?.mean_pct)}%, short ${signed(s.short?.mean_pct)}%; percentyl losowych wejść ${num(b.percentile, 0)}; `
+      + `spółki na plusie ${s.tickers_positive}/${s.tickers_traded}; lata na plusie ${s.years_positive}/${s.years}` },
+  `${signed(s.mean_pct)}% · ${s.verdict?.text || ''}`);
+}
+
+async function renderExplore() {
+  const root = $('#explore');
+  const ex = await getJSON(S.base + 'explore.json').catch(() => null);
+  const head = h('div', { class: 'phead' }, h('h3', {}, 'Eksploracja Maca'),
+    h('span', { class: 'hint' }, 'odmiany tej strategii sprawdzone w tle · wybór tylko po IS · OOS otwarty raz'));
+  if (!ex) {
+    root.replaceChildren(head, h('p', { class: 'hint' }, 'Mac sprawdzi odmiany tej strategii (filtry, przekształcenia sygnału, stop kroczący, szersza siatka '
+      + 'parametrów), kiedy nie będzie miał innej pracy — do godziny liczenia. Wynik pojawi się tutaj sam.'));
+    return;
+  }
+  const ref = ex.reference;
+  const rows = (ex.candidates || []).map((c) => {
+    const [vc, vl] = VERDICT[c.verdict?.color] || ['mute', '—'];
+    const o = c.oos || {}, b = c.benchmark || {}, d = c.dsr || {};
+    return h('tr', {},
+      h('td', { class: 'num' }, num(c.rank, 0)),
+      h('td', {}, h('b', {}, c.label), h('div', { class: 'hint' }, paramsLabel(c.params))),
+      h('td', {}, c.exit),
+      h('td', { class: 'num' }, `${num(c.is?.trades, 0)} · ${signed(c.is?.mean_r)} R`),
+      h('td', { class: `num ${cls(o.mean_r)}` }, `${num(o.trades, 0)} · ${signed(o.mean_r)} R`),
+      h('td', { class: 'num' }, num(b.percentile, 0)),
+      h('td', { class: 'num', title: `po korekcie za ${num(d.trials, 0)} prób eksploracji` }, num(d.dsr, 3)),
+      h('td', {}, stocksCell(c.stocks)),
+      h('td', {}, h('span', { class: `chip ${vc === 'mute' ? '' : vc}`, title: c.verdict?.text || '' }, vl)),
+      h('td', {}, c.code ? h('div', { class: 'row' },
+        h('button', { class: 'btn ghost small', onclick: async () => toast((await copy(c.code)) ? 'Kod odmiany skopiowany.' : 'Nie udało się skopiować.', 'ok') }, 'Kopiuj kod'),
+        h('button', { class: 'btn ghost small', title: 'Otwiera edytor z kodem tej odmiany — po wysłaniu Mac policzy ją jak nową strategię',
+          onclick: () => openEditor({ name: `${S.manifest.name} · ${c.label}`.slice(0, 120), code: c.code }) }, 'Jako nowa strategia'))
+        : h('span', { class: 'hint' }, c.check?.why || '')));
+  });
+  root.replaceChildren(head,
+    h('p', {}, ex.summary || ''),
+    ref ? h('p', { class: 'hint' }, `Punkt odniesienia — oryginał (najlepszy wg tej samej oceny): ${ref.exit}, ${paramsLabel(ref.params)}; `
+      + `IS ${num(ref.is_trades, 0)} transakcji, ${signed(ref.is_mean_r)} R; OOS ${num(ref.oos?.trades, 0)} transakcji, ${signed(ref.oos?.mean_r)} R.`,
+    ref.stocks ? h('span', {}, ' Na akcjach: ', stocksCell(ref.stocks)) : null) : null,
+    rows.length ? h('div', { class: 'tablewrap' }, h('table', { class: 'data compact' },
+      h('thead', {}, h('tr', {}, ...['#', 'odmiana', 'wyjście', 'IS', 'OOS', 'percentyl losowych', 'DSR', 'akcje (pilotaż)', 'werdykt', ''].map((x) => h('th', {}, x)))),
+      h('tbody', {}, ...rows))) : null,
+    h('p', { class: 'hint' }, `Sprawdzonych odmian: ${num(ex.trials, 0)} (${(ex.mutations || []).length} rodzajów)${ex.interrupted ? ` · przerwane: ${ex.interrupted}` : ''}`
+      + ` · ${num(ex.seconds / 60, 0)} min liczenia. Ocena w IS = gorsza z dwóch połówek IS (nagradza stałość). DSR liczony względem wszystkich prób eksploracji. `
+      + 'Akcje (tylko strategie D1): ten sam wariant na świecach dziennych spółek z zakładki Stocks, koszt 0,1% na stronę, porównanie z losowymi wejściami — informacja, nie werdykt.'));
 }
 
 function renderHead() {
@@ -182,6 +242,9 @@ function renderVerdict() {
     h('div', { class: 'phead' }, h('h3', {}, `Najlepszy wariant IS: ${v.best_exit || '—'}`), h('span', { class: 'hint' }, paramsLabel(v.best_params))),
     h('table', { class: 'kv' }, h('tbody', {},
       rowKV('IS śr. R → OOS śr. R', `${signed(v.is_mean_r)} → ${signed(v.oos_mean_r)}`, `${num(v.oos_trades, 0)} transakcji OOS`),
+      S.manifest.oos_views ? rowKV('OOS oglądany', `${num(S.manifest.oos_views.window_codes, 0)}×`,
+        `tyle wersji kodu (wszystkich strategii) widziało ten okres OOS${S.manifest.oos_views.window_explore ? `, plus ${S.manifest.oos_views.window_explore} kandydatów eksploracji` : ''}; `
+        + `ta strategia: ${S.manifest.oos_views.strategy_versions} wersji. Im więcej, tym mniej czysty OOS — prawdziwy test to forward od zamrożenia.`) : null,
       rowKV('Deflated Sharpe', num(ds.dsr, 3), `po korekcie za ${num(ds.trials, 0)} prób; ≥ 0,95 = przewaga mało prawdopodobna jako przypadek`),
       rowKV('PBO', num(pb.pbo, 3), `szansa, że najlepszy IS wypada poniżej mediany poza próbą (${num(pb.variants, 0)} wariantów, ${num(pb.combinations, 0)} podziałów)`),
       rowKV('Walk-forward', `${signed(wf.mean_r)} R`, `${num(wf.trades, 0)} transakcji; wariant wybierany tylko z przeszłości`),

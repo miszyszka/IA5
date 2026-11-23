@@ -2,6 +2,22 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-23 — eksploracja Maca, OOS na akcjach (pilotaż), dziennik OOS strategii (D-072), CLAUDE.md 0.63
+
+**Zrobione (na prośbę Michała: „żeby Mac liczył dłużej, więcej kreatywnych podejść… luki… świece akcji jako dodatkowy OOS”)**
+- **Eksploracja** (`runner/ia5/explore.py`): po każdym liczeniu Mac w tle sprawdza odmiany strategii — 13 przekształceń sygnału, stop kroczący, szersza siatka parametrów, połączenia; wybór tylko po IS (stałość w obu połowach IS), 5 kandydatów raz na OOS, DSR względem wszystkich prób, benchmark losowy, kod kandydata sprawdzony w piaskownicy. Do 60 min, ustępuje nowym strategiom. Na starcie kolejkuje strategie policzone bez eksploracji.
+- **OOS na akcjach** (`runner/ia5/stk_oos.py`): strategie D1 na świecach dziennych spółek z Stocks, koszt 0,1%/stronę, losowe wejścia na tych samych spółkach — informacja poza werdyktem.
+- **Dziennik OOS strategii** (`runner/ia5/oos_log.py`): każde liczenie zapisane; raport i karta mówią, ile wersji kodu widziało ten okres OOS.
+- **Strona:** panel „Eksploracja Maca” w karcie strategii (kandydaci, akcje, „Kopiuj kod”, „Jako nowa strategia”), wiersz „OOS oglądany”.
+- `ia5 run plik.py --eksploracja [--minuty N]` — lokalnie. 15 nowych testów (`tests/test_explore.py`), m.in.: zmiana cen w OOS nie zmienia wyboru kandydatów.
+- Sprawdzone tylko na danych syntetycznych (piaskownica bez dostępu do Twoich świec): na losowych danych eksploracja uczciwie nic nie znajduje.
+
+**Następne / do zrobienia przez Michała**
+1. Mac: `git pull`, `uv tool install -e runner --force`, restart `ia5 start` — po starcie Mac sam zacznie eksplorację policzonych strategii (po kolei, do godziny każda).
+2. Zajrzeć do panelu „Eksploracja Maca” w kartach strategii D1 (np. `d1_skladana`) — tam też wynik na akcjach.
+
+**Znane ograniczenia:** w czasie eksploracji cogodzinna kopia świec czeka (do 60 min; inwestorów, REV i Stocks liczy GitHub Actions); odmiany H1 bez tła D1; akcje tylko dla D1, dzisiejsza lista spółek.
+
 ## 2026-11-22 — Stocks: dane od 2010, rozliczenie gotówki, odliczanie i transakcje jako zdania (STK_VERSION 3), CLAUDE.md 0.62
 
 - Komunikat „Ten backtest liczono bez: …” — Mac nadal działał na kodzie sprzed 2026-11-16 (badanie wersji 1 na 5 spółkach; ostatnie przeliczenie portfela przez Maca 2026-11-22 11:50). Po `git pull` i restarcie `ia5 start` badanie liczy się od nowa na 14 spółkach.

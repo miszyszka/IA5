@@ -1,6 +1,6 @@
 # ROADMAP — jak IA5 ma się dalej rozwijać
 
-Wersja 0.3 · 2026-11-15 · Spisane po przeglądzie całego projektu (D-054–D-058); REV (D-063); FOREST usunięty, Stocks (D-071). Aktualizować, gdy zmienia się kierunek.
+Wersja 0.4 · 2026-11-23 · Spisane po przeglądzie całego projektu (D-054–D-058); REV (D-063); FOREST usunięty, Stocks (D-071); eksploracja Maca i OOS na akcjach (D-072). Aktualizować, gdy zmienia się kierunek.
 
 ## Zasada nadrzędna
 
@@ -66,6 +66,12 @@ Portfel spółek Michała rebalansowany co wtorek na otwarciu, w paśmie ±20% u
 | **S1 Backtest** | turniej 4 374 konfiguracji, walidacja, werdykt, raport | wynik na stronie dla udziałów Michała |
 | **S2 Na żywo** | plan wtorek 08:00, wykonanie na otwarciu, całe akcje, dywidendy, porównania | pierwszy wtorek wykonany sam |
 | **S3 Później (na życzenie)** | mail we wtorek z listą zleceń; waluta inna niż USD; dane fundamentalne (zmiana D7) | decyzja Michała |
+
+## Eksploracja i drugi OOS (D-072)
+
+- Każda strategia dostaje po liczeniu godzinę „kreatywnego” liczenia na Macu — odmiany wybierane tylko po IS, kandydaci raz na OOS, DSR z wszystkich prób.
+- Strategie D1 mają drugi, niezależny OOS: świece dzienne spółek (pilotaż, poza werdyktem). Jeśli po kilku strategiach okaże się, że „akcje potwierdzają” idzie w parze z dobrym forwardem — rozważyć wpisanie go do werdyktu (decyzja Michała).
+- Następne kroki do rozważenia: odmiany H1 z tłem D1 (trend dzienny jako filtr), „ten sam wzór H1 na D1”, raport korelacji kandydatów z już zamrożonymi strategiami (portfel zamiast pojedynczej strategii — etap C2).
 
 ## Czego NIE robić (świadomie)
 

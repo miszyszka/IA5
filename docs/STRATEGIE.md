@@ -1,6 +1,6 @@
 # STRATEGIE — jak pisać kod strategii dla IA5
 
-Wersja 0.47 · 2026-11-13 (dodane: `levels()` z kolumną `bars` — własny limit świec każdego wejścia, D-070; zamknięcie dnia D1 naprawione w danych, D-068; przykład `d1_skladana.py` — księga trzech składników w jednej strategii D1; wcześniej: przykłady `poniedzialek_powrot.py` i `azja_powrot.py` — sygnał w konkretnej godzinie, dzienne zamknięcia liczone z H1, `HOURS = False`, D-069; ostrzeżenie o zamknięciu D1 Yahoo od 2011, D-068; przykład `rsi_d1_seria_w_trendzie.py`; przykład `rsi_d1_powrot_w_trendzie.py` — wersje w `CONFIGS`, wyjście po X dniach przez `level` + `cap`, D-067; wyjście `level` z `cap = 0` — bez limitu czasu, D-061; `TIMEFRAME = "D1"` i tło D1 w strategiach H1 — D-058; `levels()` — D-057; noce i obsunięcie z MAE — D-054/D-055)
+Wersja 0.48 · 2026-11-23 (dodane: eksploracja Maca po liczeniu i `EXPLORE = False`, kod odmiany „Jako nowa strategia”, OOS na akcjach dla D1 — sekcja 10, D-072; wcześniej: `levels()` z kolumną `bars` — własny limit świec każdego wejścia, D-070; zamknięcie dnia D1 naprawione w danych, D-068; przykład `d1_skladana.py` — księga trzech składników w jednej strategii D1; wcześniej: przykłady `poniedzialek_powrot.py` i `azja_powrot.py` — sygnał w konkretnej godzinie, dzienne zamknięcia liczone z H1, `HOURS = False`, D-069; ostrzeżenie o zamknięciu D1 Yahoo od 2011, D-068; przykład `rsi_d1_seria_w_trendzie.py`; przykład `rsi_d1_powrot_w_trendzie.py` — wersje w `CONFIGS`, wyjście po X dniach przez `level` + `cap`, D-067; wyjście `level` z `cap = 0` — bez limitu czasu, D-061; `TIMEFRAME = "D1"` i tło D1 w strategiach H1 — D-058; `levels()` — D-057; noce i obsunięcie z MAE — D-054/D-055)
 
 > Ten plik jest **regułą dla Claude**. Gdy Michał mówi „zrób mi strategię …”, Claude postępuje dokładnie według sekcji 1 i zwraca kod, który bez zmian wkleja się do okna „Nowa strategia” w dashboardzie i który program `ia5` na Macu zrozumie.
 > Kontrakt jest egzekwowany w kodzie: `runner/ia5/sandbox.py` (wykonanie), `runner/ia5/check.py` (kontrola), `web/js/metrics.js` → `checkStrategyCode` (kontrola w przeglądarce).
@@ -261,6 +261,7 @@ def levels(df, p, ind):                      # ten sam df i p co signals(); licz
 3. Sygnały liczone w osobnym procesie, detektor look-ahead, silnik, walidacja.
 4. Wyniki trafiają na gałąź `data` (`results/{id}/`) → status `policzona` → karta strategii.
 5. Błąd w kodzie → status `blad` z komunikatem; w dashboardzie „Popraw kod”.
+6. Potem, gdy Mac nie ma innej pracy — **eksploracja** (do 60 min, sekcja 10): wynik dopisuje się do karty i do raportu dla Claude.
 
 ---
 
@@ -273,3 +274,13 @@ Gdy Michał chce „setek tysięcy kombinacji”, **nie** piszemy strategii z og
 4. Nie wybieramy z listy K tej konfiguracji, która wyszła najlepiej na OOS (W1). Rozstrzyga forward test po zamrożeniu (W4).
 5. Nowy wyzwalacz albo filtr dopisujemy w `search_rules.py` (sekcja między znacznikami — tylko `numpy`, `pandas`, `math`, `ind`) z testem look-ahead w `tests/test_search.py`.
 
+---
+
+## 10. Eksploracja Maca i OOS na akcjach (D-072)
+
+Po zwykłym liczeniu Mac sam szuka lepszych odmian strategii — nie trzeba ich dopisywać do `PARAMS` (zostaje ≤ ~12 kombinacji, K1).
+- **Co sprawdza:** przekształcenia sygnału (odwrócony, tylko long/short, z trendem/przeciw trendowi SMA200, z trendem SMA50, podwyższona/niska zmienność, silny trend / brak trendu wg ADX, z wybiciem 20 świec, po cofnięciu do SMA20, potwierdzenie następną świecą), stop kroczący, szerszą siatkę parametrów (środki i krok poza krańce; parametry-numery wersji jak `cfg` zostają), połączenia dwóch najlepszych przekształceń.
+- **Jak wybiera:** tylko po IS — gorszy z Sharpe na transakcję w dwóch połowach IS. 5 kandydatów raz na OOS, DSR względem wszystkich prób eksploracji, benchmark losowy, kod kandydata sprawdzony w piaskownicy.
+- **Strategie D1:** oryginał i kandydaci dodatkowo na świecach dziennych spółek z zakładki Stocks (koszt 0,1% na stronę, losowe wejścia na tych samych spółkach jako tło). Pilotaż: „akcje potwierdzają” wzmacnia zaufanie do wzoru ze świec, ale nie zmienia werdyktu. Strategia zależna od nazwy pary (`df.attrs["pair"]`) albo od kalendarza FX na spółkach nic nie da — to też informacja.
+- **Wyłączenie:** `EXPLORE = False` w kodzie (np. strategia z `ia5 search`, która już przeszła duże przeszukanie).
+- **Dla Claude przy ocenie raportu:** sekcja „Eksploracja Maca” mówi, czy odmiana jest lepsza od oryginału **po uczciwej korekcie**. Kandydat 🟢 można wkleić przyciskiem „Jako nowa strategia” — jego OOS był już raz oglądany, więc rozstrzyga forward test po zamrożeniu (W4). Nie dopisujemy kolejnych odmian ręcznie pod wynik OOS kandydatów; wiersz „OOS oglądany” w karcie pokazuje, ile razy ten okres był już widziany.

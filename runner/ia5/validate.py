@@ -15,7 +15,7 @@ from statistics import NormalDist
 import numpy as np
 import pandas as pd
 
-from .config import PAIRS
+from .config import PAIRS, instrument
 from .engine import Exit, data_cancel, simulate
 from .session import SWAP_STRESS_PIPS, in_trading_hours
 
@@ -28,8 +28,10 @@ MIN_TRADES = 30
 
 def random_benchmark(preps: dict, trades: pd.DataFrame, ex: Exit, signals: dict | None = None,
                      sims: int = 1000, seed: int = 7, max_rows: int = 200_000, hours=None,
-                     level_entries: pd.DataFrame | None = None) -> dict:
+                     level_entries: pd.DataFrame | None = None, pct_cost: float | None = None) -> dict:
     """Rozkład średnich pipsów netto z losowych wejść; percentyl faktycznego wyniku w tym rozkładzie.
+    pct_cost (D-072, OOS na akcjach): wynik w % ceny wejścia po koszcie pct_cost na każdą stronę zamiast pipsów po spreadzie
+    — wtedy trades["pips_net"] musi być już w tych samych procentach.
     level_entries (D-057): dla wyjść „level” losowe wejścia dostają odległości TP/SL (w ATR14, w przestrzeni long)
     wylosowane spośród odległości, jakie strategia naprawdę ustawiła — te same reguły wyjścia, inne momenty wejścia;
     razem z nimi limit świec wejścia (D-070), jeśli strategia go podała."""
@@ -53,7 +55,7 @@ def random_benchmark(preps: dict, trades: pd.DataFrame, ex: Exit, signals: dict 
             continue
         k = len(g)
         dirs = g["dir"].to_numpy()
-        spread = PAIRS[pair].spread_pips
+        spread = instrument(pair).spread_pips
         per_chunk = max(1, max_rows // k)
         for s0 in range(0, sims, per_chunk):
             s1 = min(sims, s0 + per_chunk)
@@ -71,7 +73,11 @@ def random_benchmark(preps: dict, trades: pd.DataFrame, ex: Exit, signals: dict 
                     ent["max_bars"] = np.where(np.isfinite(pick[:, 2]), pick[:, 2], 10 ** 9).astype(np.int64)
             opp = signals.get(pair) if signals else None
             res = simulate(P, ent, ex, pair, opp=opp)
-            net = np.array(res["pips_gross"] - spread, dtype=float)
+            if pct_cost is None:
+                net = np.array(res["pips_gross"] - spread, dtype=float)
+            else:   # D-072: % ceny wejścia, koszt na obie strony (pips_gross w jednostkach ceny: pip = 1)
+                px = P["o"][e]
+                net = np.array((res["pips_gross"].to_numpy(float) * instrument(pair).pip - 2 * pct_cost * px) / px * 100, dtype=float)
             net[data_cancel(P, i, e, res["exit_i"].to_numpy(float))] = np.nan  # D-031: te same luki co strategia
             net = net.reshape(s1 - s0, k)
             valid = ~np.isnan(net)

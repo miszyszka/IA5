@@ -1,4 +1,5 @@
 """Parametry rynku — jedyne źródło prawdy (CLAUDE.md, sekcja 2)."""
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 LEVERAGE = 30  # B4, D-024: zawsze 30:1
@@ -36,6 +37,38 @@ PAIRS = {
 
 # D-038: strategie liczymy na wszystkich parach; para bez danych do liczenia jest pomijana (ready.build).
 COMPUTE_PAIRS = tuple(PAIRS)
+
+
+# D-072: instrumenty spoza tabeli par (świece dzienne spółek w pilotażowym OOS na akcjach) — rejestrowane tylko na czas
+# jednego liczenia; ceny w jednostkach ceny (pip = 1), koszt liczony osobno w procentach (stk_oos). Pary FX bez zmian.
+_EXTRA: dict[str, Pair] = {}
+
+
+def instrument(name: str) -> Pair:
+    """Para z tabeli (sekcja 2) albo instrument zarejestrowany przez extra_instruments()."""
+    p = PAIRS.get(name)
+    if p is None:
+        p = _EXTRA.get(name)
+    if p is None:
+        raise KeyError(name)
+    return p
+
+
+@contextmanager
+def extra_instruments(names, pip: float = 1.0, spread_pips: float = 0.0):
+    """Rejestruje instrumenty (np. spółki) na czas bloku with; nazwy z tabeli par są odrzucane."""
+    added = []
+    for n in names:
+        if n in PAIRS:
+            raise ValueError(f"{n} jest parą FX — nie można go nadpisać")
+        if n not in _EXTRA:
+            _EXTRA[n] = Pair(n, n, pip, spread_pips, "USD")
+            added.append(n)
+    try:
+        yield
+    finally:
+        for n in added:
+            _EXTRA.pop(n, None)
 
 
 def spread_price(pair: str) -> float:

@@ -213,10 +213,11 @@ def ready_source(h1_dir: Path) -> str | None:
 def run_file(code: str, name: str, h1_dir: Path, out_root: Path, log=print,
              source: str | None = None, full_candles: bool = True, strategy_id: str | None = None,
              extra: dict | None = None, require_source: str | None = None, frozen_at: int | None = None,
-             frozen_variant: int | None = None, d1_dir: Path | None = None) -> Path:
+             frozen_variant: int | None = None, d1_dir: Path | None = None, ledger_home: Path | None = None) -> Path:
     """require_source="yahoo" (ia5 start, ia5 run) — liczenie tylko na danych z tego źródła (D7, D-041).
     frozen_at / frozen_variant (D-056): strategia zamrożona — walidacja na tym wariancie, blok „forward” od tej daty.
-    d1_dir (D-058): świece dzienne do liczenia — dane strategii z TIMEFRAME = "D1", tło D1 dla strategii H1."""
+    d1_dir (D-058): świece dzienne do liczenia — dane strategii z TIMEFRAME = "D1", tło D1 dla strategii H1.
+    ledger_home (D-072): katalog dziennika OOS (~/.ia5) — otwarcie OOS zapisane, liczniki w manifeście i raporcie."""
     t_start = time.time()
     if not any(h1_dir.glob("*.parquet")):
         raise SystemExit(f"Brak danych do liczenia w {h1_dir} — uruchom ia5 start (zrobi kopię świec Yahoo).")
@@ -279,9 +280,16 @@ def run_file(code: str, name: str, h1_dir: Path, out_root: Path, log=print,
         df = df.astype({"ts": np.int32})  # int32: przeglądarka dostaje zwykłe liczby, nie BigInt
         df.to_parquet(out / "candles" / f"{pair}.parquet", index=False, compression="snappy")
 
+    code_hash = hashlib.sha256(code.encode()).hexdigest()[:16]
+    oos_views = None
+    if ledger_home is not None:   # D-072: kto i ile razy widział ten okres OOS
+        from . import oos_log
+
+        oos_views = oos_log.add(ledger_home, sid, code_hash, tf, int(res["cutoff"]), int(max(df.ts.iloc[-1] for df in h1.values())),
+                                name=name)
     manifest = {
         "id": sid, "name": name, "run_id": run_id, "engine_version": ENGINE_VERSION,       # D6
-        "code_hash": hashlib.sha256(code.encode()).hexdigest()[:16], "data_hash": data_hash(data_dir),
+        "code_hash": code_hash, "data_hash": data_hash(data_dir), "oos_views": oos_views,
         "data_source": src or source or "inne", "timeframe": tf,
         "d1_background": bool(meta.get("d1_background")),
         "d1_hash": data_hash(Path(d1_dir)) if (tf == "H1" and meta.get("d1_background") and d1_dir) else None,

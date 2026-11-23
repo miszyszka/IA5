@@ -438,6 +438,7 @@ def cmd_start(_args) -> int:
     enqueue_frozen(jobs, owner)
     jobs.put((REV_JOB, None))                                      # D-063: badanie REV przy pierwszym starcie, potem portfel
     jobs.put((STOCKS_JOB, False))                                  # D-071: backtest Stocks przy pierwszym starcie, potem portfel
+    enqueue_explore_backlog(jobs, owner)                           # D-072: eksploracja strategii policzonych bez niej
     log("Połączony. Czekam na strategie (Ctrl+C kończy).")
     next_sync, last_forward = next_sync_time(), time.time()
     while True:
@@ -471,10 +472,16 @@ def cmd_start(_args) -> int:
         if sid == STOCKS_JOB:
             handle_stocks(state, bool(data))
             continue
+        if sid == EXPLORE_JOB:
+            if _strategy_waiting(jobs):           # najpierw strategie od Michała — eksploracja na koniec kolejki
+                jobs.put((sid, data))
+            else:
+                handle_explore(data, state, jobs)
+            continue
         if data.get("status") == "do_usuniecia":
             handle_delete(sid)
         else:
-            handle_job(sid, data, state)
+            handle_job(sid, data, state, jobs)
         seen.discard((sid, data.get("status")))
 
 
@@ -508,6 +515,7 @@ def requeue_after_source_change(owner: str | None) -> bool:
 
 FORWARD_SECONDS = 6 * 3600   # W4: forward test zamrożonych strategii
 INVESTORS_JOB = "__inwestorzy__"
+EXPLORE_JOB = "__eksploracja__"
 REV_JOB = "__rev__"
 STOCKS_JOB = "__stocks__"
 SYNC_OFFSET = 300            # kopia świec 5 min po pełnej godzinie
@@ -533,8 +541,8 @@ def enqueue_frozen(jobs: queue.Queue, owner: str | None) -> None:
 PHASES = {"Sygnały": 10, "Silnik": 25, "Walidacja: benchmark": 60, "Walidacja: Deflated": 80, "Gotowe": 90}
 
 
-def handle_job(sid: str, data: dict, state: dict) -> None:
-    from . import cloud, publish
+def handle_job(sid: str, data: dict, state: dict, jobs: queue.Queue | None = None) -> None:
+    from . import cloud, explore, publish
     from .backtest import run_file
     from .sandbox import StrategyError
 
@@ -567,13 +575,18 @@ def handle_job(sid: str, data: dict, state: dict) -> None:
         fv = data.get("frozenVariant")
         out = run_file(data.get("code", ""), name, READY, HOME / "results", log=step, source="yahoo", strategy_id=sid,
                        require_source="yahoo", d1_dir=D1_READY, frozen_at=int(fz) if fz else None,
-                       frozen_variant=int(fv) if fz and fv is not None and str(fv).lstrip("-").isdigit() else None)
+                       frozen_variant=int(fv) if fz and fv is not None and str(fv).lstrip("-").isdigit() else None,
+                       ledger_home=HOME)
+        carried = explore.carry_over(out)   # D-072: forward test tej samej wersji kodu nie gubi eksploracji
         sha = publish.publish_result(out, log=log)
         v = json.loads((out / "validation.json").read_text(encoding="utf-8"))
         cloud.update_strategy(sid, {"status": "policzona", "forwardError": None, "forwardAt": int(time.time()) if forward else None,
                                     "result": {"sha": sha, "path": f"results/{sid}",
                                                "run_id": out.name, "verdict": v.get("verdict", {}).get("color")}})
         log(f"Strategia „{name}”: gotowa.")
+        if jobs is not None and not carried and not explore.disabled(data.get("code", "")):
+            jobs.put((EXPLORE_JOB, {"sid": sid, "name": name, "code": data.get("code", ""), "out": str(out), "tries": 0}))
+            log(f"Strategia „{name}”: eksploracja w kolejce (Mac poszuka lepszych odmian, gdy nie będzie innej pracy).")
     except (StrategyError, SystemExit) as e:
         failed(str(e))
         log(f"Strategia „{name}”: błąd — {e}")
@@ -584,6 +597,91 @@ def handle_job(sid: str, data: dict, state: dict) -> None:
         state["now"] = "idle"
         state["job"] = None
         cloud.heartbeat("idle")
+
+
+EXPLORE_MAX_TRIES = 3   # D-072: eksploracja przerwana nową strategią wraca do kolejki najwyżej tyle razy
+
+
+def _strategy_waiting(jobs: queue.Queue) -> bool:
+    """Czy w kolejce czeka strategia od Michała (nie zadanie wewnętrzne) — wtedy eksploracja ustępuje."""
+    with jobs.mutex:
+        return any(isinstance(sid, str) and not sid.startswith("__") for sid, _ in list(jobs.queue))
+
+
+def handle_explore(job: dict, state: dict, jobs: queue.Queue) -> None:
+    """D-072: eksploracja w tle — odmiany strategii wybrane po IS, kandydaci raz na OOS, strategie D1 także na akcjach."""
+    from . import cloud, explore, oos_log, publish
+    from .store import D1_READY, READY, STK_READY
+
+    sid, name, out = job["sid"], job["name"], Path(job["out"])
+    if not (out / "manifest.json").exists():
+        return
+    newer = sorted(p.name for p in out.parent.iterdir() if p.is_dir())
+    if newer and newer[-1] != out.name:          # w międzyczasie policzono nowszą wersję — ta eksploracja jest nieaktualna
+        log(f"Eksploracja „{name}”: pomijam — jest nowszy wynik.")
+        return
+    log(f"Eksploracja „{name}”: start (limit {explore.MAX_SECONDS // 60} min, ustępuje nowym strategiom)…")
+    state["now"] = "computing"
+    state["job"] = {"id": sid, "name": f"Eksploracja: {name}", "progress": 0, "phase": "eksploracja"}
+    cloud.heartbeat("computing", state["job"])
+
+    def progress(pct, msg):
+        state["job"] = {"id": sid, "name": f"Eksploracja: {name}", "progress": int(5 + 85 * pct), "phase": msg[:60]}
+
+    try:
+        ex = explore.Explorer(job["code"], READY, D1_READY, log=log, stop=lambda: _strategy_waiting(jobs),
+                              stk_dir=STK_READY if any(STK_READY.glob("*.parquet")) else None, progress=progress)
+        res = ex.run()
+        if res.get("skipped"):
+            log(f"Eksploracja „{name}”: pominięta — {res['skipped']}")
+            return
+        if res.get("interrupted") and "strategia" in res["interrupted"] and job.get("tries", 0) < EXPLORE_MAX_TRIES:
+            jobs.put((EXPLORE_JOB, {**job, "tries": job.get("tries", 0) + 1}))
+            log(f"Eksploracja „{name}”: ustąpiła nowej strategii — wróci do kolejki.")
+            return
+        m = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+        if res.get("candidates"):
+            res["oos_views"] = oos_log.add(HOME, sid, m["code_hash"] + "+eksploracja", m.get("timeframe", "H1"), int(m["oos_cutoff"]),
+                                           int(m["data_to"]), kind="explore", opened=len(res["candidates"]), name=name)
+        explore.save(res, out)
+        sha = publish.publish_result(out, log=log)
+        cloud.update_strategy(sid, {"result": {"sha": sha, "path": f"results/{sid}", "run_id": out.name, "verdict": m.get("verdict")},
+                                    "explore": {"at": int(time.time()), "summary": res.get("summary"),
+                                                "green": sum(1 for c in res.get("candidates", []) if c["verdict"]["color"] == "green")}})
+        log(f"Eksploracja „{name}”: {res.get('summary')}")
+    except Exception as e:  # noqa: BLE001 — eksploracja nie może zatrzymać programu
+        log(f"Eksploracja „{name}”: błąd — {type(e).__name__}: {e}")
+    finally:
+        state["now"] = "idle"
+        state["job"] = None
+        cloud.heartbeat("idle")
+
+
+def enqueue_explore_backlog(jobs: queue.Queue, owner: str | None) -> None:
+    """D-072: policzone strategie bez eksploracji (np. sprzed tej wersji) — Mac zajmie się nimi, gdy nie ma innej pracy."""
+    from . import cloud, explore
+
+    if not owner:
+        return
+    try:
+        docs = cloud.computed_strategies()
+    except Exception as e:  # noqa: BLE001
+        log(f"Eksploracja: lista strategii nieudana ({e})")
+        return
+    for sid, data in docs:
+        if data.get("createdBy") != owner or explore.disabled(data.get("code", "")):
+            continue
+        folder = HOME / "results" / sid
+        runs = sorted((p for p in folder.glob("*") if p.is_dir()), key=lambda p: p.name) if folder.exists() else []
+        if not runs or (runs[-1] / "explore.json").exists():
+            continue
+        try:
+            same = json.loads((runs[-1] / "manifest.json").read_text())["engine_version"] == ENGINE_VERSION
+        except (OSError, ValueError, KeyError):
+            same = False
+        if same:
+            jobs.put((EXPLORE_JOB, {"sid": sid, "name": data.get("name") or sid, "code": data.get("code", ""), "out": str(runs[-1]),
+                                    "tries": 0}))
 
 
 CLOUD_FRESH_S = 2 * 3600   # D-052: świeży przebieg GitHub Actions = Mac nie liczy inwestorów
@@ -981,12 +1079,26 @@ def cmd_run(args) -> int:
     if not any(h1_dir.glob("*.parquet")):
         print(f"Brak świec do liczenia w {h1_dir} — najpierw ia5 start (zrobi kopię świec Yahoo).")
         return 1
+    code = path.read_text(encoding="utf-8")
     try:
-        run_file(path.read_text(encoding="utf-8"), args.name or path.stem, h1_dir, HOME / "results", log=log,
-                 require_source=None if args.h1 else "yahoo", d1_dir=d1_dir)
+        out = run_file(code, args.name or path.stem, h1_dir, HOME / "results", log=log,
+                       require_source=None if args.h1 else "yahoo", d1_dir=d1_dir, ledger_home=None if args.h1 else HOME)
     except StrategyError as e:
         print(f"Błąd strategii: {e}")
         return 1
+    if getattr(args, "eksploracja", False):   # D-072: eksploracja od razu, lokalnie
+        from . import explore, oos_log
+        from .store import STK_READY
+
+        res = explore.Explorer(code, h1_dir, d1_dir, log=log, max_seconds=int(args.minuty) * 60,
+                               stk_dir=STK_READY if any(STK_READY.glob("*.parquet")) else None).run()
+        if not res.get("skipped"):
+            m = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+            if res.get("candidates") and not args.h1:
+                oos_log.add(HOME, m["id"], m["code_hash"] + "+eksploracja", m.get("timeframe", "H1"), int(m["oos_cutoff"]),
+                            int(m["data_to"]), kind="explore", opened=len(res["candidates"]), name=m["name"])
+            explore.save(res, out)
+            print(explore.markdown(res))
     return 0
 
 
@@ -1102,6 +1214,8 @@ def main(argv=None) -> int:
     p_run.add_argument("--name")
     p_run.add_argument("--h1", help="katalog ze świecami H1 (domyślnie ~/.ia5/data/h1_ready)")
     p_run.add_argument("--d1", help="katalog ze świecami D1 (domyślnie ~/.ia5/data/d1_ready; D-058)")
+    p_run.add_argument("--eksploracja", action="store_true", help="po liczeniu: eksploracja odmian (D-072)")
+    p_run.add_argument("--minuty", default=60, type=int, help="limit czasu eksploracji w minutach (domyślnie 60)")
     p_run.set_defaults(func=cmd_run)
     p_chk = sub.add_parser("check", help="sprawdź kod strategii (kontrakt, look-ahead, sygnały)")
     p_chk.add_argument("file")
