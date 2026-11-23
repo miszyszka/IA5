@@ -1,6 +1,6 @@
 # Raport strategii: RSI 2
 
-Run `20261122-110352` · silnik 0.14.0 · kod `05a4838aae5707ab` · dane `eb2d9c7577046f9a`
+Run `20261123-211404` · silnik 0.14.0 · kod `05a4838aae5707ab` · dane `749711dbcd5ebfb3`
 
 ## Werdykt: 🟡 ŻÓŁTY — zaliczone 4 z 5 testów
 
@@ -25,9 +25,9 @@ Wersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób 
 
 ## Dane i model wykonania
 
-- Pary: AUDUSD, EURGBP, EURJPY, EURUSD, GBPUSD, USDCAD, USDCHF, USDJPY; świece H1 od 2024-10-28 do 2026-11-20; źródło: yahoo; tło D1 (świece dzienne, cała historia Yahoo) w signals() — D-058.
+- Pary: AUDUSD, EURGBP, EURJPY, EURUSD, GBPUSD, USDCAD, USDCHF, USDJPY; świece H1 od 2024-10-28 do 2026-11-23; źródło: yahoo; tło D1 (świece dzienne, cała historia Yahoo) w signals() — D-058.
 
-- In-sample do 2026-05-16, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS.
+- In-sample do 2026-05-18, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS.
 
 - Wejście na open świecy po sygnale, o dowolnej godzinie (strategia wyłączyła okno handlu, HOURS = False, D-034); wyjście na dowolnej świecy, także po nocy i weekendzie (D-032). TP i SL w tej samej świecy: przyjęty SL (pesymistycznie — świece H1 nie mówią, co padło pierwsze; transakcja z flagą `ambiguous`, B5).
 
@@ -94,11 +94,11 @@ Wersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób 
 
 | depozyt | kapitał końcowy | zwrot % | CAGR % | max obsunięcie % | obsunięcie z otwartymi (MAE) % | Sharpe | pominięte (depozyt) |
 |---|---|---|---|---|---|---|---|
-| 5.0% | 21 633 | 116.3 | 46.3 | -10.0 | -15.7 | 1.81 | 5 |
-| 10.0% | 32 297 | 223.0 | 78.2 | -16.6 | -29.4 | 1.71 | 71 |
-| 15.0% | 28 648 | 186.5 | 68.0 | -23.8 | -31.8 | 1.31 | 167 |
-| 20.0% | 23 817 | 138.2 | 53.4 | -28.9 | -35.6 | 1.01 | 242 |
-| 30.0% | 16 062 | 60.6 | 26.3 | -37.3 | -46.4 | 0.60 | 340 |
+| 5.0% | 21 635 | 116.3 | 46.3 | -10.0 | -15.7 | 1.81 | 5 |
+| 10.0% | 32 301 | 223.0 | 78.2 | -16.6 | -29.4 | 1.71 | 71 |
+| 15.0% | 28 654 | 186.5 | 68.0 | -23.8 | -31.8 | 1.31 | 167 |
+| 20.0% | 23 823 | 138.2 | 53.4 | -28.9 | -35.6 | 1.01 | 242 |
+| 30.0% | 16 068 | 60.7 | 26.3 | -37.3 | -46.4 | 0.60 | 340 |
 
 ### Czas trwania transakcji i pozycje otwarte (D-062)
 
@@ -517,7 +517,7 @@ Tabela pokazuje wszystkie otwarte i najdłuższe zamknięte (400 z 607); pełna 
 
 ## Walidacja
 
-- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 5.53 pips/transakcję, percentyl **99.9** (losowe: 5%=-5.05, mediana=-1.21, 95%=2.75).
+- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 5.53 pips/transakcję, percentyl **99.9** (losowe: 5%=-4.99, mediana=-0.91, 95%=3.11).
 
 - **Deflated Sharpe Ratio**: 0.761 (Sharpe na transakcję 0.229, próg przy 24 próbach 0.185).
 
