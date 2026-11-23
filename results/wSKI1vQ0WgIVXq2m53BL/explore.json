@@ -1,0 +1,502 @@
+{
+ "version": "1",
+ "timeframe": "H1",
+ "units": 19,
+ "trials": 98,
+ "mutations": [
+  "adx_silny",
+  "adx_silny+cofniecie20",
+  "adx_silny+trend50",
+  "adx_silny+zmiennosc_wysoka",
+  "adx_slaby",
+  "cofniecie20",
+  "cofniecie20+trend50",
+  "odwrocony",
+  "oryginal",
+  "potwierdzenie",
+  "przeciw200",
+  "trail",
+  "trend200",
+  "trend50",
+  "tylko_long",
+  "zmiennosc_niska",
+  "zmiennosc_wysoka",
+  "zmiennosc_wysoka+cofniecie20",
+  "zmiennosc_wysoka+trend50"
+ ],
+ "interrupted": null,
+ "reference": {
+  "mutation": "oryginal",
+  "label": "oryginał",
+  "family": "oryginał",
+  "params": {},
+  "exit": "ATR14 TP 1× SL 0× max 60",
+  "is_trades": 216,
+  "is_mean_r": 0.442084,
+  "is_mean_pips": 8.74802,
+  "is_sharpe_a": 0.18143,
+  "is_sharpe_b": 0.340353,
+  "score": 0.18143,
+  "oos": {
+   "trades": 77,
+   "mean_r": 0.503551,
+   "mean_pips": 9.011545,
+   "t_stat": 3.967463,
+   "bootstrap": {
+    "low": 4.128451,
+    "high": 13.153797,
+    "n": 77
+   }
+  }
+ },
+ "candidates": [
+  {
+   "rank": 1,
+   "mutation": "adx_silny",
+   "label": "tylko przy silnym trendzie (ADX14 > 25)",
+   "family": "przekształcenie",
+   "params": {},
+   "exit": "ATR14 TP 1.5× SL 0× max 60",
+   "is": {
+    "trades": 126,
+    "mean_r": 0.608501,
+    "mean_pips": 11.259108,
+    "sharpe_a": 0.254624,
+    "sharpe_b": 0.248494,
+    "score": 0.248494
+   },
+   "oos": {
+    "trades": 43,
+    "mean_r": 0.538948,
+    "mean_pips": 14.173569,
+    "t_stat": 2.692179,
+    "bootstrap": {
+     "low": 4.184685,
+     "high": 24.254863,
+     "n": 43
+    }
+   },
+   "dsr": {
+    "dsr": 0.42452,
+    "sharpe": 0.248505,
+    "sharpe0": 0.277348,
+    "trials": 71,
+    "trades": 126,
+    "skew": -5.194066,
+    "kurtosis": 38.530555
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 12.000657,
+    "percentile": 100.0,
+    "p5": -8.159057,
+    "p50": -1.445946,
+    "p95": 4.044954
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "HYPOTHESIS = \"\"\"FX-POWRÓT v2 (pomysł z 20.10.2026, reguły z IA4 sekcja 7b). Po gwałtownym impulsie w górę (zamknięcie ≥ 2 × ATR100\nwyżej niż poprzednie) kurs często cofa się w stronę ceny sprzed impulsu. Pierwsza czerwona świeca w ciągu 3 świec\npo impulsie pokazuje, że kupujący się wyczerpali — short z celem w połowie drogi od szczytu do bazy, bez stopu,\nlimit 60 świec.\nRóżnice wobec oryginału (ograniczenia IA5): 8 par zamiast 10; warunek „open wejścia ≥ baza + 0,5 ATR” sprawdzany na\nzamknięciu świecy sygnału (open następnej nie jest znany w chwili sygnału); TP jako poziom ceny P − ½(P − B) silnik\nna razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach ATR14 (patrz EXITS).\"\"\"\n\nimport numpy as np\n\nHOURS = False   # okno z reguł strategii: świeca sygnału zaczyna się 07–16 UTC (zamiast okna 07–17 czasu polskiego)\n\n# Bez SL (jak w oryginale), limit 60 świec. Wariant „czas” = trzymanie do 60. świecy; warianty ATR = przybliżenie\n# celu „połowa drogi powrotu” (impuls ≥ 2 × ATR100 ≈ 3–4 × ATR14, połowa drogi ≈ 1–2 × ATR14).\nEXITS = [{\"kind\": \"time\", \"n\": 60, \"cap\": 60}] + [{\"kind\": \"atr\", \"n\": 14, \"tp\": tp, \"cap\": 60} for tp in (1.0, 1.5, 2.0, 3.0)]\n\nSPREAD = {\"EURUSD\": 0.9, \"USDJPY\": 1.4, \"GBPUSD\": 1.5, \"EURGBP\": 1.7, \"AUDUSD\": 1.7, \"USDCHF\": 1.9, \"USDCAD\": 2.0,\n          \"EURJPY\": 2.1}\n\n\ndef signals(df, p, ind):\n    pair = df.attrs.get(\"pair\", \"\")\n    pip = 0.01 if \"JPY\" in pair else 0.0001\n    spread = SPREAD.get(pair, 2.0) * pip\n    o, h, c = df.open.to_numpy(), df.high.to_numpy(), df.close.to_numpy()\n    atr = ind.atr(df, 100).shift(1).to_numpy()          # ATR100 sprzed świecy\n    hour = df.index.hour.to_numpy()                      # UTC\n    n = len(c)\n    out = np.zeros(n, np.int8)\n    base, peak, last_imp, active = 0.0, 0.0, -1, False\n    for t in range(1, n):\n        a = atr[t]\n        if np.isnan(a):\n            continue\n        if c[t] - c[t - 1] >= 2 * a:                     # świeca impulsu\n            if not active:\n                active, base, peak = True, c[t - 1], h[t]\n            peak = max(peak, h[t])\n            last_imp = t\n            continue\n        if not active:\n            continue\n        peak = max(peak, h[t])\n        if c[t] <= base or t - last_imp > 3:             # impuls wygasł\n            active = False\n            continue\n        if c[t] < o[t] and 7 <= hour[t] <= 16:           # pierwsza czerwona w ciągu 3 świec\n            tp = peak - 0.5 * (peak - base)\n            if c[t] >= base + 0.5 * a and c[t] - tp >= max(spread, 0.1 * a):\n                out[t] = -1\n            active = False                               # tylko pierwsza czerwona\n    return out\n\n\n# ---- Eksploracja Maca (D-072): tylko przy silnym trendzie (ADX14 > 25) ----\n# Wybrane tylko po IS spośród 98 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_adx_silny(df, s, p, ind):\n    return s.where(ind.adx(df, 14)[\"adx\"] > 25, 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_adx_silny(df, s, p, ind)\n    return s\n\nPARAMS = {}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: tylko przy silnym trendzie (ADX14 > 25). Wybrana po IS spośród 98 prób.'\n",
+   "code_hash": "83b8f6dab188e4bd",
+   "verdict": {
+    "color": "yellow",
+    "text": "dodatnia w OOS, ale nie przechodzi wszystkich testów"
+   }
+  },
+  {
+   "rank": 2,
+   "mutation": "zmiennosc_wysoka",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "przekształcenie",
+   "params": {},
+   "exit": "ATR14 TP 1× SL 0× max 60",
+   "is": {
+    "trades": 193,
+    "mean_r": 0.470156,
+    "mean_pips": 9.514862,
+    "sharpe_a": 0.220115,
+    "sharpe_b": 0.312262,
+    "score": 0.220115
+   },
+   "oos": {
+    "trades": 68,
+    "mean_r": 0.587257,
+    "mean_pips": 9.845443,
+    "t_stat": 3.936496,
+    "bootstrap": {
+     "low": 4.504282,
+     "high": 14.332353,
+     "n": 68
+    }
+   },
+   "dsr": {
+    "dsr": 0.422267,
+    "sharpe": 0.249552,
+    "sharpe0": 0.277348,
+    "trials": 71,
+    "trades": 193,
+    "skew": -7.19971,
+    "kurtosis": 69.145022
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 9.60099,
+    "percentile": 100.0,
+    "p5": -5.709509,
+    "p50": -1.503127,
+    "p95": 2.454947
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "HYPOTHESIS = \"\"\"FX-POWRÓT v2 (pomysł z 20.10.2026, reguły z IA4 sekcja 7b). Po gwałtownym impulsie w górę (zamknięcie ≥ 2 × ATR100\nwyżej niż poprzednie) kurs często cofa się w stronę ceny sprzed impulsu. Pierwsza czerwona świeca w ciągu 3 świec\npo impulsie pokazuje, że kupujący się wyczerpali — short z celem w połowie drogi od szczytu do bazy, bez stopu,\nlimit 60 świec.\nRóżnice wobec oryginału (ograniczenia IA5): 8 par zamiast 10; warunek „open wejścia ≥ baza + 0,5 ATR” sprawdzany na\nzamknięciu świecy sygnału (open następnej nie jest znany w chwili sygnału); TP jako poziom ceny P − ½(P − B) silnik\nna razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach ATR14 (patrz EXITS).\"\"\"\n\nimport numpy as np\n\nHOURS = False   # okno z reguł strategii: świeca sygnału zaczyna się 07–16 UTC (zamiast okna 07–17 czasu polskiego)\n\n# Bez SL (jak w oryginale), limit 60 świec. Wariant „czas” = trzymanie do 60. świecy; warianty ATR = przybliżenie\n# celu „połowa drogi powrotu” (impuls ≥ 2 × ATR100 ≈ 3–4 × ATR14, połowa drogi ≈ 1–2 × ATR14).\nEXITS = [{\"kind\": \"time\", \"n\": 60, \"cap\": 60}] + [{\"kind\": \"atr\", \"n\": 14, \"tp\": tp, \"cap\": 60} for tp in (1.0, 1.5, 2.0, 3.0)]\n\nSPREAD = {\"EURUSD\": 0.9, \"USDJPY\": 1.4, \"GBPUSD\": 1.5, \"EURGBP\": 1.7, \"AUDUSD\": 1.7, \"USDCHF\": 1.9, \"USDCAD\": 2.0,\n          \"EURJPY\": 2.1}\n\n\ndef signals(df, p, ind):\n    pair = df.attrs.get(\"pair\", \"\")\n    pip = 0.01 if \"JPY\" in pair else 0.0001\n    spread = SPREAD.get(pair, 2.0) * pip\n    o, h, c = df.open.to_numpy(), df.high.to_numpy(), df.close.to_numpy()\n    atr = ind.atr(df, 100).shift(1).to_numpy()          # ATR100 sprzed świecy\n    hour = df.index.hour.to_numpy()                      # UTC\n    n = len(c)\n    out = np.zeros(n, np.int8)\n    base, peak, last_imp, active = 0.0, 0.0, -1, False\n    for t in range(1, n):\n        a = atr[t]\n        if np.isnan(a):\n            continue\n        if c[t] - c[t - 1] >= 2 * a:                     # świeca impulsu\n            if not active:\n                active, base, peak = True, c[t - 1], h[t]\n            peak = max(peak, h[t])\n            last_imp = t\n            continue\n        if not active:\n            continue\n        peak = max(peak, h[t])\n        if c[t] <= base or t - last_imp > 3:             # impuls wygasł\n            active = False\n            continue\n        if c[t] < o[t] and 7 <= hour[t] <= 16:           # pierwsza czerwona w ciągu 3 świec\n            tp = peak - 0.5 * (peak - base)\n            if c[t] >= base + 0.5 * a and c[t] - tp >= max(spread, 0.1 * a):\n                out[t] = -1\n            active = False                               # tylko pierwsza czerwona\n    return out\n\n\n# ---- Eksploracja Maca (D-072): tylko przy podwyższonej zmienności (ATR14 > ATR100) ----\n# Wybrane tylko po IS spośród 98 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_zmiennosc_wysoka(df, s, p, ind):\n    return s.where(ind.atr(df, 14) > ind.atr(df, 100), 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_zmiennosc_wysoka(df, s, p, ind)\n    return s\n\nPARAMS = {}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: tylko przy podwyższonej zmienności (ATR14 > ATR100). Wybrana po IS spośród 98 prób.'\n",
+   "code_hash": "2fc173f2b7827426",
+   "verdict": {
+    "color": "yellow",
+    "text": "dodatnia w OOS, ale nie przechodzi wszystkich testów"
+   }
+  },
+  {
+   "rank": 3,
+   "mutation": "zmiennosc_wysoka+cofniecie20",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100) + tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20)",
+   "family": "połączenie",
+   "params": {},
+   "exit": "ATR14 TP 1× SL 0× max 60",
+   "is": {
+    "trades": 180,
+    "mean_r": 0.44883,
+    "mean_pips": 9.081176,
+    "sharpe_a": 0.217116,
+    "sharpe_b": 0.264908,
+    "score": 0.217116
+   },
+   "oos": {
+    "trades": 61,
+    "mean_r": 0.595459,
+    "mean_pips": 9.259286,
+    "t_stat": 3.591421,
+    "bootstrap": {
+     "low": 3.766691,
+     "high": 13.859136,
+     "n": 61
+    }
+   },
+   "dsr": {
+    "dsr": 0.369076,
+    "sharpe": 0.230822,
+    "sharpe0": 0.277348,
+    "trials": 71,
+    "trades": 180,
+    "skew": -6.990738,
+    "kurtosis": 65.074624
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 9.126258,
+    "percentile": 100.0,
+    "p5": -6.037574,
+    "p50": -1.35318,
+    "p95": 2.60129
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "HYPOTHESIS = \"\"\"FX-POWRÓT v2 (pomysł z 20.10.2026, reguły z IA4 sekcja 7b). Po gwałtownym impulsie w górę (zamknięcie ≥ 2 × ATR100\nwyżej niż poprzednie) kurs często cofa się w stronę ceny sprzed impulsu. Pierwsza czerwona świeca w ciągu 3 świec\npo impulsie pokazuje, że kupujący się wyczerpali — short z celem w połowie drogi od szczytu do bazy, bez stopu,\nlimit 60 świec.\nRóżnice wobec oryginału (ograniczenia IA5): 8 par zamiast 10; warunek „open wejścia ≥ baza + 0,5 ATR” sprawdzany na\nzamknięciu świecy sygnału (open następnej nie jest znany w chwili sygnału); TP jako poziom ceny P − ½(P − B) silnik\nna razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach ATR14 (patrz EXITS).\"\"\"\n\nimport numpy as np\n\nHOURS = False   # okno z reguł strategii: świeca sygnału zaczyna się 07–16 UTC (zamiast okna 07–17 czasu polskiego)\n\n# Bez SL (jak w oryginale), limit 60 świec. Wariant „czas” = trzymanie do 60. świecy; warianty ATR = przybliżenie\n# celu „połowa drogi powrotu” (impuls ≥ 2 × ATR100 ≈ 3–4 × ATR14, połowa drogi ≈ 1–2 × ATR14).\nEXITS = [{\"kind\": \"time\", \"n\": 60, \"cap\": 60}] + [{\"kind\": \"atr\", \"n\": 14, \"tp\": tp, \"cap\": 60} for tp in (1.0, 1.5, 2.0, 3.0)]\n\nSPREAD = {\"EURUSD\": 0.9, \"USDJPY\": 1.4, \"GBPUSD\": 1.5, \"EURGBP\": 1.7, \"AUDUSD\": 1.7, \"USDCHF\": 1.9, \"USDCAD\": 2.0,\n          \"EURJPY\": 2.1}\n\n\ndef signals(df, p, ind):\n    pair = df.attrs.get(\"pair\", \"\")\n    pip = 0.01 if \"JPY\" in pair else 0.0001\n    spread = SPREAD.get(pair, 2.0) * pip\n    o, h, c = df.open.to_numpy(), df.high.to_numpy(), df.close.to_numpy()\n    atr = ind.atr(df, 100).shift(1).to_numpy()          # ATR100 sprzed świecy\n    hour = df.index.hour.to_numpy()                      # UTC\n    n = len(c)\n    out = np.zeros(n, np.int8)\n    base, peak, last_imp, active = 0.0, 0.0, -1, False\n    for t in range(1, n):\n        a = atr[t]\n        if np.isnan(a):\n            continue\n        if c[t] - c[t - 1] >= 2 * a:                     # świeca impulsu\n            if not active:\n                active, base, peak = True, c[t - 1], h[t]\n            peak = max(peak, h[t])\n            last_imp = t\n            continue\n        if not active:\n            continue\n        peak = max(peak, h[t])\n        if c[t] <= base or t - last_imp > 3:             # impuls wygasł\n            active = False\n            continue\n        if c[t] < o[t] and 7 <= hour[t] <= 16:           # pierwsza czerwona w ciągu 3 świec\n            tp = peak - 0.5 * (peak - base)\n            if c[t] >= base + 0.5 * a and c[t] - tp >= max(spread, 0.1 * a):\n                out[t] = -1\n            active = False                               # tylko pierwsza czerwona\n    return out\n\n\n# ---- Eksploracja Maca (D-072): tylko przy podwyższonej zmienności (ATR14 > ATR100) + tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20) ----\n# Wybrane tylko po IS spośród 98 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_zmiennosc_wysoka(df, s, p, ind):\n    return s.where(ind.atr(df, 14) > ind.atr(df, 100), 0.0)\n\ndef _ia5_cofniecie20(df, s, p, ind):\n    m = ind.sma(df.close, 20)\n    return s.where(((s > 0) & (df.close < m)) | ((s < 0) & (df.close > m)), 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_zmiennosc_wysoka(df, s, p, ind)\n    s = _ia5_cofniecie20(df, s, p, ind)\n    return s\n\nPARAMS = {}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: tylko przy podwyższonej zmienności (ATR14 > ATR100) + tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20). Wybrana po IS spośród 98 prób.'\n",
+   "code_hash": "b1f6f09f4137b22e",
+   "verdict": {
+    "color": "yellow",
+    "text": "dodatnia w OOS, ale nie przechodzi wszystkich testów"
+   }
+  },
+  {
+   "rank": 4,
+   "mutation": "adx_silny+zmiennosc_wysoka",
+   "label": "tylko przy silnym trendzie (ADX14 > 25) + tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "połączenie",
+   "params": {},
+   "exit": "ATR14 TP 1.5× SL 0× max 60",
+   "is": {
+    "trades": 120,
+    "mean_r": 0.56911,
+    "mean_pips": 10.855234,
+    "sharpe_a": 0.243082,
+    "sharpe_b": 0.210473,
+    "score": 0.210473
+   },
+   "oos": {
+    "trades": 38,
+    "mean_r": 0.870263,
+    "mean_pips": 17.81653,
+    "t_stat": 3.24612,
+    "bootstrap": {
+     "low": 6.391064,
+     "high": 28.123535,
+     "n": 38
+    }
+   },
+   "dsr": {
+    "dsr": 0.367965,
+    "sharpe": 0.22737,
+    "sharpe0": 0.277348,
+    "trials": 71,
+    "trades": 120,
+    "skew": -5.063281,
+    "kurtosis": 36.762181
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 12.52947,
+    "percentile": 100.0,
+    "p5": -8.831847,
+    "p50": -1.44172,
+    "p95": 4.602078
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "HYPOTHESIS = \"\"\"FX-POWRÓT v2 (pomysł z 20.10.2026, reguły z IA4 sekcja 7b). Po gwałtownym impulsie w górę (zamknięcie ≥ 2 × ATR100\nwyżej niż poprzednie) kurs często cofa się w stronę ceny sprzed impulsu. Pierwsza czerwona świeca w ciągu 3 świec\npo impulsie pokazuje, że kupujący się wyczerpali — short z celem w połowie drogi od szczytu do bazy, bez stopu,\nlimit 60 świec.\nRóżnice wobec oryginału (ograniczenia IA5): 8 par zamiast 10; warunek „open wejścia ≥ baza + 0,5 ATR” sprawdzany na\nzamknięciu świecy sygnału (open następnej nie jest znany w chwili sygnału); TP jako poziom ceny P − ½(P − B) silnik\nna razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach ATR14 (patrz EXITS).\"\"\"\n\nimport numpy as np\n\nHOURS = False   # okno z reguł strategii: świeca sygnału zaczyna się 07–16 UTC (zamiast okna 07–17 czasu polskiego)\n\n# Bez SL (jak w oryginale), limit 60 świec. Wariant „czas” = trzymanie do 60. świecy; warianty ATR = przybliżenie\n# celu „połowa drogi powrotu” (impuls ≥ 2 × ATR100 ≈ 3–4 × ATR14, połowa drogi ≈ 1–2 × ATR14).\nEXITS = [{\"kind\": \"time\", \"n\": 60, \"cap\": 60}] + [{\"kind\": \"atr\", \"n\": 14, \"tp\": tp, \"cap\": 60} for tp in (1.0, 1.5, 2.0, 3.0)]\n\nSPREAD = {\"EURUSD\": 0.9, \"USDJPY\": 1.4, \"GBPUSD\": 1.5, \"EURGBP\": 1.7, \"AUDUSD\": 1.7, \"USDCHF\": 1.9, \"USDCAD\": 2.0,\n          \"EURJPY\": 2.1}\n\n\ndef signals(df, p, ind):\n    pair = df.attrs.get(\"pair\", \"\")\n    pip = 0.01 if \"JPY\" in pair else 0.0001\n    spread = SPREAD.get(pair, 2.0) * pip\n    o, h, c = df.open.to_numpy(), df.high.to_numpy(), df.close.to_numpy()\n    atr = ind.atr(df, 100).shift(1).to_numpy()          # ATR100 sprzed świecy\n    hour = df.index.hour.to_numpy()                      # UTC\n    n = len(c)\n    out = np.zeros(n, np.int8)\n    base, peak, last_imp, active = 0.0, 0.0, -1, False\n    for t in range(1, n):\n        a = atr[t]\n        if np.isnan(a):\n            continue\n        if c[t] - c[t - 1] >= 2 * a:                     # świeca impulsu\n            if not active:\n                active, base, peak = True, c[t - 1], h[t]\n            peak = max(peak, h[t])\n            last_imp = t\n            continue\n        if not active:\n            continue\n        peak = max(peak, h[t])\n        if c[t] <= base or t - last_imp > 3:             # impuls wygasł\n            active = False\n            continue\n        if c[t] < o[t] and 7 <= hour[t] <= 16:           # pierwsza czerwona w ciągu 3 świec\n            tp = peak - 0.5 * (peak - base)\n            if c[t] >= base + 0.5 * a and c[t] - tp >= max(spread, 0.1 * a):\n                out[t] = -1\n            active = False                               # tylko pierwsza czerwona\n    return out\n\n\n# ---- Eksploracja Maca (D-072): tylko przy silnym trendzie (ADX14 > 25) + tylko przy podwyższonej zmienności (ATR14 > ATR100) ----\n# Wybrane tylko po IS spośród 98 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_adx_silny(df, s, p, ind):\n    return s.where(ind.adx(df, 14)[\"adx\"] > 25, 0.0)\n\ndef _ia5_zmiennosc_wysoka(df, s, p, ind):\n    return s.where(ind.atr(df, 14) > ind.atr(df, 100), 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_adx_silny(df, s, p, ind)\n    s = _ia5_zmiennosc_wysoka(df, s, p, ind)\n    return s\n\nPARAMS = {}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: tylko przy silnym trendzie (ADX14 > 25) + tylko przy podwyższonej zmienności (ATR14 > ATR100). Wybrana po IS spośród 98 prób.'\n",
+   "code_hash": "b759bdbfc9986307",
+   "verdict": {
+    "color": "yellow",
+    "text": "dodatnia w OOS, ale nie przechodzi wszystkich testów"
+   }
+  },
+  {
+   "rank": 5,
+   "mutation": "adx_silny+cofniecie20",
+   "label": "tylko przy silnym trendzie (ADX14 > 25) + tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20)",
+   "family": "połączenie",
+   "params": {},
+   "exit": "ATR14 TP 1.5× SL 0× max 60",
+   "is": {
+    "trades": 116,
+    "mean_r": 0.563025,
+    "mean_pips": 9.910209,
+    "sharpe_a": 0.237265,
+    "sharpe_b": 0.204916,
+    "score": 0.204916
+   },
+   "oos": {
+    "trades": 40,
+    "mean_r": 0.471794,
+    "mean_pips": 11.578819,
+    "t_stat": 2.201743,
+    "bootstrap": {
+     "low": 1.368984,
+     "high": 20.897456,
+     "n": 40
+    }
+   },
+   "dsr": {
+    "dsr": 0.355528,
+    "sharpe": 0.222156,
+    "sharpe0": 0.277348,
+    "trials": 71,
+    "trades": 116,
+    "skew": -5.037254,
+    "kurtosis": 36.150902
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 10.338057,
+    "percentile": 100.0,
+    "p5": -8.133527,
+    "p50": -1.744571,
+    "p95": 4.353692
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "HYPOTHESIS = \"\"\"FX-POWRÓT v2 (pomysł z 20.10.2026, reguły z IA4 sekcja 7b). Po gwałtownym impulsie w górę (zamknięcie ≥ 2 × ATR100\nwyżej niż poprzednie) kurs często cofa się w stronę ceny sprzed impulsu. Pierwsza czerwona świeca w ciągu 3 świec\npo impulsie pokazuje, że kupujący się wyczerpali — short z celem w połowie drogi od szczytu do bazy, bez stopu,\nlimit 60 świec.\nRóżnice wobec oryginału (ograniczenia IA5): 8 par zamiast 10; warunek „open wejścia ≥ baza + 0,5 ATR” sprawdzany na\nzamknięciu świecy sygnału (open następnej nie jest znany w chwili sygnału); TP jako poziom ceny P − ½(P − B) silnik\nna razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach ATR14 (patrz EXITS).\"\"\"\n\nimport numpy as np\n\nHOURS = False   # okno z reguł strategii: świeca sygnału zaczyna się 07–16 UTC (zamiast okna 07–17 czasu polskiego)\n\n# Bez SL (jak w oryginale), limit 60 świec. Wariant „czas” = trzymanie do 60. świecy; warianty ATR = przybliżenie\n# celu „połowa drogi powrotu” (impuls ≥ 2 × ATR100 ≈ 3–4 × ATR14, połowa drogi ≈ 1–2 × ATR14).\nEXITS = [{\"kind\": \"time\", \"n\": 60, \"cap\": 60}] + [{\"kind\": \"atr\", \"n\": 14, \"tp\": tp, \"cap\": 60} for tp in (1.0, 1.5, 2.0, 3.0)]\n\nSPREAD = {\"EURUSD\": 0.9, \"USDJPY\": 1.4, \"GBPUSD\": 1.5, \"EURGBP\": 1.7, \"AUDUSD\": 1.7, \"USDCHF\": 1.9, \"USDCAD\": 2.0,\n          \"EURJPY\": 2.1}\n\n\ndef signals(df, p, ind):\n    pair = df.attrs.get(\"pair\", \"\")\n    pip = 0.01 if \"JPY\" in pair else 0.0001\n    spread = SPREAD.get(pair, 2.0) * pip\n    o, h, c = df.open.to_numpy(), df.high.to_numpy(), df.close.to_numpy()\n    atr = ind.atr(df, 100).shift(1).to_numpy()          # ATR100 sprzed świecy\n    hour = df.index.hour.to_numpy()                      # UTC\n    n = len(c)\n    out = np.zeros(n, np.int8)\n    base, peak, last_imp, active = 0.0, 0.0, -1, False\n    for t in range(1, n):\n        a = atr[t]\n        if np.isnan(a):\n            continue\n        if c[t] - c[t - 1] >= 2 * a:                     # świeca impulsu\n            if not active:\n                active, base, peak = True, c[t - 1], h[t]\n            peak = max(peak, h[t])\n            last_imp = t\n            continue\n        if not active:\n            continue\n        peak = max(peak, h[t])\n        if c[t] <= base or t - last_imp > 3:             # impuls wygasł\n            active = False\n            continue\n        if c[t] < o[t] and 7 <= hour[t] <= 16:           # pierwsza czerwona w ciągu 3 świec\n            tp = peak - 0.5 * (peak - base)\n            if c[t] >= base + 0.5 * a and c[t] - tp >= max(spread, 0.1 * a):\n                out[t] = -1\n            active = False                               # tylko pierwsza czerwona\n    return out\n\n\n# ---- Eksploracja Maca (D-072): tylko przy silnym trendzie (ADX14 > 25) + tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20) ----\n# Wybrane tylko po IS spośród 98 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_adx_silny(df, s, p, ind):\n    return s.where(ind.adx(df, 14)[\"adx\"] > 25, 0.0)\n\ndef _ia5_cofniecie20(df, s, p, ind):\n    m = ind.sma(df.close, 20)\n    return s.where(((s > 0) & (df.close < m)) | ((s < 0) & (df.close > m)), 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_adx_silny(df, s, p, ind)\n    s = _ia5_cofniecie20(df, s, p, ind)\n    return s\n\nPARAMS = {}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: tylko przy silnym trendzie (ADX14 > 25) + tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20). Wybrana po IS spośród 98 prób.'\n",
+   "code_hash": "8253778fa1202fbe",
+   "verdict": {
+    "color": "yellow",
+    "text": "dodatnia w OOS, ale nie przechodzi wszystkich testów"
+   }
+  }
+ ],
+ "is_table": [
+  {
+   "mutation": "adx_silny",
+   "label": "tylko przy silnym trendzie (ADX14 > 25)",
+   "family": "przekształcenie",
+   "params": {},
+   "exit": "ATR14 TP 1.5× SL 0× max 60",
+   "is_trades": 126,
+   "is_mean_r": 0.608501,
+   "is_mean_pips": 11.259108,
+   "is_sharpe_a": 0.254624,
+   "is_sharpe_b": 0.248494,
+   "score": 0.248494
+  },
+  {
+   "mutation": "zmiennosc_wysoka",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "przekształcenie",
+   "params": {},
+   "exit": "ATR14 TP 1× SL 0× max 60",
+   "is_trades": 193,
+   "is_mean_r": 0.470156,
+   "is_mean_pips": 9.514862,
+   "is_sharpe_a": 0.220115,
+   "is_sharpe_b": 0.312262,
+   "score": 0.220115
+  },
+  {
+   "mutation": "zmiennosc_wysoka+cofniecie20",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100) + tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20)",
+   "family": "połączenie",
+   "params": {},
+   "exit": "ATR14 TP 1× SL 0× max 60",
+   "is_trades": 180,
+   "is_mean_r": 0.44883,
+   "is_mean_pips": 9.081176,
+   "is_sharpe_a": 0.217116,
+   "is_sharpe_b": 0.264908,
+   "score": 0.217116
+  },
+  {
+   "mutation": "adx_silny+zmiennosc_wysoka",
+   "label": "tylko przy silnym trendzie (ADX14 > 25) + tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "połączenie",
+   "params": {},
+   "exit": "ATR14 TP 1.5× SL 0× max 60",
+   "is_trades": 120,
+   "is_mean_r": 0.56911,
+   "is_mean_pips": 10.855234,
+   "is_sharpe_a": 0.243082,
+   "is_sharpe_b": 0.210473,
+   "score": 0.210473
+  },
+  {
+   "mutation": "adx_silny+cofniecie20",
+   "label": "tylko przy silnym trendzie (ADX14 > 25) + tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20)",
+   "family": "połączenie",
+   "params": {},
+   "exit": "ATR14 TP 1.5× SL 0× max 60",
+   "is_trades": 116,
+   "is_mean_r": 0.563025,
+   "is_mean_pips": 9.910209,
+   "is_sharpe_a": 0.237265,
+   "is_sharpe_b": 0.204916,
+   "score": 0.204916
+  },
+  {
+   "mutation": "cofniecie20",
+   "label": "tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20)",
+   "family": "przekształcenie",
+   "params": {},
+   "exit": "ATR14 TP 1× SL 0× max 60",
+   "is_trades": 202,
+   "is_mean_r": 0.419052,
+   "is_mean_pips": 8.294828,
+   "is_sharpe_a": 0.175032,
+   "is_sharpe_b": 0.300058,
+   "score": 0.175032
+  },
+  {
+   "mutation": "trend50",
+   "label": "tylko z trendem SMA50",
+   "family": "przekształcenie",
+   "params": {},
+   "exit": "ATR14 TP 1.5× SL 0× max 60",
+   "is_trades": 30,
+   "is_mean_r": 0.370263,
+   "is_mean_pips": 8.996247,
+   "is_sharpe_a": 0.169196,
+   "is_sharpe_b": 0.162181,
+   "score": 0.162181
+  },
+  {
+   "mutation": "przeciw200",
+   "label": "tylko przeciw trendowi SMA200",
+   "family": "przekształcenie",
+   "params": {},
+   "exit": "ATR14 TP 1× SL 0× max 60",
+   "is_trades": 166,
+   "is_mean_r": 0.486741,
+   "is_mean_pips": 9.655987,
+   "is_sharpe_a": 0.128481,
+   "is_sharpe_b": 0.655565,
+   "score": 0.128481
+  },
+  {
+   "mutation": "trend200",
+   "label": "tylko z trendem SMA200",
+   "family": "przekształcenie",
+   "params": {},
+   "exit": "ATR14 TP 1.5× SL 0× max 60",
+   "is_trades": 44,
+   "is_mean_r": 0.471853,
+   "is_mean_pips": 9.293651,
+   "is_sharpe_a": 0.465914,
+   "is_sharpe_b": 0.117817,
+   "score": 0.117817
+  },
+  {
+   "mutation": "adx_slaby",
+   "label": "tylko bez wyraźnego trendu (ADX14 < 20)",
+   "family": "przekształcenie",
+   "params": {},
+   "exit": "ATR14 TP 1× SL 0× max 60",
+   "is_trades": 46,
+   "is_mean_r": 0.245105,
+   "is_mean_pips": 4.272163,
+   "is_sharpe_a": 0.063295,
+   "is_sharpe_b": 0.217739,
+   "score": 0.063295
+  },
+  {
+   "mutation": "odwrocony",
+   "label": "odwrócony sygnał",
+   "family": "przekształcenie",
+   "params": {},
+   "exit": "ATR14 TP 1.5× SL 0× max 60",
+   "is_trades": 216,
+   "is_mean_r": 0.097896,
+   "is_mean_pips": 3.016466,
+   "is_sharpe_a": 0.052601,
+   "is_sharpe_b": 0.01501,
+   "score": 0.01501
+  },
+  {
+   "mutation": "trail",
+   "label": "stop kroczący 1–3 × ATR14",
+   "family": "wyjście",
+   "params": {},
+   "exit": "ATR14 SL 2× kroczący 1× max 72",
+   "is_trades": 231,
+   "is_mean_r": 0.011871,
+   "is_mean_pips": -0.10355,
+   "is_sharpe_a": -0.026158,
+   "is_sharpe_b": 0.051604,
+   "score": -0.026158
+  },
+  {
+   "mutation": "potwierdzenie",
+   "label": "potwierdzenie: następna świeca zamyka się w kierunku sygnału",
+   "family": "przekształcenie",
+   "params": {},
+   "exit": "ATR14 TP 1× SL 0× max 60",
+   "is_trades": 109,
+   "is_mean_r": -0.161984,
+   "is_mean_pips": 0.486956,
+   "is_sharpe_a": 0.007553,
+   "is_sharpe_b": -0.10325,
+   "score": -0.10325
+  }
+ ],
+ "summary": "Mac sprawdził 98 odmian (19 rodzajów). 5 z 5 kandydatów dodatnich w OOS, żaden nie przeszedł wszystkich testów.",
+ "seconds": 33.3,
+ "oos_views": {
+  "strategy_versions": 1,
+  "window_codes": 2,
+  "window_explore": 10
+ }
+}
