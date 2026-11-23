@@ -1,0 +1,1038 @@
+{
+ "version": "1",
+ "timeframe": "H1",
+ "units": 140,
+ "trials": 440,
+ "mutations": [
+  "adx_silny",
+  "adx_slaby",
+  "adx_slaby+zmiennosc_niska",
+  "odwrocony",
+  "oryginal",
+  "potwierdzenie",
+  "przeciw200",
+  "siatka",
+  "trail",
+  "trend200",
+  "trend200+adx_slaby",
+  "trend200+tylko_long",
+  "trend200+zmiennosc_niska",
+  "trend50",
+  "tylko_long",
+  "tylko_long+adx_slaby",
+  "tylko_long+zmiennosc_niska",
+  "tylko_short",
+  "zmiennosc_niska",
+  "zmiennosc_wysoka"
+ ],
+ "interrupted": null,
+ "reference": {
+  "mutation": "oryginal",
+  "label": "oryginał",
+  "family": "oryginał",
+  "params": {
+   "ema": 200,
+   "nachylenie": 0.15,
+   "szok": 0
+  },
+  "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+  "is_trades": 446,
+  "is_mean_r": 0.392723,
+  "is_mean_pips": 5.861492,
+  "is_sharpe_a": 0.129549,
+  "is_sharpe_b": 0.365793,
+  "score": 0.129549,
+  "oos": {
+   "trades": 161,
+   "mean_r": 0.210292,
+   "mean_pips": 4.604096,
+   "t_stat": 2.542969,
+   "bootstrap": {
+    "low": 1.040963,
+    "high": 8.027344,
+    "n": 161
+   }
+  }
+ },
+ "candidates": [
+  {
+   "rank": 1,
+   "mutation": "tylko_long+adx_slaby",
+   "label": "tylko long + tylko bez wyraźnego trendu (ADX14 < 20)",
+   "family": "połączenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.15,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is": {
+    "trades": 33,
+    "mean_r": 0.864405,
+    "mean_pips": 10.772684,
+    "sharpe_a": 0.365201,
+    "sharpe_b": 1.610607,
+    "score": 0.365201
+   },
+   "oos": {
+    "trades": 11,
+    "mean_r": -0.61084,
+    "mean_pips": -4.76565,
+    "t_stat": -0.668919,
+    "bootstrap": {
+     "low": -18.760453,
+     "high": 8.328357,
+     "n": 11
+    }
+   },
+   "dsr": {
+    "dsr": 0.766293,
+    "sharpe": 0.646318,
+    "sharpe0": 0.399587,
+    "trials": 356,
+    "trades": 33,
+    "skew": -2.7316,
+    "kurtosis": 9.841917
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 6.888101,
+    "percentile": 78.1,
+    "p5": -16.789339,
+    "p50": 0.055993,
+    "p95": 13.701545
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "HYPOTHESIS = \"\"\"Jak w wersji 1: w wyraźnym trendzie H1 gwałtowny ruch przeciw trendowi, w którym RSI14 przebija 70\n(trend spadkowy) albo 30 (trend wzrostowy), to chwilowa przesada, po której cena cofa się o ok. 1,5 ATR.\nWersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób łącznie 1 + 24):\n1) Największe straty wersji 1 to nie przesady, tylko SZOKI informacyjne (np. 1.08.2025 13:00 UTC, dane z rynku pracy\n   USA): jedna świeca o zakresie kilku ATR to nowa cena, a nie przesada — filtr „szok” pomija taki epizod.\n2) Seria RSI zamyka stratę dopiero po 6 godzinach; w tym czasie cena potrafiła odejść o 100+ pipsów — stop cenowy\n   2 / 3 × ATR ucina ten ogon (wariant bez stopu zostaje do porównania).\n3) Więcej wejść: łagodniejszy próg „wyraźnego trendu” (0,15 ATR) i krótsza średnia (EMA100).\"\"\"\n\nimport numpy as np\n\nLEVEL = 70          # short: RSI > 70; long: RSI < 30 — ten sam poziom co w wyjściu „seria RSI”\nRUN = 6             # 6 zamknięć RSI z rzędu za poziomem = pomyłka → zamknięcie wszystkiego\nMAX_POS = 5\n\nPYRAMID = MAX_POS   # D-034: do 5 pozycji naraz w parze, tylko w jednym kierunku\nHOURS = False       # D-034: bez okna godzin, jak w wersji 1\n\nPARAMS = {\n    \"ema\": [100, 200],              # średnia trendu\n    \"nachylenie\": [0.15, 0.25],     # „wyraźny trend”: zmiana EMA na 10 świec > tyle × ATR14 (wersja 1: 0,25)\n    \"szok\": [0, 3.0],               # 0 = bez filtra; 3.0 = pomiń epizod, gdy świeca przebicia ma zakres > 3 × ATR14\n}\n\n# TP 1,5 × ATR14; seria 6 zamknięć RSI za 70/30 → wyjście na open następnej; limit 120 świec;\n# stop cenowy: brak (jak wersja 1) / 2 / 3 × ATR14 od ceny wejścia\nEXITS = [{\"kind\": \"rsi_streak\", \"n\": 14, \"tp\": 1.5, \"run\": RUN, \"level\": LEVEL, \"cap\": 120, **({\"sl\": sl} if sl else {})}\n         for sl in (0, 2.0, 3.0)]\n\n\ndef weight(dist):\n    \"\"\"Waga pozycji: 1 + (odległość RSI od progu) / 5, maksymalnie 3 (jak w wersji 1).\"\"\"\n    return min(3.0, 1.0 + dist / 5.0)\n\n\ndef signals(df, p, ind):\n    ema = ind.ema(df.close, p[\"ema\"])\n    atr = ind.atr(df, 14)\n    slope = (ema - ema.shift(10)) / atr                     # nachylenie EMA na 10 świec, w ATR14\n    up = (slope > p[\"nachylenie\"]).to_numpy()\n    down = (slope < -p[\"nachylenie\"]).to_numpy()\n    rng = ((df.high - df.low) / atr.shift(1)).to_numpy()    # zakres świecy względem ATR sprzed niej\n    shock = rng > p[\"szok\"] if p[\"szok\"] else np.zeros(len(df), bool)\n    r = ind.rsi(df.close, 14).to_numpy()\n    out = np.zeros(len(r))\n    side, streak, count, record, skip = 0, 0, 0, 0.0, False\n    for t in range(1, len(r)):\n        x, prev = r[t], r[t - 1]\n        if np.isnan(x) or np.isnan(prev):\n            side = 0\n            continue\n        if side != 0:\n            beyond = x > LEVEL if side < 0 else x < 100 - LEVEL\n            if beyond:                                      # przesada trwa: ta sama „seria”\n                streak += 1\n                deeper = x > record if side < 0 else x < record\n                if deeper and count < MAX_POS and streak < RUN and not skip:\n                    count += 1\n                    record = x\n                    out[t] = side * weight(abs(x - (LEVEL if side < 0 else 100 - LEVEL)))\n                continue\n            side = 0                                        # RSI wrócił za próg — koniec epizodu\n        if down[t] and x > LEVEL and prev <= LEVEL:          # przebicie 70 w trendzie spadkowym → short\n            side, streak, count, record, skip = -1, 1, 1, x, bool(shock[t])\n            if not skip:\n                out[t] = -weight(x - LEVEL)\n        elif up[t] and x < 100 - LEVEL and prev >= 100 - LEVEL:  # przebicie 30 w trendzie wzrostowym → long\n            side, streak, count, record, skip = 1, 1, 1, x, bool(shock[t])\n            if not skip:\n                out[t] = weight(100 - LEVEL - x)\n    return out\n\n\n# ---- Eksploracja Maca (D-072): tylko long + tylko bez wyraźnego trendu (ADX14 < 20) ----\n# Wybrane tylko po IS spośród 440 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_tylko_long(df, s, p, ind):\n    return s.where(s > 0, 0.0)\n\ndef _ia5_adx_slaby(df, s, p, ind):\n    return s.where(ind.adx(df, 14)[\"adx\"] < 20, 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_tylko_long(df, s, p, ind)\n    s = _ia5_adx_slaby(df, s, p, ind)\n    return s\n\nPARAMS = {'ema': [200], 'nachylenie': [0.15], 'szok': [0]}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: tylko long + tylko bez wyraźnego trendu (ADX14 < 20). Wybrana po IS spośród 440 prób.'\n",
+   "code_hash": "467140f7841f8dd9",
+   "verdict": {
+    "color": "red",
+    "text": "nie przetrwała OOS"
+   }
+  },
+  {
+   "rank": 2,
+   "mutation": "trend200+zmiennosc_niska",
+   "label": "tylko z trendem SMA200 + tylko przy spokojnym rynku (ATR14 < ATR100)",
+   "family": "połączenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.15,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is": {
+    "trades": 140,
+    "mean_r": 0.636794,
+    "mean_pips": 8.585019,
+    "sharpe_a": 0.288628,
+    "sharpe_b": 0.537686,
+    "score": 0.288628
+   },
+   "oos": {
+    "trades": 42,
+    "mean_r": 0.257634,
+    "mean_pips": 8.980128,
+    "t_stat": 2.585405,
+    "bootstrap": {
+     "low": 2.031654,
+     "high": 15.472491,
+     "n": 42
+    }
+   },
+   "dsr": {
+    "dsr": 0.449736,
+    "sharpe": 0.383755,
+    "sharpe0": 0.399587,
+    "trials": 356,
+    "trades": 140,
+    "skew": -2.382439,
+    "kurtosis": 8.305615
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 8.676198,
+    "percentile": 98.7,
+    "p5": -8.609088,
+    "p50": -0.87107,
+    "p95": 5.884015
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "HYPOTHESIS = \"\"\"Jak w wersji 1: w wyraźnym trendzie H1 gwałtowny ruch przeciw trendowi, w którym RSI14 przebija 70\n(trend spadkowy) albo 30 (trend wzrostowy), to chwilowa przesada, po której cena cofa się o ok. 1,5 ATR.\nWersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób łącznie 1 + 24):\n1) Największe straty wersji 1 to nie przesady, tylko SZOKI informacyjne (np. 1.08.2025 13:00 UTC, dane z rynku pracy\n   USA): jedna świeca o zakresie kilku ATR to nowa cena, a nie przesada — filtr „szok” pomija taki epizod.\n2) Seria RSI zamyka stratę dopiero po 6 godzinach; w tym czasie cena potrafiła odejść o 100+ pipsów — stop cenowy\n   2 / 3 × ATR ucina ten ogon (wariant bez stopu zostaje do porównania).\n3) Więcej wejść: łagodniejszy próg „wyraźnego trendu” (0,15 ATR) i krótsza średnia (EMA100).\"\"\"\n\nimport numpy as np\n\nLEVEL = 70          # short: RSI > 70; long: RSI < 30 — ten sam poziom co w wyjściu „seria RSI”\nRUN = 6             # 6 zamknięć RSI z rzędu za poziomem = pomyłka → zamknięcie wszystkiego\nMAX_POS = 5\n\nPYRAMID = MAX_POS   # D-034: do 5 pozycji naraz w parze, tylko w jednym kierunku\nHOURS = False       # D-034: bez okna godzin, jak w wersji 1\n\nPARAMS = {\n    \"ema\": [100, 200],              # średnia trendu\n    \"nachylenie\": [0.15, 0.25],     # „wyraźny trend”: zmiana EMA na 10 świec > tyle × ATR14 (wersja 1: 0,25)\n    \"szok\": [0, 3.0],               # 0 = bez filtra; 3.0 = pomiń epizod, gdy świeca przebicia ma zakres > 3 × ATR14\n}\n\n# TP 1,5 × ATR14; seria 6 zamknięć RSI za 70/30 → wyjście na open następnej; limit 120 świec;\n# stop cenowy: brak (jak wersja 1) / 2 / 3 × ATR14 od ceny wejścia\nEXITS = [{\"kind\": \"rsi_streak\", \"n\": 14, \"tp\": 1.5, \"run\": RUN, \"level\": LEVEL, \"cap\": 120, **({\"sl\": sl} if sl else {})}\n         for sl in (0, 2.0, 3.0)]\n\n\ndef weight(dist):\n    \"\"\"Waga pozycji: 1 + (odległość RSI od progu) / 5, maksymalnie 3 (jak w wersji 1).\"\"\"\n    return min(3.0, 1.0 + dist / 5.0)\n\n\ndef signals(df, p, ind):\n    ema = ind.ema(df.close, p[\"ema\"])\n    atr = ind.atr(df, 14)\n    slope = (ema - ema.shift(10)) / atr                     # nachylenie EMA na 10 świec, w ATR14\n    up = (slope > p[\"nachylenie\"]).to_numpy()\n    down = (slope < -p[\"nachylenie\"]).to_numpy()\n    rng = ((df.high - df.low) / atr.shift(1)).to_numpy()    # zakres świecy względem ATR sprzed niej\n    shock = rng > p[\"szok\"] if p[\"szok\"] else np.zeros(len(df), bool)\n    r = ind.rsi(df.close, 14).to_numpy()\n    out = np.zeros(len(r))\n    side, streak, count, record, skip = 0, 0, 0, 0.0, False\n    for t in range(1, len(r)):\n        x, prev = r[t], r[t - 1]\n        if np.isnan(x) or np.isnan(prev):\n            side = 0\n            continue\n        if side != 0:\n            beyond = x > LEVEL if side < 0 else x < 100 - LEVEL\n            if beyond:                                      # przesada trwa: ta sama „seria”\n                streak += 1\n                deeper = x > record if side < 0 else x < record\n                if deeper and count < MAX_POS and streak < RUN and not skip:\n                    count += 1\n                    record = x\n                    out[t] = side * weight(abs(x - (LEVEL if side < 0 else 100 - LEVEL)))\n                continue\n            side = 0                                        # RSI wrócił za próg — koniec epizodu\n        if down[t] and x > LEVEL and prev <= LEVEL:          # przebicie 70 w trendzie spadkowym → short\n            side, streak, count, record, skip = -1, 1, 1, x, bool(shock[t])\n            if not skip:\n                out[t] = -weight(x - LEVEL)\n        elif up[t] and x < 100 - LEVEL and prev >= 100 - LEVEL:  # przebicie 30 w trendzie wzrostowym → long\n            side, streak, count, record, skip = 1, 1, 1, x, bool(shock[t])\n            if not skip:\n                out[t] = weight(100 - LEVEL - x)\n    return out\n\n\n# ---- Eksploracja Maca (D-072): tylko z trendem SMA200 + tylko przy spokojnym rynku (ATR14 < ATR100) ----\n# Wybrane tylko po IS spośród 440 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_trend200(df, s, p, ind):\n    m = ind.sma(df.close, 200)\n    return s.where(((s > 0) & (df.close > m)) | ((s < 0) & (df.close < m)), 0.0)\n\ndef _ia5_zmiennosc_niska(df, s, p, ind):\n    return s.where(ind.atr(df, 14) < ind.atr(df, 100), 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_trend200(df, s, p, ind)\n    s = _ia5_zmiennosc_niska(df, s, p, ind)\n    return s\n\nPARAMS = {'ema': [200], 'nachylenie': [0.15], 'szok': [0]}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: tylko z trendem SMA200 + tylko przy spokojnym rynku (ATR14 < ATR100). Wybrana po IS spośród 440 prób.'\n",
+   "code_hash": "1fdd13b8c96fc5c5",
+   "verdict": {
+    "color": "yellow",
+    "text": "dodatnia w OOS, ale nie przechodzi wszystkich testów"
+   }
+  },
+  {
+   "rank": 3,
+   "mutation": "siatka",
+   "label": "szersza siatka parametrów",
+   "family": "parametry",
+   "params": {
+    "ema": 300,
+    "nachylenie": 0.35,
+    "szok": 1.5
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is": {
+    "trades": 72,
+    "mean_r": 0.483449,
+    "mean_pips": 9.58281,
+    "sharpe_a": 0.234557,
+    "sharpe_b": 0.24211,
+    "score": 0.234557
+   },
+   "oos": {
+    "trades": 22,
+    "mean_r": 0.694474,
+    "mean_pips": 15.490087,
+    "t_stat": 2.901833,
+    "bootstrap": {
+     "low": 4.411273,
+     "high": 24.039519,
+     "n": 22
+    }
+   },
+   "dsr": {
+    "dsr": 0.140664,
+    "sharpe": 0.238792,
+    "sharpe0": 0.399587,
+    "trials": 356,
+    "trades": 72,
+    "skew": -2.116774,
+    "kurtosis": 6.341491
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 10.965364,
+    "percentile": 97.7,
+    "p5": -12.560993,
+    "p50": -1.0869,
+    "p95": 9.056118
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "HYPOTHESIS = \"\"\"Jak w wersji 1: w wyraźnym trendzie H1 gwałtowny ruch przeciw trendowi, w którym RSI14 przebija 70\n(trend spadkowy) albo 30 (trend wzrostowy), to chwilowa przesada, po której cena cofa się o ok. 1,5 ATR.\nWersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób łącznie 1 + 24):\n1) Największe straty wersji 1 to nie przesady, tylko SZOKI informacyjne (np. 1.08.2025 13:00 UTC, dane z rynku pracy\n   USA): jedna świeca o zakresie kilku ATR to nowa cena, a nie przesada — filtr „szok” pomija taki epizod.\n2) Seria RSI zamyka stratę dopiero po 6 godzinach; w tym czasie cena potrafiła odejść o 100+ pipsów — stop cenowy\n   2 / 3 × ATR ucina ten ogon (wariant bez stopu zostaje do porównania).\n3) Więcej wejść: łagodniejszy próg „wyraźnego trendu” (0,15 ATR) i krótsza średnia (EMA100).\"\"\"\n\nimport numpy as np\n\nLEVEL = 70          # short: RSI > 70; long: RSI < 30 — ten sam poziom co w wyjściu „seria RSI”\nRUN = 6             # 6 zamknięć RSI z rzędu za poziomem = pomyłka → zamknięcie wszystkiego\nMAX_POS = 5\n\nPYRAMID = MAX_POS   # D-034: do 5 pozycji naraz w parze, tylko w jednym kierunku\nHOURS = False       # D-034: bez okna godzin, jak w wersji 1\n\nPARAMS = {\n    \"ema\": [100, 200],              # średnia trendu\n    \"nachylenie\": [0.15, 0.25],     # „wyraźny trend”: zmiana EMA na 10 świec > tyle × ATR14 (wersja 1: 0,25)\n    \"szok\": [0, 3.0],               # 0 = bez filtra; 3.0 = pomiń epizod, gdy świeca przebicia ma zakres > 3 × ATR14\n}\n\n# TP 1,5 × ATR14; seria 6 zamknięć RSI za 70/30 → wyjście na open następnej; limit 120 świec;\n# stop cenowy: brak (jak wersja 1) / 2 / 3 × ATR14 od ceny wejścia\nEXITS = [{\"kind\": \"rsi_streak\", \"n\": 14, \"tp\": 1.5, \"run\": RUN, \"level\": LEVEL, \"cap\": 120, **({\"sl\": sl} if sl else {})}\n         for sl in (0, 2.0, 3.0)]\n\n\ndef weight(dist):\n    \"\"\"Waga pozycji: 1 + (odległość RSI od progu) / 5, maksymalnie 3 (jak w wersji 1).\"\"\"\n    return min(3.0, 1.0 + dist / 5.0)\n\n\ndef signals(df, p, ind):\n    ema = ind.ema(df.close, p[\"ema\"])\n    atr = ind.atr(df, 14)\n    slope = (ema - ema.shift(10)) / atr                     # nachylenie EMA na 10 świec, w ATR14\n    up = (slope > p[\"nachylenie\"]).to_numpy()\n    down = (slope < -p[\"nachylenie\"]).to_numpy()\n    rng = ((df.high - df.low) / atr.shift(1)).to_numpy()    # zakres świecy względem ATR sprzed niej\n    shock = rng > p[\"szok\"] if p[\"szok\"] else np.zeros(len(df), bool)\n    r = ind.rsi(df.close, 14).to_numpy()\n    out = np.zeros(len(r))\n    side, streak, count, record, skip = 0, 0, 0, 0.0, False\n    for t in range(1, len(r)):\n        x, prev = r[t], r[t - 1]\n        if np.isnan(x) or np.isnan(prev):\n            side = 0\n            continue\n        if side != 0:\n            beyond = x > LEVEL if side < 0 else x < 100 - LEVEL\n            if beyond:                                      # przesada trwa: ta sama „seria”\n                streak += 1\n                deeper = x > record if side < 0 else x < record\n                if deeper and count < MAX_POS and streak < RUN and not skip:\n                    count += 1\n                    record = x\n                    out[t] = side * weight(abs(x - (LEVEL if side < 0 else 100 - LEVEL)))\n                continue\n            side = 0                                        # RSI wrócił za próg — koniec epizodu\n        if down[t] and x > LEVEL and prev <= LEVEL:          # przebicie 70 w trendzie spadkowym → short\n            side, streak, count, record, skip = -1, 1, 1, x, bool(shock[t])\n            if not skip:\n                out[t] = -weight(x - LEVEL)\n        elif up[t] and x < 100 - LEVEL and prev >= 100 - LEVEL:  # przebicie 30 w trendzie wzrostowym → long\n            side, streak, count, record, skip = 1, 1, 1, x, bool(shock[t])\n            if not skip:\n                out[t] = weight(100 - LEVEL - x)\n    return out\n\n\n# ---- Eksploracja Maca (D-072): szersza siatka parametrów ----\n# Wybrane tylko po IS spośród 440 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\nPARAMS = {'ema': [300], 'nachylenie': [0.35], 'szok': [1.5]}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: szersza siatka parametrów. Wybrana po IS spośród 440 prób.'\n",
+   "code_hash": "9818ab74c41ac281",
+   "verdict": {
+    "color": "yellow",
+    "text": "dodatnia w OOS, ale nie przechodzi wszystkich testów"
+   }
+  },
+  {
+   "rank": 4,
+   "mutation": "tylko_long+zmiennosc_niska",
+   "label": "tylko long + tylko przy spokojnym rynku (ATR14 < ATR100)",
+   "family": "połączenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.15,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is": {
+    "trades": 72,
+    "mean_r": 0.561394,
+    "mean_pips": 8.542631,
+    "sharpe_a": 0.358885,
+    "sharpe_b": 0.228443,
+    "score": 0.228443
+   },
+   "oos": {
+    "trades": 22,
+    "mean_r": -1.099362,
+    "mean_pips": -10.063285,
+    "t_stat": -1.972539,
+    "bootstrap": {
+     "low": -20.026005,
+     "high": -0.821885,
+     "n": 22
+    }
+   },
+   "dsr": {
+    "dsr": 0.267861,
+    "sharpe": 0.298537,
+    "sharpe0": 0.399587,
+    "trials": 356,
+    "trades": 72,
+    "skew": -2.446564,
+    "kurtosis": 8.178551
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 4.188055,
+    "percentile": 79.6,
+    "p5": -11.123732,
+    "p50": -0.352037,
+    "p95": 8.283648
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "HYPOTHESIS = \"\"\"Jak w wersji 1: w wyraźnym trendzie H1 gwałtowny ruch przeciw trendowi, w którym RSI14 przebija 70\n(trend spadkowy) albo 30 (trend wzrostowy), to chwilowa przesada, po której cena cofa się o ok. 1,5 ATR.\nWersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób łącznie 1 + 24):\n1) Największe straty wersji 1 to nie przesady, tylko SZOKI informacyjne (np. 1.08.2025 13:00 UTC, dane z rynku pracy\n   USA): jedna świeca o zakresie kilku ATR to nowa cena, a nie przesada — filtr „szok” pomija taki epizod.\n2) Seria RSI zamyka stratę dopiero po 6 godzinach; w tym czasie cena potrafiła odejść o 100+ pipsów — stop cenowy\n   2 / 3 × ATR ucina ten ogon (wariant bez stopu zostaje do porównania).\n3) Więcej wejść: łagodniejszy próg „wyraźnego trendu” (0,15 ATR) i krótsza średnia (EMA100).\"\"\"\n\nimport numpy as np\n\nLEVEL = 70          # short: RSI > 70; long: RSI < 30 — ten sam poziom co w wyjściu „seria RSI”\nRUN = 6             # 6 zamknięć RSI z rzędu za poziomem = pomyłka → zamknięcie wszystkiego\nMAX_POS = 5\n\nPYRAMID = MAX_POS   # D-034: do 5 pozycji naraz w parze, tylko w jednym kierunku\nHOURS = False       # D-034: bez okna godzin, jak w wersji 1\n\nPARAMS = {\n    \"ema\": [100, 200],              # średnia trendu\n    \"nachylenie\": [0.15, 0.25],     # „wyraźny trend”: zmiana EMA na 10 świec > tyle × ATR14 (wersja 1: 0,25)\n    \"szok\": [0, 3.0],               # 0 = bez filtra; 3.0 = pomiń epizod, gdy świeca przebicia ma zakres > 3 × ATR14\n}\n\n# TP 1,5 × ATR14; seria 6 zamknięć RSI za 70/30 → wyjście na open następnej; limit 120 świec;\n# stop cenowy: brak (jak wersja 1) / 2 / 3 × ATR14 od ceny wejścia\nEXITS = [{\"kind\": \"rsi_streak\", \"n\": 14, \"tp\": 1.5, \"run\": RUN, \"level\": LEVEL, \"cap\": 120, **({\"sl\": sl} if sl else {})}\n         for sl in (0, 2.0, 3.0)]\n\n\ndef weight(dist):\n    \"\"\"Waga pozycji: 1 + (odległość RSI od progu) / 5, maksymalnie 3 (jak w wersji 1).\"\"\"\n    return min(3.0, 1.0 + dist / 5.0)\n\n\ndef signals(df, p, ind):\n    ema = ind.ema(df.close, p[\"ema\"])\n    atr = ind.atr(df, 14)\n    slope = (ema - ema.shift(10)) / atr                     # nachylenie EMA na 10 świec, w ATR14\n    up = (slope > p[\"nachylenie\"]).to_numpy()\n    down = (slope < -p[\"nachylenie\"]).to_numpy()\n    rng = ((df.high - df.low) / atr.shift(1)).to_numpy()    # zakres świecy względem ATR sprzed niej\n    shock = rng > p[\"szok\"] if p[\"szok\"] else np.zeros(len(df), bool)\n    r = ind.rsi(df.close, 14).to_numpy()\n    out = np.zeros(len(r))\n    side, streak, count, record, skip = 0, 0, 0, 0.0, False\n    for t in range(1, len(r)):\n        x, prev = r[t], r[t - 1]\n        if np.isnan(x) or np.isnan(prev):\n            side = 0\n            continue\n        if side != 0:\n            beyond = x > LEVEL if side < 0 else x < 100 - LEVEL\n            if beyond:                                      # przesada trwa: ta sama „seria”\n                streak += 1\n                deeper = x > record if side < 0 else x < record\n                if deeper and count < MAX_POS and streak < RUN and not skip:\n                    count += 1\n                    record = x\n                    out[t] = side * weight(abs(x - (LEVEL if side < 0 else 100 - LEVEL)))\n                continue\n            side = 0                                        # RSI wrócił za próg — koniec epizodu\n        if down[t] and x > LEVEL and prev <= LEVEL:          # przebicie 70 w trendzie spadkowym → short\n            side, streak, count, record, skip = -1, 1, 1, x, bool(shock[t])\n            if not skip:\n                out[t] = -weight(x - LEVEL)\n        elif up[t] and x < 100 - LEVEL and prev >= 100 - LEVEL:  # przebicie 30 w trendzie wzrostowym → long\n            side, streak, count, record, skip = 1, 1, 1, x, bool(shock[t])\n            if not skip:\n                out[t] = weight(100 - LEVEL - x)\n    return out\n\n\n# ---- Eksploracja Maca (D-072): tylko long + tylko przy spokojnym rynku (ATR14 < ATR100) ----\n# Wybrane tylko po IS spośród 440 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_tylko_long(df, s, p, ind):\n    return s.where(s > 0, 0.0)\n\ndef _ia5_zmiennosc_niska(df, s, p, ind):\n    return s.where(ind.atr(df, 14) < ind.atr(df, 100), 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_tylko_long(df, s, p, ind)\n    s = _ia5_zmiennosc_niska(df, s, p, ind)\n    return s\n\nPARAMS = {'ema': [200], 'nachylenie': [0.15], 'szok': [0]}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: tylko long + tylko przy spokojnym rynku (ATR14 < ATR100). Wybrana po IS spośród 440 prób.'\n",
+   "code_hash": "1e73f9b348f31874",
+   "verdict": {
+    "color": "red",
+    "text": "nie przetrwała OOS"
+   }
+  },
+  {
+   "rank": 5,
+   "mutation": "trend200+tylko_long",
+   "label": "tylko z trendem SMA200 + tylko long",
+   "family": "połączenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.25,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is": {
+    "trades": 103,
+    "mean_r": 0.408172,
+    "mean_pips": 7.324905,
+    "sharpe_a": 0.222157,
+    "sharpe_b": 0.20358,
+    "score": 0.20358
+   },
+   "oos": {
+    "trades": 23,
+    "mean_r": 0.070289,
+    "mean_pips": 1.76505,
+    "t_stat": 0.336335,
+    "bootstrap": {
+     "low": -8.481407,
+     "high": 11.055581,
+     "n": 23
+    }
+   },
+   "dsr": {
+    "dsr": 0.058813,
+    "sharpe": 0.212165,
+    "sharpe0": 0.399587,
+    "trials": 356,
+    "trades": 103,
+    "skew": -1.925278,
+    "kurtosis": 5.866504
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 6.31001,
+    "percentile": 89.0,
+    "p5": -10.135707,
+    "p50": -0.262982,
+    "p95": 8.356602
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "HYPOTHESIS = \"\"\"Jak w wersji 1: w wyraźnym trendzie H1 gwałtowny ruch przeciw trendowi, w którym RSI14 przebija 70\n(trend spadkowy) albo 30 (trend wzrostowy), to chwilowa przesada, po której cena cofa się o ok. 1,5 ATR.\nWersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób łącznie 1 + 24):\n1) Największe straty wersji 1 to nie przesady, tylko SZOKI informacyjne (np. 1.08.2025 13:00 UTC, dane z rynku pracy\n   USA): jedna świeca o zakresie kilku ATR to nowa cena, a nie przesada — filtr „szok” pomija taki epizod.\n2) Seria RSI zamyka stratę dopiero po 6 godzinach; w tym czasie cena potrafiła odejść o 100+ pipsów — stop cenowy\n   2 / 3 × ATR ucina ten ogon (wariant bez stopu zostaje do porównania).\n3) Więcej wejść: łagodniejszy próg „wyraźnego trendu” (0,15 ATR) i krótsza średnia (EMA100).\"\"\"\n\nimport numpy as np\n\nLEVEL = 70          # short: RSI > 70; long: RSI < 30 — ten sam poziom co w wyjściu „seria RSI”\nRUN = 6             # 6 zamknięć RSI z rzędu za poziomem = pomyłka → zamknięcie wszystkiego\nMAX_POS = 5\n\nPYRAMID = MAX_POS   # D-034: do 5 pozycji naraz w parze, tylko w jednym kierunku\nHOURS = False       # D-034: bez okna godzin, jak w wersji 1\n\nPARAMS = {\n    \"ema\": [100, 200],              # średnia trendu\n    \"nachylenie\": [0.15, 0.25],     # „wyraźny trend”: zmiana EMA na 10 świec > tyle × ATR14 (wersja 1: 0,25)\n    \"szok\": [0, 3.0],               # 0 = bez filtra; 3.0 = pomiń epizod, gdy świeca przebicia ma zakres > 3 × ATR14\n}\n\n# TP 1,5 × ATR14; seria 6 zamknięć RSI za 70/30 → wyjście na open następnej; limit 120 świec;\n# stop cenowy: brak (jak wersja 1) / 2 / 3 × ATR14 od ceny wejścia\nEXITS = [{\"kind\": \"rsi_streak\", \"n\": 14, \"tp\": 1.5, \"run\": RUN, \"level\": LEVEL, \"cap\": 120, **({\"sl\": sl} if sl else {})}\n         for sl in (0, 2.0, 3.0)]\n\n\ndef weight(dist):\n    \"\"\"Waga pozycji: 1 + (odległość RSI od progu) / 5, maksymalnie 3 (jak w wersji 1).\"\"\"\n    return min(3.0, 1.0 + dist / 5.0)\n\n\ndef signals(df, p, ind):\n    ema = ind.ema(df.close, p[\"ema\"])\n    atr = ind.atr(df, 14)\n    slope = (ema - ema.shift(10)) / atr                     # nachylenie EMA na 10 świec, w ATR14\n    up = (slope > p[\"nachylenie\"]).to_numpy()\n    down = (slope < -p[\"nachylenie\"]).to_numpy()\n    rng = ((df.high - df.low) / atr.shift(1)).to_numpy()    # zakres świecy względem ATR sprzed niej\n    shock = rng > p[\"szok\"] if p[\"szok\"] else np.zeros(len(df), bool)\n    r = ind.rsi(df.close, 14).to_numpy()\n    out = np.zeros(len(r))\n    side, streak, count, record, skip = 0, 0, 0, 0.0, False\n    for t in range(1, len(r)):\n        x, prev = r[t], r[t - 1]\n        if np.isnan(x) or np.isnan(prev):\n            side = 0\n            continue\n        if side != 0:\n            beyond = x > LEVEL if side < 0 else x < 100 - LEVEL\n            if beyond:                                      # przesada trwa: ta sama „seria”\n                streak += 1\n                deeper = x > record if side < 0 else x < record\n                if deeper and count < MAX_POS and streak < RUN and not skip:\n                    count += 1\n                    record = x\n                    out[t] = side * weight(abs(x - (LEVEL if side < 0 else 100 - LEVEL)))\n                continue\n            side = 0                                        # RSI wrócił za próg — koniec epizodu\n        if down[t] and x > LEVEL and prev <= LEVEL:          # przebicie 70 w trendzie spadkowym → short\n            side, streak, count, record, skip = -1, 1, 1, x, bool(shock[t])\n            if not skip:\n                out[t] = -weight(x - LEVEL)\n        elif up[t] and x < 100 - LEVEL and prev >= 100 - LEVEL:  # przebicie 30 w trendzie wzrostowym → long\n            side, streak, count, record, skip = 1, 1, 1, x, bool(shock[t])\n            if not skip:\n                out[t] = weight(100 - LEVEL - x)\n    return out\n\n\n# ---- Eksploracja Maca (D-072): tylko z trendem SMA200 + tylko long ----\n# Wybrane tylko po IS spośród 440 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_trend200(df, s, p, ind):\n    m = ind.sma(df.close, 200)\n    return s.where(((s > 0) & (df.close > m)) | ((s < 0) & (df.close < m)), 0.0)\n\ndef _ia5_tylko_long(df, s, p, ind):\n    return s.where(s > 0, 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_trend200(df, s, p, ind)\n    s = _ia5_tylko_long(df, s, p, ind)\n    return s\n\nPARAMS = {'ema': [200], 'nachylenie': [0.25], 'szok': [0]}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: tylko z trendem SMA200 + tylko long. Wybrana po IS spośród 440 prób.'\n",
+   "code_hash": "69d57ec6d0620508",
+   "verdict": {
+    "color": "yellow",
+    "text": "dodatnia w OOS, ale nie przechodzi wszystkich testów"
+   }
+  }
+ ],
+ "is_table": [
+  {
+   "mutation": "tylko_long+adx_slaby",
+   "label": "tylko long + tylko bez wyraźnego trendu (ADX14 < 20)",
+   "family": "połączenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.15,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 33,
+   "is_mean_r": 0.864405,
+   "is_mean_pips": 10.772684,
+   "is_sharpe_a": 0.365201,
+   "is_sharpe_b": 1.610607,
+   "score": 0.365201
+  },
+  {
+   "mutation": "trend200+zmiennosc_niska",
+   "label": "tylko z trendem SMA200 + tylko przy spokojnym rynku (ATR14 < ATR100)",
+   "family": "połączenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.15,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 140,
+   "is_mean_r": 0.636794,
+   "is_mean_pips": 8.585019,
+   "is_sharpe_a": 0.288628,
+   "is_sharpe_b": 0.537686,
+   "score": 0.288628
+  },
+  {
+   "mutation": "trend200+zmiennosc_niska",
+   "label": "tylko z trendem SMA200 + tylko przy spokojnym rynku (ATR14 < ATR100)",
+   "family": "połączenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.15,
+    "szok": 3.0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 134,
+   "is_mean_r": 0.604933,
+   "is_mean_pips": 7.934936,
+   "is_sharpe_a": 0.257966,
+   "is_sharpe_b": 0.518406,
+   "score": 0.257966
+  },
+  {
+   "mutation": "trend200+zmiennosc_niska",
+   "label": "tylko z trendem SMA200 + tylko przy spokojnym rynku (ATR14 < ATR100)",
+   "family": "połączenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.25,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 110,
+   "is_mean_r": 0.594949,
+   "is_mean_pips": 8.311302,
+   "is_sharpe_a": 0.245519,
+   "is_sharpe_b": 0.455785,
+   "score": 0.245519
+  },
+  {
+   "mutation": "siatka",
+   "label": "szersza siatka parametrów",
+   "family": "parametry",
+   "params": {
+    "ema": 300,
+    "nachylenie": 0.35,
+    "szok": 1.5
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 72,
+   "is_mean_r": 0.483449,
+   "is_mean_pips": 9.58281,
+   "is_sharpe_a": 0.234557,
+   "is_sharpe_b": 0.24211,
+   "score": 0.234557
+  },
+  {
+   "mutation": "tylko_long+zmiennosc_niska",
+   "label": "tylko long + tylko przy spokojnym rynku (ATR14 < ATR100)",
+   "family": "połączenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.15,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 72,
+   "is_mean_r": 0.561394,
+   "is_mean_pips": 8.542631,
+   "is_sharpe_a": 0.358885,
+   "is_sharpe_b": 0.228443,
+   "score": 0.228443
+  },
+  {
+   "mutation": "tylko_long+zmiennosc_niska",
+   "label": "tylko long + tylko przy spokojnym rynku (ATR14 < ATR100)",
+   "family": "połączenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.15,
+    "szok": 3.0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 69,
+   "is_mean_r": 0.52339,
+   "is_mean_pips": 7.297549,
+   "is_sharpe_a": 0.329633,
+   "is_sharpe_b": 0.208922,
+   "score": 0.208922
+  },
+  {
+   "mutation": "trend200+tylko_long",
+   "label": "tylko z trendem SMA200 + tylko long",
+   "family": "połączenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.25,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 103,
+   "is_mean_r": 0.408172,
+   "is_mean_pips": 7.324905,
+   "is_sharpe_a": 0.222157,
+   "is_sharpe_b": 0.20358,
+   "score": 0.20358
+  },
+  {
+   "mutation": "trend200",
+   "label": "tylko z trendem SMA200",
+   "family": "przekształcenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.15,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 285,
+   "is_mean_r": 0.48502,
+   "is_mean_pips": 7.309371,
+   "is_sharpe_a": 0.196044,
+   "is_sharpe_b": 0.331423,
+   "score": 0.196044
+  },
+  {
+   "mutation": "siatka",
+   "label": "szersza siatka parametrów",
+   "family": "parametry",
+   "params": {
+    "ema": 300,
+    "nachylenie": 0.2,
+    "szok": 6.0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 345,
+   "is_mean_r": 0.542306,
+   "is_mean_pips": 8.570864,
+   "is_sharpe_a": 0.188343,
+   "is_sharpe_b": 0.603424,
+   "score": 0.188343
+  },
+  {
+   "mutation": "trend200+zmiennosc_niska",
+   "label": "tylko z trendem SMA200 + tylko przy spokojnym rynku (ATR14 < ATR100)",
+   "family": "połączenie",
+   "params": {
+    "ema": 100,
+    "nachylenie": 0.25,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 70,
+   "is_mean_r": 0.517486,
+   "is_mean_pips": 7.917401,
+   "is_sharpe_a": 0.185099,
+   "is_sharpe_b": 0.449578,
+   "score": 0.185099
+  },
+  {
+   "mutation": "trend200+tylko_long",
+   "label": "tylko z trendem SMA200 + tylko long",
+   "family": "połączenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.15,
+    "szok": 3.0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 137,
+   "is_mean_r": 0.38568,
+   "is_mean_pips": 7.045173,
+   "is_sharpe_a": 0.173558,
+   "is_sharpe_b": 0.176239,
+   "score": 0.173558
+  },
+  {
+   "mutation": "trend200",
+   "label": "tylko z trendem SMA200",
+   "family": "przekształcenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.15,
+    "szok": 3.0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 257,
+   "is_mean_r": 0.501046,
+   "is_mean_pips": 7.830393,
+   "is_sharpe_a": 0.172805,
+   "is_sharpe_b": 0.377772,
+   "score": 0.172805
+  },
+  {
+   "mutation": "siatka",
+   "label": "szersza siatka parametrów",
+   "family": "parametry",
+   "params": {
+    "ema": 300,
+    "nachylenie": 0.2,
+    "szok": 0.0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 367,
+   "is_mean_r": 0.515521,
+   "is_mean_pips": 8.031621,
+   "is_sharpe_a": 0.169689,
+   "is_sharpe_b": 0.611526,
+   "score": 0.169689
+  },
+  {
+   "mutation": "tylko_long",
+   "label": "tylko long",
+   "family": "przekształcenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.15,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 251,
+   "is_mean_r": 0.380926,
+   "is_mean_pips": 5.904121,
+   "is_sharpe_a": 0.168677,
+   "is_sharpe_b": 0.24149,
+   "score": 0.168677
+  },
+  {
+   "mutation": "adx_slaby",
+   "label": "tylko bez wyraźnego trendu (ADX14 < 20)",
+   "family": "przekształcenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.15,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 57,
+   "is_mean_r": 0.540282,
+   "is_mean_pips": 4.329585,
+   "is_sharpe_a": 0.167317,
+   "is_sharpe_b": 0.833531,
+   "score": 0.167317
+  },
+  {
+   "mutation": "siatka",
+   "label": "szersza siatka parametrów",
+   "family": "parametry",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.35,
+    "szok": 6.0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 146,
+   "is_mean_r": 0.427791,
+   "is_mean_pips": 7.914934,
+   "is_sharpe_a": 0.165955,
+   "is_sharpe_b": 0.302381,
+   "score": 0.165955
+  },
+  {
+   "mutation": "trend200",
+   "label": "tylko z trendem SMA200",
+   "family": "przekształcenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.25,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 206,
+   "is_mean_r": 0.488383,
+   "is_mean_pips": 7.418523,
+   "is_sharpe_a": 0.16531,
+   "is_sharpe_b": 0.406053,
+   "score": 0.16531
+  },
+  {
+   "mutation": "trend200+tylko_long",
+   "label": "tylko z trendem SMA200 + tylko long",
+   "family": "połączenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.15,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 153,
+   "is_mean_r": 0.385836,
+   "is_mean_pips": 6.869948,
+   "is_sharpe_a": 0.200734,
+   "is_sharpe_b": 0.164365,
+   "score": 0.164365
+  },
+  {
+   "mutation": "zmiennosc_niska",
+   "label": "tylko przy spokojnym rynku (ATR14 < ATR100)",
+   "family": "przekształcenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.15,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 179,
+   "is_mean_r": 0.489832,
+   "is_mean_pips": 6.243962,
+   "is_sharpe_a": 0.156661,
+   "is_sharpe_b": 0.592183,
+   "score": 0.156661
+  },
+  {
+   "mutation": "tylko_long",
+   "label": "tylko long",
+   "family": "przekształcenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.15,
+    "szok": 3.0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 194,
+   "is_mean_r": 0.434448,
+   "is_mean_pips": 6.995987,
+   "is_sharpe_a": 0.155703,
+   "is_sharpe_b": 0.286262,
+   "score": 0.155703
+  },
+  {
+   "mutation": "tylko_long",
+   "label": "tylko long",
+   "family": "przekształcenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.25,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 134,
+   "is_mean_r": 0.378632,
+   "is_mean_pips": 7.78894,
+   "is_sharpe_a": 0.150826,
+   "is_sharpe_b": 0.265328,
+   "score": 0.150826
+  },
+  {
+   "mutation": "odwrocony",
+   "label": "odwrócony sygnał",
+   "family": "przekształcenie",
+   "params": {
+    "ema": 100,
+    "nachylenie": 0.25,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 206,
+   "is_mean_r": 0.493116,
+   "is_mean_pips": 7.726391,
+   "is_sharpe_a": 0.148521,
+   "is_sharpe_b": 0.261918,
+   "score": 0.148521
+  },
+  {
+   "mutation": "trend200+tylko_long",
+   "label": "tylko z trendem SMA200 + tylko long",
+   "family": "połączenie",
+   "params": {
+    "ema": 100,
+    "nachylenie": 0.25,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 76,
+   "is_mean_r": 0.293337,
+   "is_mean_pips": 6.664867,
+   "is_sharpe_a": 0.138116,
+   "is_sharpe_b": 0.163183,
+   "score": 0.138116
+  },
+  {
+   "mutation": "zmiennosc_niska",
+   "label": "tylko przy spokojnym rynku (ATR14 < ATR100)",
+   "family": "przekształcenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.15,
+    "szok": 3.0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 170,
+   "is_mean_r": 0.445235,
+   "is_mean_pips": 5.540977,
+   "is_sharpe_a": 0.13268,
+   "is_sharpe_b": 0.547809,
+   "score": 0.13268
+  },
+  {
+   "mutation": "trend200+adx_slaby",
+   "label": "tylko z trendem SMA200 + tylko bez wyraźnego trendu (ADX14 < 20)",
+   "family": "połączenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.15,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 37,
+   "is_mean_r": 0.383394,
+   "is_mean_pips": 0.732842,
+   "is_sharpe_a": 0.130901,
+   "is_sharpe_b": 0.462324,
+   "score": 0.130901
+  },
+  {
+   "mutation": "siatka",
+   "label": "szersza siatka parametrów",
+   "family": "parametry",
+   "params": {
+    "ema": 150,
+    "nachylenie": 0.15,
+    "szok": 6.0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 344,
+   "is_mean_r": 0.411497,
+   "is_mean_pips": 7.043244,
+   "is_sharpe_a": 0.125226,
+   "is_sharpe_b": 0.366482,
+   "score": 0.125226
+  },
+  {
+   "mutation": "siatka",
+   "label": "szersza siatka parametrów",
+   "family": "parametry",
+   "params": {
+    "ema": 300,
+    "nachylenie": 0.25,
+    "szok": 1.5
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 132,
+   "is_mean_r": 0.440695,
+   "is_mean_pips": 8.320349,
+   "is_sharpe_a": 0.12313,
+   "is_sharpe_b": 0.381749,
+   "score": 0.12313
+  },
+  {
+   "mutation": "siatka",
+   "label": "szersza siatka parametrów",
+   "family": "parametry",
+   "params": {
+    "ema": 300,
+    "nachylenie": 0.35,
+    "szok": 0.0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 148,
+   "is_mean_r": 0.40225,
+   "is_mean_pips": 6.711745,
+   "is_sharpe_a": 0.120958,
+   "is_sharpe_b": 0.338296,
+   "score": 0.120958
+  },
+  {
+   "mutation": "siatka",
+   "label": "szersza siatka parametrów",
+   "family": "parametry",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.15,
+    "szok": 1.5
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 190,
+   "is_mean_r": 0.432809,
+   "is_mean_pips": 7.519009,
+   "is_sharpe_a": 0.117239,
+   "is_sharpe_b": 0.409626,
+   "score": 0.117239
+  },
+  {
+   "mutation": "odwrocony",
+   "label": "odwrócony sygnał",
+   "family": "przekształcenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.25,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 266,
+   "is_mean_r": 0.390418,
+   "is_mean_pips": 7.955176,
+   "is_sharpe_a": 0.117037,
+   "is_sharpe_b": 0.183841,
+   "score": 0.117037
+  },
+  {
+   "mutation": "siatka",
+   "label": "szersza siatka parametrów",
+   "family": "parametry",
+   "params": {
+    "ema": 150,
+    "nachylenie": 0.15,
+    "szok": 0.0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 376,
+   "is_mean_r": 0.414234,
+   "is_mean_pips": 7.188805,
+   "is_sharpe_a": 0.116899,
+   "is_sharpe_b": 0.400359,
+   "score": 0.116899
+  },
+  {
+   "mutation": "siatka",
+   "label": "szersza siatka parametrów",
+   "family": "parametry",
+   "params": {
+    "ema": 150,
+    "nachylenie": 0.2,
+    "szok": 6.0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 271,
+   "is_mean_r": 0.401887,
+   "is_mean_pips": 7.249393,
+   "is_sharpe_a": 0.11264,
+   "is_sharpe_b": 0.395402,
+   "score": 0.11264
+  },
+  {
+   "mutation": "zmiennosc_niska",
+   "label": "tylko przy spokojnym rynku (ATR14 < ATR100)",
+   "family": "przekształcenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.25,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 122,
+   "is_mean_r": 0.437905,
+   "is_mean_pips": 6.132637,
+   "is_sharpe_a": 0.11252,
+   "is_sharpe_b": 0.455785,
+   "score": 0.11252
+  },
+  {
+   "mutation": "trend200",
+   "label": "tylko z trendem SMA200",
+   "family": "przekształcenie",
+   "params": {
+    "ema": 100,
+    "nachylenie": 0.25,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 147,
+   "is_mean_r": 0.393649,
+   "is_mean_pips": 6.491266,
+   "is_sharpe_a": 0.111407,
+   "is_sharpe_b": 0.336701,
+   "score": 0.111407
+  },
+  {
+   "mutation": "siatka",
+   "label": "szersza siatka parametrów",
+   "family": "parametry",
+   "params": {
+    "ema": 300,
+    "nachylenie": 0.25,
+    "szok": 6.0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 269,
+   "is_mean_r": 0.456004,
+   "is_mean_pips": 7.846186,
+   "is_sharpe_a": 0.107911,
+   "is_sharpe_b": 0.54187,
+   "score": 0.107911
+  },
+  {
+   "mutation": "zmiennosc_wysoka",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "przekształcenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.15,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 272,
+   "is_mean_r": 0.313146,
+   "is_mean_pips": 5.325871,
+   "is_sharpe_a": 0.10301,
+   "is_sharpe_b": 0.258844,
+   "score": 0.10301
+  },
+  {
+   "mutation": "siatka",
+   "label": "szersza siatka parametrów",
+   "family": "parametry",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.2,
+    "szok": 1.5
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 150,
+   "is_mean_r": 0.388137,
+   "is_mean_pips": 8.211691,
+   "is_sharpe_a": 0.092665,
+   "is_sharpe_b": 0.372592,
+   "score": 0.092665
+  },
+  {
+   "mutation": "siatka",
+   "label": "szersza siatka parametrów",
+   "family": "parametry",
+   "params": {
+    "ema": 150,
+    "nachylenie": 0.15,
+    "szok": 1.5
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 153,
+   "is_mean_r": 0.407833,
+   "is_mean_pips": 8.580885,
+   "is_sharpe_a": 0.087576,
+   "is_sharpe_b": 0.404483,
+   "score": 0.087576
+  },
+  {
+   "mutation": "tylko_short",
+   "label": "tylko short",
+   "family": "przekształcenie",
+   "params": {
+    "ema": 200,
+    "nachylenie": 0.15,
+    "szok": 0
+   },
+   "exit": "TP 1.5×ATR14, RSI 6 świec za 70/30, max 120",
+   "is_trades": 198,
+   "is_mean_r": 0.409178,
+   "is_mean_pips": 5.848339,
+   "is_sharpe_a": 0.087406,
+   "is_sharpe_b": 0.800221,
+   "score": 0.087406
+  }
+ ],
+ "summary": "Mac sprawdził 440 odmian (20 rodzajów). 3 z 5 kandydatów dodatnich w OOS, żaden nie przeszedł wszystkich testów.",
+ "seconds": 3091.0,
+ "oos_views": {
+  "strategy_versions": 1,
+  "window_codes": 2,
+  "window_explore": 5
+ }
+}
