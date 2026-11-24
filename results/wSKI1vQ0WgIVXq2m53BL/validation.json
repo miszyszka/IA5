@@ -2,38 +2,38 @@
  "best_variant_id": 2,
  "best_exit": "ATR14 TP 1.5× SL 0× max 60",
  "best_params": {},
- "oos_trades": 74,
- "oos_mean_pips": 10.861982,
- "oos_mean_r": 0.547887,
+ "oos_trades": 75,
+ "oos_mean_pips": 11.006661,
+ "oos_mean_r": 0.558959,
  "is_mean_r": 0.515308,
  "pinned_variant": true,
  "rank_is": 1,
  "forward": {
   "since": 1794328953,
-  "trades": 1,
+  "trades": 2,
   "pre_trades": 283,
   "expected_pips": 10.56237,
-  "expected_r": 0.520609,
-  "mean_pips": 17.313698,
-  "mean_r": 1.42588,
-  "sum_pips": 17.313698,
+  "expected_r": 0.520606,
+  "mean_pips": 19.513288,
+  "mean_r": 1.402591,
+  "sum_pips": 39.026577,
   "win_rate": 1.0,
-  "t_stat": null,
-  "z_vs_expected": 0.175251,
+  "t_stat": 8.871327,
+  "z_vs_expected": 0.328589,
   "bootstrap": {
    "low": null,
    "high": null,
-   "n": 1
+   "n": 2
   },
   "nights_mean": 1.0
  },
  "benchmark": {
   "sims": 1000,
-  "actual_mean_pips": 10.586143,
+  "actual_mean_pips": 10.625184,
   "percentile": 100.0,
-  "p5": -6.796386,
-  "p50": -1.653238,
-  "p95": 2.701973
+  "p5": -7.01183,
+  "p50": -1.713389,
+  "p95": 2.825217
  },
  "dsr": {
   "dsr": 0.693825,
@@ -45,7 +45,7 @@
   "kurtosis": 29.474293
  },
  "pbo": {
-  "pbo": 0.134033,
+  "pbo": 0.136441,
   "variants": 5,
   "combinations": 12870,
   "blocks": 16,
@@ -54,126 +54,126 @@
  "walk_forward": {
   "windows": [
    {
-    "from": 1756345680,
-    "to": 1769292720,
+    "from": 1756452240,
+    "to": 1769452560,
     "variant_id": 2,
     "train_r": 0.528791,
-    "test_trades": 60,
-    "test_r": 0.381424,
-    "test_pips": 3.78266
+    "test_trades": 63,
+    "test_r": 0.429997,
+    "test_pips": 4.627798
    },
    {
-    "from": 1769292720,
-    "to": 1782239760,
+    "from": 1769452560,
+    "to": 1782452880,
     "variant_id": 2,
-    "train_r": 0.477084,
-    "test_trades": 48,
-    "test_r": 0.653228,
-    "test_pips": 12.360614
+    "train_r": 0.493021,
+    "test_trades": 45,
+    "test_r": 0.603347,
+    "test_pips": 11.749284
    },
    {
-    "from": 1782239760,
-    "to": 1795186801,
+    "from": 1782452880,
+    "to": 1795453201,
     "variant_id": 2,
     "train_r": 0.515691,
-    "test_trades": 65,
-    "test_r": 0.551109,
-    "test_pips": 11.234476
+    "test_trades": 66,
+    "test_r": 0.563642,
+    "test_pips": 11.39324
    }
   ],
-  "trades": 173,
-  "mean_r": 0.520593,
-  "mean_pips": 8.962485
+  "trades": 174,
+  "mean_r": 0.525522,
+  "mean_pips": 9.035764
  },
  "bootstrap": {
   "all": {
-   "low": 5.974182,
-   "high": 15.009465,
-   "n": 284
+   "low": 5.99064,
+   "high": 14.893775,
+   "n": 285
   },
   "oos": {
-   "low": 3.891838,
-   "high": 17.802786,
-   "n": 74
+   "low": 4.151944,
+   "high": 17.959778,
+   "n": 75
   }
  },
  "spread": {
-  "x1": 10.586143,
-  "x1_5": 9.816425,
-  "x2": 9.046706
+  "x1": 10.625184,
+  "x1_5": 9.854833,
+  "x2": 9.084482
  },
  "swap": {
-  "nights_mean": 1.559859,
-  "nights_total": 443.0,
-  "overnight_pct": 64.084507,
-  "x0_5": 9.806213,
-  "x1": 9.026284
+  "nights_mean": 1.557895,
+  "nights_total": 444.0,
+  "overnight_pct": 64.210526,
+  "x0_5": 9.846237,
+  "x1": 9.067289
  },
  "ambiguous_pct": 0.0,
  "equity": {
   "5.0": {
-   "final": 14346.084406,
-   "return_pct": 43.460844,
-   "cagr_pct": 19.227333,
+   "final": 14401.53553,
+   "return_pct": 44.015355,
+   "cagr_pct": 19.3659,
    "max_dd_pct": -6.596819,
    "max_dd_mae_pct": -7.71953,
-   "calmar": 2.914637,
-   "sharpe": 2.172403,
-   "sortino": 1.060231,
+   "calmar": 2.935642,
+   "sharpe": 2.189945,
+   "sortino": 1.067344,
    "longest_underwater_days": 100.416667,
-   "taken": 284,
+   "taken": 285,
    "skipped_margin": 0
   },
   "10.0": {
-   "final": 20380.397119,
-   "return_pct": 103.803971,
-   "cagr_pct": 41.474653,
+   "final": 20537.947556,
+   "return_pct": 105.379476,
+   "cagr_pct": 41.805404,
    "max_dd_pct": -13.111937,
    "max_dd_mae_pct": -15.398869,
-   "calmar": 3.163122,
-   "sharpe": 2.169043,
-   "sortino": 1.05723,
+   "calmar": 3.188347,
+   "sharpe": 2.186569,
+   "sortino": 1.064327,
    "longest_underwater_days": 100.708333,
-   "taken": 284,
+   "taken": 285,
    "skipped_margin": 0
   },
   "15.0": {
-   "final": 28658.523698,
-   "return_pct": 186.585237,
-   "cagr_pct": 67.039344,
+   "final": 28990.840304,
+   "return_pct": 189.908403,
+   "cagr_pct": 67.628653,
    "max_dd_pct": -19.537983,
    "max_dd_mae_pct": -23.027719,
-   "calmar": 3.431232,
-   "sharpe": 2.164791,
-   "sortino": 1.053333,
+   "calmar": 3.461394,
+   "sharpe": 2.182298,
+   "sortino": 1.06041,
    "longest_underwater_days": 100.791667,
-   "taken": 284,
+   "taken": 285,
    "skipped_margin": 0
   },
   "20.0": {
-   "final": 39868.47301,
-   "return_pct": 298.68473,
-   "cagr_pct": 96.193891,
+   "final": 40484.8786,
+   "return_pct": 304.848786,
+   "cagr_pct": 97.122596,
    "max_dd_pct": -25.867562,
    "max_dd_mae_pct": -30.595548,
-   "calmar": 3.718707,
-   "sharpe": 2.159524,
-   "sortino": 1.048404,
+   "calmar": 3.75461,
+   "sharpe": 2.17701,
+   "sortino": 1.055455,
    "longest_underwater_days": 103.708333,
-   "taken": 284,
+   "taken": 285,
    "skipped_margin": 0
   },
   "30.0": {
-   "final": 60100.919767,
-   "return_pct": 501.009198,
-   "cagr_pct": 139.633235,
+   "final": 61494.74828,
+   "return_pct": 514.947483,
+   "cagr_pct": 141.46013,
    "max_dd_pct": -38.32771,
    "max_dd_mae_pct": -45.61068,
-   "calmar": 3.643141,
-   "sharpe": 1.984096,
-   "sortino": 0.928398,
+   "calmar": 3.690806,
+   "sharpe": 2.002598,
+   "sortino": 0.935829,
    "longest_underwater_days": 104.708333,
-   "taken": 271,
+   "taken": 272,
    "skipped_margin": 13
   }
  },
@@ -184,7 +184,7 @@
    {
     "test": "expectancy netto OOS > 0",
     "ok": true,
-    "value": 10.861982
+    "value": 11.006661
    },
    {
     "test": "percentyl benchmarku ≥ 95",
@@ -194,7 +194,7 @@
    {
     "test": "PBO < 0,3",
     "ok": true,
-    "value": 0.134033
+    "value": 0.136441
    },
    {
     "test": "DSR ≥ 0,95",
@@ -204,7 +204,7 @@
    {
     "test": "dodatni przy spreadzie ×1,5",
     "ok": true,
-    "value": 9.816425
+    "value": 9.854833
    }
   ]
  }
