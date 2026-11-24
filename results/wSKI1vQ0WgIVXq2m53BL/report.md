@@ -1,6 +1,6 @@
 # Raport strategii: Powrót
 
-Run `20261124-143258` · silnik 0.14.0 · kod `12864a1b4312df32` · dane `547de4f534a0c9db`
+Run `20261124-210748` · silnik 0.14.0 · kod `12864a1b4312df32` · dane `59af0fdff102d718`
 
 ## Werdykt: 🟡 ŻÓŁTY — zaliczone 4 z 5 testów
 
@@ -394,7 +394,7 @@ Dni = dni kalendarzowe od wejścia (open świecy) do wyjścia. Pozycja **OTWARTA
 
 ## Walidacja
 
-- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 10.63 pips/transakcję, percentyl **100.0** (losowe: 5%=-7.01, mediana=-1.89, 95%=2.57).
+- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 10.63 pips/transakcję, percentyl **100.0** (losowe: 5%=-6.74, mediana=-1.93, 95%=2.75).
 
 - **Deflated Sharpe Ratio**: 0.694 (Sharpe na transakcję 0.213, próg przy 5 próbach 0.160).
 
