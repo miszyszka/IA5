@@ -1,13 +1,13 @@
 # Raport strategii: RSI 2
 
-Run `20261124-073927` · silnik 0.14.0 · kod `05a4838aae5707ab` · dane `b20e84b925278afd`
+Run `20261124-143249` · silnik 0.14.0 · kod `05a4838aae5707ab` · dane `547de4f534a0c9db`
 
 ## Werdykt: 🟡 ŻÓŁTY — zaliczone 4 z 5 testów
 
 | test | wynik | wartość |
 |---|---|---|
 | expectancy netto OOS > 0 | ✔ | 4.75 |
-| percentyl benchmarku ≥ 95 | ✔ | 99.60 |
+| percentyl benchmarku ≥ 95 | ✔ | 99.70 |
 | PBO < 0,3 | ✔ | 0.16 |
 | DSR ≥ 0,95 | ✘ | 0.75 |
 | dodatni przy spreadzie ×1,5 | ✔ | 4.71 |
@@ -27,7 +27,7 @@ Wersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób 
 
 - Pary: AUDUSD, EURGBP, EURJPY, EURUSD, GBPUSD, USDCAD, USDCHF, USDJPY; świece H1 od 2024-10-28 do 2026-11-24; źródło: yahoo; tło D1 (świece dzienne, cała historia Yahoo) w signals() — D-058.
 
-- In-sample do 2026-05-18, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS. OOS tego okresu widziało już 2 wersji kodu strategii i 10 kandydatów eksploracji; ta strategia: 1 wersji.
+- In-sample do 2026-05-19, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS. OOS tego okresu widziało już 2 wersji kodu strategii i 10 kandydatów eksploracji; ta strategia: 1 wersji.
 
 - Wejście na open świecy po sygnale, o dowolnej godzinie (strategia wyłączyła okno handlu, HOURS = False, D-034); wyjście na dowolnej świecy, także po nocy i weekendzie (D-032). TP i SL w tej samej świecy: przyjęty SL (pesymistycznie — świece H1 nie mówią, co padło pierwsze; transakcja z flagą `ambiguous`, B5).
 
@@ -517,7 +517,7 @@ Tabela pokazuje wszystkie otwarte i najdłuższe zamknięte (400 z 607); pełna 
 
 ## Walidacja
 
-- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 5.53 pips/transakcję, percentyl **99.6** (losowe: 5%=-5.09, mediana=-1.09, 95%=2.93).
+- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 5.53 pips/transakcję, percentyl **99.7** (losowe: 5%=-5.21, mediana=-0.96, 95%=2.69).
 
 - **Deflated Sharpe Ratio**: 0.748 (Sharpe na transakcję 0.226, próg przy 24 próbach 0.185).
 
