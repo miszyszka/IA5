@@ -1,6 +1,6 @@
 # Raport strategii: Powrót
 
-Run `20261124-073935` · silnik 0.14.0 · kod `12864a1b4312df32` · dane `b20e84b925278afd`
+Run `20261124-143258` · silnik 0.14.0 · kod `12864a1b4312df32` · dane `547de4f534a0c9db`
 
 ## Werdykt: 🟡 ŻÓŁTY — zaliczone 4 z 5 testów
 
@@ -26,7 +26,7 @@ na razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach 
 
 - Pary: AUDUSD, EURGBP, EURJPY, EURUSD, GBPUSD, USDCAD, USDCHF, USDJPY; świece H1 od 2024-10-28 do 2026-11-24; źródło: yahoo; tło D1 (świece dzienne, cała historia Yahoo) w signals() — D-058.
 
-- In-sample do 2026-05-18, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS. OOS tego okresu widziało już 2 wersji kodu strategii i 10 kandydatów eksploracji; ta strategia: 1 wersji.
+- In-sample do 2026-05-19, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS. OOS tego okresu widziało już 2 wersji kodu strategii i 10 kandydatów eksploracji; ta strategia: 1 wersji.
 
 - Wejście na open świecy po sygnale, o dowolnej godzinie (strategia wyłączyła okno handlu, HOURS = False, D-034); wyjście na dowolnej świecy, także po nocy i weekendzie (D-032). TP i SL w tej samej świecy: przyjęty SL (pesymistycznie — świece H1 nie mówią, co padło pierwsze; transakcja z flagą `ambiguous`, B5).
 
@@ -42,7 +42,7 @@ na razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach 
 
 - **Przetestowane warianty: 5** (1 wejścia × 5 wyjść).
 
-- Pominięte sygnały, średnio na wariant: 34 (limit otwartych pozycji w parze), 0.8 (brak danych do wyjścia); 0 wejść w rozgrzewce ATR, 0 sygnałów poza oknem 07:00–17:00 czasu polskiego (B11), anulowane transakcje, średnio na wariant: 5.0 (przerwa w dostępie do danych), 1.0 (sygnał, wejście lub wyjście na świecy uzupełnionej) — D-032.
+- Pominięte sygnały, średnio na wariant: 34 (limit otwartych pozycji w parze), 1.4 (brak danych do wyjścia); 0 wejść w rozgrzewce ATR, 0 sygnałów poza oknem 07:00–17:00 czasu polskiego (B11), anulowane transakcje, średnio na wariant: 5.0 (przerwa w dostępie do danych), 1.0 (sygnał, wejście lub wyjście na świecy uzupełnionej) — D-032.
 
 ## Top 10 wariantów (ranking po IS, min. 30 transakcji IS)
 
@@ -50,9 +50,9 @@ na razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach 
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | ATR14 TP 1.5× SL 0× max 60 | — | 210 | 0.52 | 10.49 | 83.3 | 75 | 0.56 | 11.01 |
 | 2 | ATR14 TP 1× SL 0× max 60 | — | 216 | 0.44 | 8.75 | 91.2 | 78 | 0.51 | 9.07 |
-| 3 | ATR14 TP 2× SL 0× max 60 | — | 200 | 0.10 | 4.83 | 72.0 | 72 | 0.50 | 11.16 |
+| 3 | ATR14 TP 2× SL 0× max 60 | — | 200 | 0.10 | 4.83 | 72.0 | 73 | 0.52 | 11.42 |
 | 4 | po 60 świecach | — | 182 | -0.12 | -0.92 | 46.2 | 62 | -0.17 | 5.94 |
-| 5 | ATR14 TP 3× SL 0× max 60 | — | 193 | -0.20 | -1.12 | 55.4 | 69 | 0.29 | 10.98 |
+| 5 | ATR14 TP 3× SL 0× max 60 | — | 193 | -0.20 | -1.12 | 55.4 | 70 | 0.33 | 11.47 |
 
 ## Najlepszy wariant IS: ATR14 TP 1.5× SL 0× max 60 (—)
 
@@ -394,11 +394,11 @@ Dni = dni kalendarzowe od wejścia (open świecy) do wyjścia. Pozycja **OTWARTA
 
 ## Walidacja
 
-- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 10.63 pips/transakcję, percentyl **100.0** (losowe: 5%=-7.01, mediana=-1.71, 95%=2.83).
+- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 10.63 pips/transakcję, percentyl **100.0** (losowe: 5%=-7.01, mediana=-1.89, 95%=2.57).
 
 - **Deflated Sharpe Ratio**: 0.694 (Sharpe na transakcję 0.213, próg przy 5 próbach 0.160).
 
-- **PBO** (CSCV, 16 bloków, 5 wariantów): 0.136 — szansa, że najlepszy wariant IS wypada poniżej mediany poza próbą.
+- **PBO** (CSCV, 16 bloków, 5 wariantów): 0.144 — szansa, że najlepszy wariant IS wypada poniżej mediany poza próbą.
 
 - **Walk-forward** (okna kotwiczone, wybór najlepszego wariantu przed każdym oknem): 174 transakcji, śr. 9.04 pips, 0.53 R.
 
