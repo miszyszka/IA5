@@ -1,116 +1,116 @@
 {
  "files": {
   "candles_stk/AAPL.parquet": {
-   "bars": 11584,
+   "bars": 11585,
    "first_day": "1980-12-12",
    "from": 345445200,
-   "hash": "7edf5e3b1d3cfe4b",
-   "last_day": "2026-11-20",
-   "to": 1795185000
+   "hash": "136740f2753aea77",
+   "last_day": "2026-11-23",
+   "to": 1795444200
   },
   "candles_stk/AMZN.parquet": {
-   "bars": 7432,
+   "bars": 7433,
    "first_day": "1997-05-15",
    "from": 863668800,
-   "hash": "bbff35afe437fd16",
-   "last_day": "2026-11-20",
-   "to": 1795185000
+   "hash": "816955876cd29e92",
+   "last_day": "2026-11-23",
+   "to": 1795444200
   },
   "candles_stk/CVX.parquet": {
-   "bars": 14350,
+   "bars": 14351,
    "first_day": "1970-01-02",
    "from": 104400,
-   "hash": "32bbc1666e03d3ff",
-   "last_day": "2026-11-20",
-   "to": 1795185000
+   "hash": "38ea7415bbb4ad94",
+   "last_day": "2026-11-23",
+   "to": 1795444200
   },
   "candles_stk/GOOGL.parquet": {
-   "bars": 5606,
+   "bars": 5607,
    "first_day": "2004-08-19",
    "from": 1092888000,
-   "hash": "ed26c9b81cf89051",
-   "last_day": "2026-11-20",
-   "to": 1795185000
+   "hash": "5a611652f3371910",
+   "last_day": "2026-11-23",
+   "to": 1795444200
   },
   "candles_stk/JNJ.parquet": {
-   "bars": 14350,
+   "bars": 14351,
    "first_day": "1970-01-02",
    "from": 104400,
-   "hash": "224d667016f3b929",
-   "last_day": "2026-11-20",
-   "to": 1795185000
+   "hash": "9c489a348e26d790",
+   "last_day": "2026-11-23",
+   "to": 1795444200
   },
   "candles_stk/JPM.parquet": {
-   "bars": 11772,
+   "bars": 11773,
    "first_day": "1980-03-17",
    "from": 322117200,
-   "hash": "b60590ab5d4cb236",
-   "last_day": "2026-11-20",
-   "to": 1795185000
+   "hash": "6ecda36fa071e749",
+   "last_day": "2026-11-23",
+   "to": 1795444200
   },
   "candles_stk/MMM.parquet": {
-   "bars": 14350,
+   "bars": 14351,
    "first_day": "1970-01-02",
    "from": 104400,
-   "hash": "29ea8c62370c5cf1",
-   "last_day": "2026-11-20",
-   "to": 1795185000
+   "hash": "3a02cef0ebebbc46",
+   "last_day": "2026-11-23",
+   "to": 1795444200
   },
   "candles_stk/MO.parquet": {
-   "bars": 14350,
+   "bars": 14351,
    "first_day": "1970-01-02",
    "from": 104400,
-   "hash": "82114177a54fde83",
-   "last_day": "2026-11-20",
-   "to": 1795185000
+   "hash": "7a9a6d9e1f219215",
+   "last_day": "2026-11-23",
+   "to": 1795444200
   },
   "candles_stk/MSFT.parquet": {
-   "bars": 10258,
+   "bars": 10259,
    "first_day": "1986-03-13",
    "from": 511074000,
-   "hash": "68cd456b038da6dd",
-   "last_day": "2026-11-20",
-   "to": 1795185000
+   "hash": "4f87b55c3e343553",
+   "last_day": "2026-11-23",
+   "to": 1795444200
   },
   "candles_stk/MU.parquet": {
-   "bars": 10707,
+   "bars": 10708,
    "first_day": "1984-06-01",
    "from": 454910400,
-   "hash": "9a3371bb7a727c70",
-   "last_day": "2026-11-20",
-   "to": 1795185000
+   "hash": "e760a3a5dceff647",
+   "last_day": "2026-11-23",
+   "to": 1795444200
   },
   "candles_stk/NVDA.parquet": {
-   "bars": 7008,
+   "bars": 7009,
    "first_day": "1999-01-22",
    "from": 916981200,
-   "hash": "634a42d73632747d",
-   "last_day": "2026-11-20",
-   "to": 1795185000
+   "hash": "dfc2874c3ba4e2cf",
+   "last_day": "2026-11-23",
+   "to": 1795444200
   },
   "candles_stk/O.parquet": {
-   "bars": 8083,
+   "bars": 8084,
    "first_day": "1994-10-18",
    "from": 782452800,
-   "hash": "9faf72400fa93a77",
-   "last_day": "2026-11-20",
-   "to": 1795185000
+   "hash": "5b2cb2e8157ad905",
+   "last_day": "2026-11-23",
+   "to": 1795444200
   },
   "candles_stk/PM.parquet": {
-   "bars": 4707,
+   "bars": 4708,
    "first_day": "2008-03-17",
    "from": 1205726400,
-   "hash": "061516dba61d0304",
-   "last_day": "2026-11-20",
-   "to": 1795185000
+   "hash": "f53b06b46e17b884",
+   "last_day": "2026-11-23",
+   "to": 1795444200
   },
   "candles_stk/SO.parquet": {
-   "bars": 11319,
+   "bars": 11320,
    "first_day": "1981-12-31",
    "from": 378622800,
-   "hash": "1197ba68ace9aa19",
-   "last_day": "2026-11-20",
-   "to": 1795185000
+   "hash": "25a1a0f35910774c",
+   "last_day": "2026-11-23",
+   "to": 1795444200
   }
  },
  "interval": "1d",
