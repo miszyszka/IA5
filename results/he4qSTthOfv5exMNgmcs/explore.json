@@ -1,0 +1,1814 @@
+{
+ "version": "1",
+ "timeframe": "D1",
+ "units": 112,
+ "trials": 1004,
+ "mutations": [
+  "adx_silny",
+  "adx_silny+cofniecie20",
+  "adx_silny+trend200",
+  "adx_silny+zmiennosc_wysoka",
+  "adx_slaby",
+  "cofniecie20",
+  "cofniecie20+trend200",
+  "cofniecie20+zmiennosc_wysoka",
+  "odwrocony",
+  "oryginal",
+  "potwierdzenie",
+  "przeciw200",
+  "siatka",
+  "trail",
+  "trend200",
+  "trend50",
+  "tylko_long",
+  "tylko_short",
+  "wybicie20",
+  "zmiennosc_niska",
+  "zmiennosc_wysoka",
+  "zmiennosc_wysoka+trend200"
+ ],
+ "interrupted": null,
+ "reference": {
+  "mutation": "oryginal",
+  "label": "oryginał",
+  "family": "oryginał",
+  "params": {
+   "mode": "trend",
+   "ema": 100,
+   "k": 20
+  },
+  "exit": "ATR14 TP 1× SL 5× max 60",
+  "is_trades": 2808,
+  "is_mean_r": 0.008969,
+  "is_mean_pips": 4.731867,
+  "is_sharpe_a": 0.040697,
+  "is_sharpe_b": 0.012689,
+  "score": 0.012689,
+  "oos": {
+   "trades": 1276,
+   "mean_r": -0.030079,
+   "mean_pips": -12.414838,
+   "t_stat": -2.241906,
+   "bootstrap": {
+    "low": -23.479031,
+    "high": -1.193483,
+    "n": 1276
+   }
+  },
+  "stocks": {
+   "tickers": 14,
+   "tickers_traded": 14,
+   "trades": 5216,
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 20
+   },
+   "exit": "ATR14 TP 1× SL 5× max 60",
+   "from": "2010-01-01",
+   "cost_pct_side": 0.1,
+   "mean_pct": -0.353768,
+   "mean_r": -0.030563,
+   "win_rate": 0.81921,
+   "t_stat": -4.38568,
+   "long": {
+    "trades": 3805,
+    "mean_pct": 0.179759
+   },
+   "short": {
+    "trades": 1411,
+    "mean_pct": -1.792513
+   },
+   "halves_pct": [
+    -0.188806,
+    -0.518729
+   ],
+   "tickers_positive": 2,
+   "years_positive": 4,
+   "years": 17,
+   "bootstrap": {
+    "low": -0.512898,
+    "high": -0.202043,
+    "n": 5216
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": -0.353768,
+    "percentile": 0.0,
+    "p5": -0.069275,
+    "p50": 0.051063,
+    "p95": 0.165862
+   },
+   "skipped": {
+    "B8": 52480,
+    "brak_danych": 124,
+    "rozgrzewka": 0,
+    "poza_godzinami": 0,
+    "luka_danych": 0,
+    "swieca_uzupelniona": 0
+   },
+   "per_ticker": [
+    {
+     "ticker": "AAPL",
+     "trades": 431,
+     "mean_pct": -0.216447
+    },
+    {
+     "ticker": "AMZN",
+     "trades": 378,
+     "mean_pct": -0.651818
+    },
+    {
+     "ticker": "CVX",
+     "trades": 349,
+     "mean_pct": -0.802322
+    },
+    {
+     "ticker": "GOOGL",
+     "trades": 393,
+     "mean_pct": -0.456668
+    },
+    {
+     "ticker": "JNJ",
+     "trades": 350,
+     "mean_pct": -0.565709
+    },
+    {
+     "ticker": "JPM",
+     "trades": 388,
+     "mean_pct": -0.165482
+    },
+    {
+     "ticker": "MMM",
+     "trades": 328,
+     "mean_pct": -0.376814
+    },
+    {
+     "ticker": "MO",
+     "trades": 377,
+     "mean_pct": -0.478782
+    },
+    {
+     "ticker": "MSFT",
+     "trades": 356,
+     "mean_pct": -0.288145
+    },
+    {
+     "ticker": "MU",
+     "trades": 407,
+     "mean_pct": 0.155878
+    },
+    {
+     "ticker": "NVDA",
+     "trades": 402,
+     "mean_pct": 0.345915
+    },
+    {
+     "ticker": "O",
+     "trades": 344,
+     "mean_pct": -0.538647
+    },
+    {
+     "ticker": "PM",
+     "trades": 364,
+     "mean_pct": -0.782683
+    },
+    {
+     "ticker": "SO",
+     "trades": 349,
+     "mean_pct": -0.31382
+    }
+   ],
+   "verdict": {
+    "color": "red",
+    "text": "akcje nie potwierdzają"
+   }
+  }
+ },
+ "candidates": [
+  {
+   "rank": 1,
+   "mutation": "adx_silny+cofniecie20",
+   "label": "tylko przy silnym trendzie (ADX14 > 25) + tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20)",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 20
+   },
+   "exit": "ATR14 TP 1× SL 10× max 60",
+   "is": {
+    "trades": 715,
+    "mean_r": 0.027316,
+    "mean_pips": 26.90444,
+    "sharpe_a": 0.151802,
+    "sharpe_b": 0.111788,
+    "score": 0.111788
+   },
+   "oos": {
+    "trades": 285,
+    "mean_r": -0.002284,
+    "mean_pips": -6.377067,
+    "t_stat": -0.425425,
+    "bootstrap": {
+     "low": -36.729387,
+     "high": 21.096872,
+     "n": 285
+    }
+   },
+   "dsr": {
+    "dsr": 0.636004,
+    "sharpe": 0.123512,
+    "sharpe0": 0.107699,
+    "trials": 1004,
+    "trades": 715,
+    "skew": -3.43912,
+    "kurtosis": 14.417143
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 17.41921,
+    "percentile": 97.9,
+    "p5": -13.916005,
+    "p50": 1.054103,
+    "p95": 14.177589
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "TIMEFRAME = \"D1\"   # świece dzienne: sygnał codziennie na zamknięciu dnia, wejście na open następnego\n\nHYPOTHESIS = \"\"\"Mały TP i ogromny SL: cena często dochodzi do bliskiego celu w kierunku długiego trendu, a daleki stop\nrzadko pada. Kierunek z długiej EMA: tryb „trend” — EMA rośnie → long, spada → short; tryb „hamowanie” — spadek EMA\nzwalnia → long, wzrost EMA zwalnia → short (wejście przed zawróceniem). Wysoki win rate jest tu pewny — pytanie, czy rzadkie\nduże straty na SL go nie zjadają.\"\"\"\n\n# mode: \"trend\" = kierunek EMA; \"hamowanie\" = zmiana tempa EMA (spadek hamuje → long, wzrost hamuje → short)\nPARAMS = {\"mode\": [\"trend\", \"hamowanie\"], \"ema\": [100, 200], \"k\": [5, 20]}   # k = ile dni wstecz mierzymy nachylenie\n\n# mały TP, ogromny SL (w ATR14 dziennym), limit 60 dni (B7); jedna pozycja na parę — nowe wejście następnego dnia po wyjściu\nEXITS = [{\"kind\": \"atr\", \"n\": 14, \"tp\": tp, \"sl\": sl, \"cap\": 60} for tp in (0.3, 0.5, 1.0) for sl in (3.0, 5.0, 10.0)]\n\n\ndef signals(df, p, ind):\n    e = ind.ema(df.close, p[\"ema\"])\n    slope = e - e.shift(p[\"k\"])                      # nachylenie EMA z k dni\n    if p[\"mode\"] == \"trend\":\n        long_, short = slope > 0, slope < 0\n    else:\n        prev = slope.shift(p[\"k\"])                   # nachylenie k dni wcześniej\n        long_ = (slope < 0) & (slope > prev)         # spada, ale wolniej — spadek hamuje\n        short = (slope > 0) & (slope < prev)         # rośnie, ale wolniej — wzrost hamuje\n    return long_.astype(\"int8\") - short.astype(\"int8\")\n\n\n# ---- Eksploracja Maca (D-072): tylko przy silnym trendzie (ADX14 > 25) + tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20) ----\n# Wybrane tylko po IS spośród 1,004 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_adx_silny(df, s, p, ind):\n    return s.where(ind.adx(df, 14)[\"adx\"] > 25, 0.0)\n\ndef _ia5_cofniecie20(df, s, p, ind):\n    m = ind.sma(df.close, 20)\n    return s.where(((s > 0) & (df.close < m)) | ((s < 0) & (df.close > m)), 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_adx_silny(df, s, p, ind)\n    s = _ia5_cofniecie20(df, s, p, ind)\n    return s\n\nPARAMS = {'mode': ['trend'], 'ema': [100], 'k': [20]}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: tylko przy silnym trendzie (ADX14 > 25) + tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20). Wybrana po IS spośród 1,004 prób.'\n",
+   "code_hash": "26de5d843d9e1e07",
+   "verdict": {
+    "color": "red",
+    "text": "nie przetrwała OOS"
+   },
+   "stocks": {
+    "tickers": 14,
+    "tickers_traded": 14,
+    "trades": 1238,
+    "params": {
+     "mode": "trend",
+     "ema": 100,
+     "k": 20
+    },
+    "exit": "ATR14 TP 1× SL 10× max 60",
+    "from": "2010-01-01",
+    "cost_pct_side": 0.1,
+    "mean_pct": 0.032252,
+    "mean_r": -0.006143,
+    "win_rate": 0.855412,
+    "t_stat": 0.181141,
+    "long": {
+     "trades": 849,
+     "mean_pct": 0.465866
+    },
+    "short": {
+     "trades": 389,
+     "mean_pct": -0.914117
+    },
+    "halves_pct": [
+     0.278514,
+     -0.214009
+    ],
+    "tickers_positive": 7,
+    "years_positive": 11,
+    "years": 17,
+    "bootstrap": {
+     "low": -0.326655,
+     "high": 0.374553,
+     "n": 1238
+    },
+    "benchmark": {
+     "sims": 1000,
+     "actual_mean_pips": 0.032252,
+     "percentile": 49.4,
+     "p5": -0.236295,
+     "p50": 0.03635,
+     "p95": 0.315246
+    },
+    "skipped": {
+     "B8": 5454,
+     "brak_danych": 39,
+     "rozgrzewka": 0,
+     "poza_godzinami": 0,
+     "luka_danych": 0,
+     "swieca_uzupelniona": 0
+    },
+    "per_ticker": [
+     {
+      "ticker": "AAPL",
+      "trades": 94,
+      "mean_pct": 0.514301
+     },
+     {
+      "ticker": "AMZN",
+      "trades": 87,
+      "mean_pct": 0.24689
+     },
+     {
+      "ticker": "CVX",
+      "trades": 93,
+      "mean_pct": -0.721848
+     },
+     {
+      "ticker": "GOOGL",
+      "trades": 97,
+      "mean_pct": 0.812918
+     },
+     {
+      "ticker": "JNJ",
+      "trades": 106,
+      "mean_pct": 0.242081
+     },
+     {
+      "ticker": "JPM",
+      "trades": 74,
+      "mean_pct": -0.263441
+     },
+     {
+      "ticker": "MMM",
+      "trades": 75,
+      "mean_pct": -0.955038
+     },
+     {
+      "ticker": "MO",
+      "trades": 82,
+      "mean_pct": -1.837228
+     },
+     {
+      "ticker": "MSFT",
+      "trades": 103,
+      "mean_pct": 1.247143
+     },
+     {
+      "ticker": "MU",
+      "trades": 84,
+      "mean_pct": 2.389906
+     },
+     {
+      "ticker": "NVDA",
+      "trades": 93,
+      "mean_pct": 0.502017
+     },
+     {
+      "ticker": "O",
+      "trades": 79,
+      "mean_pct": -0.911257
+     },
+     {
+      "ticker": "PM",
+      "trades": 80,
+      "mean_pct": -1.28091
+     },
+     {
+      "ticker": "SO",
+      "trades": 91,
+      "mean_pct": -0.295991
+     }
+    ],
+    "verdict": {
+     "color": "red",
+     "text": "akcje nie potwierdzają"
+    }
+   }
+  },
+  {
+   "rank": 2,
+   "mutation": "cofniecie20+zmiennosc_wysoka",
+   "label": "tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20) + tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 5
+   },
+   "exit": "ATR14 TP 0.3× SL 10× max 60",
+   "is": {
+    "trades": 1568,
+    "mean_r": 0.00974,
+    "mean_pips": 11.216449,
+    "sharpe_a": 0.139666,
+    "sharpe_b": 0.067555,
+    "score": 0.067555
+   },
+   "oos": {
+    "trades": 710,
+    "mean_r": -0.003408,
+    "mean_pips": -5.027248,
+    "t_stat": -0.773367,
+    "bootstrap": {
+     "low": -18.405418,
+     "high": 7.032679,
+     "n": 710
+    }
+   },
+   "dsr": {
+    "dsr": 0.286476,
+    "sharpe": 0.089001,
+    "sharpe0": 0.107699,
+    "trials": 1004,
+    "trades": 1568,
+    "skew": -6.931994,
+    "kurtosis": 55.070619
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 6.153664,
+    "percentile": 99.7,
+    "p5": -7.264241,
+    "p50": -1.75551,
+    "p95": 3.504797
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "TIMEFRAME = \"D1\"   # świece dzienne: sygnał codziennie na zamknięciu dnia, wejście na open następnego\n\nHYPOTHESIS = \"\"\"Mały TP i ogromny SL: cena często dochodzi do bliskiego celu w kierunku długiego trendu, a daleki stop\nrzadko pada. Kierunek z długiej EMA: tryb „trend” — EMA rośnie → long, spada → short; tryb „hamowanie” — spadek EMA\nzwalnia → long, wzrost EMA zwalnia → short (wejście przed zawróceniem). Wysoki win rate jest tu pewny — pytanie, czy rzadkie\nduże straty na SL go nie zjadają.\"\"\"\n\n# mode: \"trend\" = kierunek EMA; \"hamowanie\" = zmiana tempa EMA (spadek hamuje → long, wzrost hamuje → short)\nPARAMS = {\"mode\": [\"trend\", \"hamowanie\"], \"ema\": [100, 200], \"k\": [5, 20]}   # k = ile dni wstecz mierzymy nachylenie\n\n# mały TP, ogromny SL (w ATR14 dziennym), limit 60 dni (B7); jedna pozycja na parę — nowe wejście następnego dnia po wyjściu\nEXITS = [{\"kind\": \"atr\", \"n\": 14, \"tp\": tp, \"sl\": sl, \"cap\": 60} for tp in (0.3, 0.5, 1.0) for sl in (3.0, 5.0, 10.0)]\n\n\ndef signals(df, p, ind):\n    e = ind.ema(df.close, p[\"ema\"])\n    slope = e - e.shift(p[\"k\"])                      # nachylenie EMA z k dni\n    if p[\"mode\"] == \"trend\":\n        long_, short = slope > 0, slope < 0\n    else:\n        prev = slope.shift(p[\"k\"])                   # nachylenie k dni wcześniej\n        long_ = (slope < 0) & (slope > prev)         # spada, ale wolniej — spadek hamuje\n        short = (slope > 0) & (slope < prev)         # rośnie, ale wolniej — wzrost hamuje\n    return long_.astype(\"int8\") - short.astype(\"int8\")\n\n\n# ---- Eksploracja Maca (D-072): tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20) + tylko przy podwyższonej zmienności (ATR14 > ATR100) ----\n# Wybrane tylko po IS spośród 1,004 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_cofniecie20(df, s, p, ind):\n    m = ind.sma(df.close, 20)\n    return s.where(((s > 0) & (df.close < m)) | ((s < 0) & (df.close > m)), 0.0)\n\ndef _ia5_zmiennosc_wysoka(df, s, p, ind):\n    return s.where(ind.atr(df, 14) > ind.atr(df, 100), 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_cofniecie20(df, s, p, ind)\n    s = _ia5_zmiennosc_wysoka(df, s, p, ind)\n    return s\n\nPARAMS = {'mode': ['trend'], 'ema': [100], 'k': [5]}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20) + tylko przy podwyższonej zmienności (ATR14 > ATR100). Wybrana po IS spośród 1,004 prób.'\n",
+   "code_hash": "b52b87ddf6dd3dce",
+   "verdict": {
+    "color": "red",
+    "text": "nie przetrwała OOS"
+   },
+   "stocks": {
+    "tickers": 14,
+    "tickers_traded": 14,
+    "trades": 3424,
+    "params": {
+     "mode": "trend",
+     "ema": 100,
+     "k": 5
+    },
+    "exit": "ATR14 TP 0.3× SL 10× max 60",
+    "from": "2010-01-01",
+    "cost_pct_side": 0.1,
+    "mean_pct": -0.128094,
+    "mean_r": -0.008467,
+    "win_rate": 0.952103,
+    "t_stat": -2.162939,
+    "long": {
+     "trades": 2391,
+     "mean_pct": 0.033804
+    },
+    "short": {
+     "trades": 1033,
+     "mean_pct": -0.502826
+    },
+    "halves_pct": [
+     -0.140404,
+     -0.115784
+    ],
+    "tickers_positive": 3,
+    "years_positive": 6,
+    "years": 17,
+    "bootstrap": {
+     "low": -0.24067,
+     "high": -0.014165,
+     "n": 3424
+    },
+    "benchmark": {
+     "sims": 1000,
+     "actual_mean_pips": -0.128094,
+     "percentile": 49.5,
+     "p5": -0.228204,
+     "p50": -0.126881,
+     "p95": -0.033504
+    },
+    "skipped": {
+     "B8": 5798,
+     "brak_danych": 15,
+     "rozgrzewka": 0,
+     "poza_godzinami": 0,
+     "luka_danych": 0,
+     "swieca_uzupelniona": 0
+    },
+    "per_ticker": [
+     {
+      "ticker": "AAPL",
+      "trades": 248,
+      "mean_pct": -0.157878
+     },
+     {
+      "ticker": "AMZN",
+      "trades": 219,
+      "mean_pct": -0.245005
+     },
+     {
+      "ticker": "CVX",
+      "trades": 231,
+      "mean_pct": -0.236197
+     },
+     {
+      "ticker": "GOOGL",
+      "trades": 256,
+      "mean_pct": -0.294646
+     },
+     {
+      "ticker": "JNJ",
+      "trades": 263,
+      "mean_pct": -0.002141
+     },
+     {
+      "ticker": "JPM",
+      "trades": 289,
+      "mean_pct": 0.056285
+     },
+     {
+      "ticker": "MMM",
+      "trades": 231,
+      "mean_pct": -0.239033
+     },
+     {
+      "ticker": "MO",
+      "trades": 216,
+      "mean_pct": -0.269427
+     },
+     {
+      "ticker": "MSFT",
+      "trades": 296,
+      "mean_pct": 0.153902
+     },
+     {
+      "ticker": "MU",
+      "trades": 243,
+      "mean_pct": 0.437535
+     },
+     {
+      "ticker": "NVDA",
+      "trades": 259,
+      "mean_pct": -0.022301
+     },
+     {
+      "ticker": "O",
+      "trades": 185,
+      "mean_pct": -0.376073
+     },
+     {
+      "ticker": "PM",
+      "trades": 265,
+      "mean_pct": -0.303342
+     },
+     {
+      "ticker": "SO",
+      "trades": 223,
+      "mean_pct": -0.512223
+     }
+    ],
+    "verdict": {
+     "color": "red",
+     "text": "akcje nie potwierdzają"
+    }
+   }
+  },
+  {
+   "rank": 3,
+   "mutation": "adx_silny",
+   "label": "tylko przy silnym trendzie (ADX14 > 25)",
+   "family": "przekształcenie",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 20
+   },
+   "exit": "ATR14 TP 1× SL 10× max 60",
+   "is": {
+    "trades": 1413,
+    "mean_r": 0.015694,
+    "mean_pips": 14.674355,
+    "sharpe_a": 0.107661,
+    "sharpe_b": 0.051132,
+    "score": 0.051132
+   },
+   "oos": {
+    "trades": 594,
+    "mean_r": -0.006051,
+    "mean_pips": -3.777797,
+    "t_stat": -0.412397,
+    "bootstrap": {
+     "low": -22.787697,
+     "high": 13.883535,
+     "n": 594
+    }
+   },
+   "dsr": {
+    "dsr": 0.084431,
+    "sharpe": 0.067343,
+    "sharpe0": 0.107699,
+    "trials": 1004,
+    "trades": 1413,
+    "skew": -3.013543,
+    "kurtosis": 11.420652
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 9.21318,
+    "percentile": 92.5,
+    "p5": -8.816796,
+    "p50": 0.677753,
+    "p95": 10.198394
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "TIMEFRAME = \"D1\"   # świece dzienne: sygnał codziennie na zamknięciu dnia, wejście na open następnego\n\nHYPOTHESIS = \"\"\"Mały TP i ogromny SL: cena często dochodzi do bliskiego celu w kierunku długiego trendu, a daleki stop\nrzadko pada. Kierunek z długiej EMA: tryb „trend” — EMA rośnie → long, spada → short; tryb „hamowanie” — spadek EMA\nzwalnia → long, wzrost EMA zwalnia → short (wejście przed zawróceniem). Wysoki win rate jest tu pewny — pytanie, czy rzadkie\nduże straty na SL go nie zjadają.\"\"\"\n\n# mode: \"trend\" = kierunek EMA; \"hamowanie\" = zmiana tempa EMA (spadek hamuje → long, wzrost hamuje → short)\nPARAMS = {\"mode\": [\"trend\", \"hamowanie\"], \"ema\": [100, 200], \"k\": [5, 20]}   # k = ile dni wstecz mierzymy nachylenie\n\n# mały TP, ogromny SL (w ATR14 dziennym), limit 60 dni (B7); jedna pozycja na parę — nowe wejście następnego dnia po wyjściu\nEXITS = [{\"kind\": \"atr\", \"n\": 14, \"tp\": tp, \"sl\": sl, \"cap\": 60} for tp in (0.3, 0.5, 1.0) for sl in (3.0, 5.0, 10.0)]\n\n\ndef signals(df, p, ind):\n    e = ind.ema(df.close, p[\"ema\"])\n    slope = e - e.shift(p[\"k\"])                      # nachylenie EMA z k dni\n    if p[\"mode\"] == \"trend\":\n        long_, short = slope > 0, slope < 0\n    else:\n        prev = slope.shift(p[\"k\"])                   # nachylenie k dni wcześniej\n        long_ = (slope < 0) & (slope > prev)         # spada, ale wolniej — spadek hamuje\n        short = (slope > 0) & (slope < prev)         # rośnie, ale wolniej — wzrost hamuje\n    return long_.astype(\"int8\") - short.astype(\"int8\")\n\n\n# ---- Eksploracja Maca (D-072): tylko przy silnym trendzie (ADX14 > 25) ----\n# Wybrane tylko po IS spośród 1,004 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_adx_silny(df, s, p, ind):\n    return s.where(ind.adx(df, 14)[\"adx\"] > 25, 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_adx_silny(df, s, p, ind)\n    return s\n\nPARAMS = {'mode': ['trend'], 'ema': [100], 'k': [20]}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: tylko przy silnym trendzie (ADX14 > 25). Wybrana po IS spośród 1,004 prób.'\n",
+   "code_hash": "485c6599fd60d69d",
+   "verdict": {
+    "color": "red",
+    "text": "nie przetrwała OOS"
+   },
+   "stocks": {
+    "tickers": 14,
+    "tickers_traded": 14,
+    "trades": 2632,
+    "params": {
+     "mode": "trend",
+     "ema": 100,
+     "k": 20
+    },
+    "exit": "ATR14 TP 1× SL 10× max 60",
+    "from": "2010-01-01",
+    "cost_pct_side": 0.1,
+    "mean_pct": -0.231967,
+    "mean_r": -0.008349,
+    "win_rate": 0.858663,
+    "t_stat": -1.714006,
+    "long": {
+     "trades": 1970,
+     "mean_pct": 0.454616
+    },
+    "short": {
+     "trades": 662,
+     "mean_pct": -2.275122
+    },
+    "halves_pct": [
+     0.00903,
+     -0.472964
+    ],
+    "tickers_positive": 5,
+    "years_positive": 6,
+    "years": 17,
+    "bootstrap": {
+     "low": -0.495532,
+     "high": 0.019857,
+     "n": 2632
+    },
+    "benchmark": {
+     "sims": 1000,
+     "actual_mean_pips": -0.231967,
+     "percentile": 0.0,
+     "p5": 0.001198,
+     "p50": 0.192017,
+     "p95": 0.400122
+    },
+    "skipped": {
+     "B8": 20054,
+     "brak_danych": 86,
+     "rozgrzewka": 0,
+     "poza_godzinami": 0,
+     "luka_danych": 0,
+     "swieca_uzupelniona": 0
+    },
+    "per_ticker": [
+     {
+      "ticker": "AAPL",
+      "trades": 229,
+      "mean_pct": 0.28752
+     },
+     {
+      "ticker": "AMZN",
+      "trades": 183,
+      "mean_pct": -1.025831
+     },
+     {
+      "ticker": "CVX",
+      "trades": 195,
+      "mean_pct": -0.559703
+     },
+     {
+      "ticker": "GOOGL",
+      "trades": 186,
+      "mean_pct": -0.18244
+     },
+     {
+      "ticker": "JNJ",
+      "trades": 203,
+      "mean_pct": -0.131526
+     },
+     {
+      "ticker": "JPM",
+      "trades": 165,
+      "mean_pct": 0.123462
+     },
+     {
+      "ticker": "MMM",
+      "trades": 159,
+      "mean_pct": -0.752801
+     },
+     {
+      "ticker": "MO",
+      "trades": 200,
+      "mean_pct": -0.54125
+     },
+     {
+      "ticker": "MSFT",
+      "trades": 190,
+      "mean_pct": 0.12818
+     },
+     {
+      "ticker": "MU",
+      "trades": 214,
+      "mean_pct": 0.957774
+     },
+     {
+      "ticker": "NVDA",
+      "trades": 220,
+      "mean_pct": 0.701715
+     },
+     {
+      "ticker": "O",
+      "trades": 170,
+      "mean_pct": -0.910041
+     },
+     {
+      "ticker": "PM",
+      "trades": 165,
+      "mean_pct": -1.226776
+     },
+     {
+      "ticker": "SO",
+      "trades": 153,
+      "mean_pct": -0.901127
+     }
+    ],
+    "verdict": {
+     "color": "red",
+     "text": "akcje nie potwierdzają"
+    }
+   }
+  },
+  {
+   "rank": 4,
+   "mutation": "adx_silny+trend200",
+   "label": "tylko przy silnym trendzie (ADX14 > 25) + tylko z trendem SMA200",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 20
+   },
+   "exit": "ATR14 TP 1× SL 10× max 60",
+   "is": {
+    "trades": 1377,
+    "mean_r": 0.013055,
+    "mean_pips": 12.729898,
+    "sharpe_a": 0.085387,
+    "sharpe_b": 0.043586,
+    "score": 0.043586
+   },
+   "oos": {
+    "trades": 576,
+    "mean_r": -0.010636,
+    "mean_pips": -8.568757,
+    "t_stat": -0.893522,
+    "bootstrap": {
+     "low": -27.977298,
+     "high": 9.654272,
+     "n": 576
+    }
+   },
+   "dsr": {
+    "dsr": 0.035888,
+    "sharpe": 0.055196,
+    "sharpe0": 0.107699,
+    "trials": 1004,
+    "trades": 1377,
+    "skew": -2.942218,
+    "kurtosis": 10.946221
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 6.448267,
+    "percentile": 81.7,
+    "p5": -9.447399,
+    "p50": 0.754958,
+    "p95": 10.496293
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "TIMEFRAME = \"D1\"   # świece dzienne: sygnał codziennie na zamknięciu dnia, wejście na open następnego\n\nHYPOTHESIS = \"\"\"Mały TP i ogromny SL: cena często dochodzi do bliskiego celu w kierunku długiego trendu, a daleki stop\nrzadko pada. Kierunek z długiej EMA: tryb „trend” — EMA rośnie → long, spada → short; tryb „hamowanie” — spadek EMA\nzwalnia → long, wzrost EMA zwalnia → short (wejście przed zawróceniem). Wysoki win rate jest tu pewny — pytanie, czy rzadkie\nduże straty na SL go nie zjadają.\"\"\"\n\n# mode: \"trend\" = kierunek EMA; \"hamowanie\" = zmiana tempa EMA (spadek hamuje → long, wzrost hamuje → short)\nPARAMS = {\"mode\": [\"trend\", \"hamowanie\"], \"ema\": [100, 200], \"k\": [5, 20]}   # k = ile dni wstecz mierzymy nachylenie\n\n# mały TP, ogromny SL (w ATR14 dziennym), limit 60 dni (B7); jedna pozycja na parę — nowe wejście następnego dnia po wyjściu\nEXITS = [{\"kind\": \"atr\", \"n\": 14, \"tp\": tp, \"sl\": sl, \"cap\": 60} for tp in (0.3, 0.5, 1.0) for sl in (3.0, 5.0, 10.0)]\n\n\ndef signals(df, p, ind):\n    e = ind.ema(df.close, p[\"ema\"])\n    slope = e - e.shift(p[\"k\"])                      # nachylenie EMA z k dni\n    if p[\"mode\"] == \"trend\":\n        long_, short = slope > 0, slope < 0\n    else:\n        prev = slope.shift(p[\"k\"])                   # nachylenie k dni wcześniej\n        long_ = (slope < 0) & (slope > prev)         # spada, ale wolniej — spadek hamuje\n        short = (slope > 0) & (slope < prev)         # rośnie, ale wolniej — wzrost hamuje\n    return long_.astype(\"int8\") - short.astype(\"int8\")\n\n\n# ---- Eksploracja Maca (D-072): tylko przy silnym trendzie (ADX14 > 25) + tylko z trendem SMA200 ----\n# Wybrane tylko po IS spośród 1,004 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_adx_silny(df, s, p, ind):\n    return s.where(ind.adx(df, 14)[\"adx\"] > 25, 0.0)\n\ndef _ia5_trend200(df, s, p, ind):\n    m = ind.sma(df.close, 200)\n    return s.where(((s > 0) & (df.close > m)) | ((s < 0) & (df.close < m)), 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_adx_silny(df, s, p, ind)\n    s = _ia5_trend200(df, s, p, ind)\n    return s\n\nPARAMS = {'mode': ['trend'], 'ema': [100], 'k': [20]}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: tylko przy silnym trendzie (ADX14 > 25) + tylko z trendem SMA200. Wybrana po IS spośród 1,004 prób.'\n",
+   "code_hash": "10e07d8a0ab3b540",
+   "verdict": {
+    "color": "red",
+    "text": "nie przetrwała OOS"
+   },
+   "stocks": {
+    "tickers": 14,
+    "tickers_traded": 14,
+    "trades": 2565,
+    "params": {
+     "mode": "trend",
+     "ema": 100,
+     "k": 20
+    },
+    "exit": "ATR14 TP 1× SL 10× max 60",
+    "from": "2010-01-01",
+    "cost_pct_side": 0.1,
+    "mean_pct": -0.15253,
+    "mean_r": -0.005375,
+    "win_rate": 0.862768,
+    "t_stat": -1.135179,
+    "long": {
+     "trades": 1926,
+     "mean_pct": 0.47147
+    },
+    "short": {
+     "trades": 639,
+     "mean_pct": -2.033318
+    },
+    "halves_pct": [
+     0.06589,
+     -0.37078
+    ],
+    "tickers_positive": 5,
+    "years_positive": 9,
+    "years": 17,
+    "bootstrap": {
+     "low": -0.426312,
+     "high": 0.107513,
+     "n": 2565
+    },
+    "benchmark": {
+     "sims": 1000,
+     "actual_mean_pips": -0.15253,
+     "percentile": 0.3,
+     "p5": -0.006558,
+     "p50": 0.20156,
+     "p95": 0.406091
+    },
+    "skipped": {
+     "B8": 17743,
+     "brak_danych": 82,
+     "rozgrzewka": 0,
+     "poza_godzinami": 0,
+     "luka_danych": 0,
+     "swieca_uzupelniona": 0
+    },
+    "per_ticker": [
+     {
+      "ticker": "AAPL",
+      "trades": 236,
+      "mean_pct": 0.411393
+     },
+     {
+      "ticker": "AMZN",
+      "trades": 175,
+      "mean_pct": -0.623487
+     },
+     {
+      "ticker": "CVX",
+      "trades": 190,
+      "mean_pct": -0.607826
+     },
+     {
+      "ticker": "GOOGL",
+      "trades": 177,
+      "mean_pct": 0.036126
+     },
+     {
+      "ticker": "JNJ",
+      "trades": 179,
+      "mean_pct": -0.445961
+     },
+     {
+      "ticker": "JPM",
+      "trades": 170,
+      "mean_pct": 0.428438
+     },
+     {
+      "ticker": "MMM",
+      "trades": 159,
+      "mean_pct": -0.367051
+     },
+     {
+      "ticker": "MO",
+      "trades": 200,
+      "mean_pct": -0.560316
+     },
+     {
+      "ticker": "MSFT",
+      "trades": 177,
+      "mean_pct": -0.027267
+     },
+     {
+      "ticker": "MU",
+      "trades": 206,
+      "mean_pct": 0.885898
+     },
+     {
+      "ticker": "NVDA",
+      "trades": 221,
+      "mean_pct": 1.046792
+     },
+     {
+      "ticker": "O",
+      "trades": 168,
+      "mean_pct": -0.92766
+     },
+     {
+      "ticker": "PM",
+      "trades": 168,
+      "mean_pct": -0.950156
+     },
+     {
+      "ticker": "SO",
+      "trades": 139,
+      "mean_pct": -1.339893
+     }
+    ],
+    "verdict": {
+     "color": "red",
+     "text": "akcje nie potwierdzają"
+    }
+   }
+  },
+  {
+   "rank": 5,
+   "mutation": "zmiennosc_wysoka+trend200",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100) + tylko z trendem SMA200",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 200,
+    "k": 20
+   },
+   "exit": "ATR14 TP 1× SL 10× max 60",
+   "is": {
+    "trades": 1092,
+    "mean_r": 0.012888,
+    "mean_pips": 12.519247,
+    "sharpe_a": 0.09383,
+    "sharpe_b": 0.040542,
+    "score": 0.040542
+   },
+   "oos": {
+    "trades": 524,
+    "mean_r": 0.004336,
+    "mean_pips": 2.444257,
+    "t_stat": 0.222474,
+    "bootstrap": {
+     "low": -19.408664,
+     "high": 23.469939,
+     "n": 524
+    }
+   },
+   "dsr": {
+    "dsr": 0.058873,
+    "sharpe": 0.056364,
+    "sharpe0": 0.107699,
+    "trials": 1004,
+    "trades": 1092,
+    "skew": -2.957642,
+    "kurtosis": 11.359292
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 9.252356,
+    "percentile": 93.8,
+    "p5": -10.199662,
+    "p50": 0.397624,
+    "p95": 9.922135
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "TIMEFRAME = \"D1\"   # świece dzienne: sygnał codziennie na zamknięciu dnia, wejście na open następnego\n\nHYPOTHESIS = \"\"\"Mały TP i ogromny SL: cena często dochodzi do bliskiego celu w kierunku długiego trendu, a daleki stop\nrzadko pada. Kierunek z długiej EMA: tryb „trend” — EMA rośnie → long, spada → short; tryb „hamowanie” — spadek EMA\nzwalnia → long, wzrost EMA zwalnia → short (wejście przed zawróceniem). Wysoki win rate jest tu pewny — pytanie, czy rzadkie\nduże straty na SL go nie zjadają.\"\"\"\n\n# mode: \"trend\" = kierunek EMA; \"hamowanie\" = zmiana tempa EMA (spadek hamuje → long, wzrost hamuje → short)\nPARAMS = {\"mode\": [\"trend\", \"hamowanie\"], \"ema\": [100, 200], \"k\": [5, 20]}   # k = ile dni wstecz mierzymy nachylenie\n\n# mały TP, ogromny SL (w ATR14 dziennym), limit 60 dni (B7); jedna pozycja na parę — nowe wejście następnego dnia po wyjściu\nEXITS = [{\"kind\": \"atr\", \"n\": 14, \"tp\": tp, \"sl\": sl, \"cap\": 60} for tp in (0.3, 0.5, 1.0) for sl in (3.0, 5.0, 10.0)]\n\n\ndef signals(df, p, ind):\n    e = ind.ema(df.close, p[\"ema\"])\n    slope = e - e.shift(p[\"k\"])                      # nachylenie EMA z k dni\n    if p[\"mode\"] == \"trend\":\n        long_, short = slope > 0, slope < 0\n    else:\n        prev = slope.shift(p[\"k\"])                   # nachylenie k dni wcześniej\n        long_ = (slope < 0) & (slope > prev)         # spada, ale wolniej — spadek hamuje\n        short = (slope > 0) & (slope < prev)         # rośnie, ale wolniej — wzrost hamuje\n    return long_.astype(\"int8\") - short.astype(\"int8\")\n\n\n# ---- Eksploracja Maca (D-072): tylko przy podwyższonej zmienności (ATR14 > ATR100) + tylko z trendem SMA200 ----\n# Wybrane tylko po IS spośród 1,004 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_zmiennosc_wysoka(df, s, p, ind):\n    return s.where(ind.atr(df, 14) > ind.atr(df, 100), 0.0)\n\ndef _ia5_trend200(df, s, p, ind):\n    m = ind.sma(df.close, 200)\n    return s.where(((s > 0) & (df.close > m)) | ((s < 0) & (df.close < m)), 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_zmiennosc_wysoka(df, s, p, ind)\n    s = _ia5_trend200(df, s, p, ind)\n    return s\n\nPARAMS = {'mode': ['trend'], 'ema': [200], 'k': [20]}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: tylko przy podwyższonej zmienności (ATR14 > ATR100) + tylko z trendem SMA200. Wybrana po IS spośród 1,004 prób.'\n",
+   "code_hash": "003a3c28e0b2fe22",
+   "verdict": {
+    "color": "yellow",
+    "text": "dodatnia w OOS, ale nie przechodzi wszystkich testów"
+   },
+   "stocks": {
+    "tickers": 14,
+    "tickers_traded": 14,
+    "trades": 2662,
+    "params": {
+     "mode": "trend",
+     "ema": 200,
+     "k": 20
+    },
+    "exit": "ATR14 TP 1× SL 10× max 60",
+    "from": "2010-01-01",
+    "cost_pct_side": 0.1,
+    "mean_pct": 0.115897,
+    "mean_r": 0.006246,
+    "win_rate": 0.873028,
+    "t_stat": 0.898493,
+    "long": {
+     "trades": 2143,
+     "mean_pct": 0.637859
+    },
+    "short": {
+     "trades": 519,
+     "mean_pct": -2.039335
+    },
+    "halves_pct": [
+     0.333021,
+     -0.101228
+    ],
+    "tickers_positive": 8,
+    "years_positive": 11,
+    "years": 17,
+    "bootstrap": {
+     "low": -0.142646,
+     "high": 0.35934,
+     "n": 2662
+    },
+    "benchmark": {
+     "sims": 1000,
+     "actual_mean_pips": 0.115897,
+     "percentile": 1.3,
+     "p5": 0.175131,
+     "p50": 0.367187,
+     "p95": 0.547931
+    },
+    "skipped": {
+     "B8": 23646,
+     "brak_danych": 116,
+     "rozgrzewka": 0,
+     "poza_godzinami": 0,
+     "luka_danych": 0,
+     "swieca_uzupelniona": 0
+    },
+    "per_ticker": [
+     {
+      "ticker": "AAPL",
+      "trades": 218,
+      "mean_pct": 0.260832
+     },
+     {
+      "ticker": "AMZN",
+      "trades": 201,
+      "mean_pct": 0.431933
+     },
+     {
+      "ticker": "CVX",
+      "trades": 175,
+      "mean_pct": -0.240051
+     },
+     {
+      "ticker": "GOOGL",
+      "trades": 206,
+      "mean_pct": 0.228651
+     },
+     {
+      "ticker": "JNJ",
+      "trades": 157,
+      "mean_pct": -0.379664
+     },
+     {
+      "ticker": "JPM",
+      "trades": 195,
+      "mean_pct": 0.46484
+     },
+     {
+      "ticker": "MMM",
+      "trades": 199,
+      "mean_pct": 0.256152
+     },
+     {
+      "ticker": "MO",
+      "trades": 196,
+      "mean_pct": -0.133099
+     },
+     {
+      "ticker": "MSFT",
+      "trades": 183,
+      "mean_pct": 0.290587
+     },
+     {
+      "ticker": "MU",
+      "trades": 219,
+      "mean_pct": 0.670587
+     },
+     {
+      "ticker": "NVDA",
+      "trades": 248,
+      "mean_pct": 1.284162
+     },
+     {
+      "ticker": "O",
+      "trades": 146,
+      "mean_pct": -1.021037
+     },
+     {
+      "ticker": "PM",
+      "trades": 172,
+      "mean_pct": -0.561166
+     },
+     {
+      "ticker": "SO",
+      "trades": 147,
+      "mean_pct": -1.150313
+     }
+    ],
+    "verdict": {
+     "color": "red",
+     "text": "akcje nie potwierdzają"
+    }
+   }
+  }
+ ],
+ "is_table": [
+  {
+   "mutation": "adx_silny+cofniecie20",
+   "label": "tylko przy silnym trendzie (ADX14 > 25) + tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20)",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 20
+   },
+   "exit": "ATR14 TP 1× SL 10× max 60",
+   "is_trades": 715,
+   "is_mean_r": 0.027316,
+   "is_mean_pips": 26.90444,
+   "is_sharpe_a": 0.151802,
+   "is_sharpe_b": 0.111788,
+   "score": 0.111788
+  },
+  {
+   "mutation": "adx_silny+cofniecie20",
+   "label": "tylko przy silnym trendzie (ADX14 > 25) + tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20)",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 5
+   },
+   "exit": "ATR14 TP 0.3× SL 10× max 60",
+   "is_trades": 1303,
+   "is_mean_r": 0.012229,
+   "is_mean_pips": 13.363441,
+   "is_sharpe_a": 0.144699,
+   "is_sharpe_b": 0.099628,
+   "score": 0.099628
+  },
+  {
+   "mutation": "adx_silny+cofniecie20",
+   "label": "tylko przy silnym trendzie (ADX14 > 25) + tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20)",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 200,
+    "k": 20
+   },
+   "exit": "ATR14 TP 0.5× SL 10× max 60",
+   "is_trades": 1123,
+   "is_mean_r": 0.013179,
+   "is_mean_pips": 12.843862,
+   "is_sharpe_a": 0.097206,
+   "is_sharpe_b": 0.074992,
+   "score": 0.074992
+  },
+  {
+   "mutation": "adx_silny+cofniecie20",
+   "label": "tylko przy silnym trendzie (ADX14 > 25) + tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20)",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 200,
+    "k": 5
+   },
+   "exit": "ATR14 TP 1× SL 5× max 60",
+   "is_trades": 728,
+   "is_mean_r": 0.034378,
+   "is_mean_pips": 18.579926,
+   "is_sharpe_a": 0.12418,
+   "is_sharpe_b": 0.071564,
+   "score": 0.071564
+  },
+  {
+   "mutation": "cofniecie20+zmiennosc_wysoka",
+   "label": "tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20) + tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 5
+   },
+   "exit": "ATR14 TP 0.3× SL 10× max 60",
+   "is_trades": 1568,
+   "is_mean_r": 0.00974,
+   "is_mean_pips": 11.216449,
+   "is_sharpe_a": 0.139666,
+   "is_sharpe_b": 0.067555,
+   "score": 0.067555
+  },
+  {
+   "mutation": "cofniecie20+zmiennosc_wysoka",
+   "label": "tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20) + tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 20
+   },
+   "exit": "ATR14 TP 1× SL 10× max 60",
+   "is_trades": 734,
+   "is_mean_r": 0.020129,
+   "is_mean_pips": 26.832551,
+   "is_sharpe_a": 0.158471,
+   "is_sharpe_b": 0.061292,
+   "score": 0.061292
+  },
+  {
+   "mutation": "cofniecie20+zmiennosc_wysoka",
+   "label": "tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20) + tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 200,
+    "k": 5
+   },
+   "exit": "ATR14 TP 0.3× SL 10× max 60",
+   "is_trades": 1529,
+   "is_mean_r": 0.008399,
+   "is_mean_pips": 9.51351,
+   "is_sharpe_a": 0.133814,
+   "is_sharpe_b": 0.052564,
+   "score": 0.052564
+  },
+  {
+   "mutation": "adx_silny",
+   "label": "tylko przy silnym trendzie (ADX14 > 25)",
+   "family": "przekształcenie",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 20
+   },
+   "exit": "ATR14 TP 1× SL 10× max 60",
+   "is_trades": 1413,
+   "is_mean_r": 0.015694,
+   "is_mean_pips": 14.674355,
+   "is_sharpe_a": 0.107661,
+   "is_sharpe_b": 0.051132,
+   "score": 0.051132
+  },
+  {
+   "mutation": "cofniecie20+zmiennosc_wysoka",
+   "label": "tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20) + tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 200,
+    "k": 20
+   },
+   "exit": "ATR14 TP 0.3× SL 10× max 60",
+   "is_trades": 1605,
+   "is_mean_r": 0.008738,
+   "is_mean_pips": 9.611702,
+   "is_sharpe_a": 0.1564,
+   "is_sharpe_b": 0.051096,
+   "score": 0.051096
+  },
+  {
+   "mutation": "adx_silny+trend200",
+   "label": "tylko przy silnym trendzie (ADX14 > 25) + tylko z trendem SMA200",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 20
+   },
+   "exit": "ATR14 TP 1× SL 10× max 60",
+   "is_trades": 1377,
+   "is_mean_r": 0.013055,
+   "is_mean_pips": 12.729898,
+   "is_sharpe_a": 0.085387,
+   "is_sharpe_b": 0.043586,
+   "score": 0.043586
+  },
+  {
+   "mutation": "zmiennosc_wysoka+trend200",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100) + tylko z trendem SMA200",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 200,
+    "k": 20
+   },
+   "exit": "ATR14 TP 1× SL 10× max 60",
+   "is_trades": 1092,
+   "is_mean_r": 0.012888,
+   "is_mean_pips": 12.519247,
+   "is_sharpe_a": 0.09383,
+   "is_sharpe_b": 0.040542,
+   "score": 0.040542
+  },
+  {
+   "mutation": "zmiennosc_wysoka+trend200",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100) + tylko z trendem SMA200",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 20
+   },
+   "exit": "ATR14 TP 1× SL 10× max 60",
+   "is_trades": 1108,
+   "is_mean_r": 0.014065,
+   "is_mean_pips": 13.298198,
+   "is_sharpe_a": 0.120144,
+   "is_sharpe_b": 0.039363,
+   "score": 0.039363
+  },
+  {
+   "mutation": "adx_silny",
+   "label": "tylko przy silnym trendzie (ADX14 > 25)",
+   "family": "przekształcenie",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 5
+   },
+   "exit": "ATR14 TP 1× SL 10× max 60",
+   "is_trades": 1433,
+   "is_mean_r": 0.009741,
+   "is_mean_pips": 8.648787,
+   "is_sharpe_a": 0.044285,
+   "is_sharpe_b": 0.038918,
+   "score": 0.038918
+  },
+  {
+   "mutation": "zmiennosc_wysoka+trend200",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100) + tylko z trendem SMA200",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 200,
+    "k": 5
+   },
+   "exit": "ATR14 TP 1× SL 10× max 60",
+   "is_trades": 1132,
+   "is_mean_r": 0.013043,
+   "is_mean_pips": 13.154858,
+   "is_sharpe_a": 0.109246,
+   "is_sharpe_b": 0.034958,
+   "score": 0.034958
+  },
+  {
+   "mutation": "cofniecie20",
+   "label": "tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20)",
+   "family": "przekształcenie",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 20
+   },
+   "exit": "ATR14 TP 1× SL 5× max 60",
+   "is_trades": 1658,
+   "is_mean_r": 0.014893,
+   "is_mean_pips": 7.459933,
+   "is_sharpe_a": 0.033885,
+   "is_sharpe_b": 0.036444,
+   "score": 0.033885
+  },
+  {
+   "mutation": "adx_silny",
+   "label": "tylko przy silnym trendzie (ADX14 > 25)",
+   "family": "przekształcenie",
+   "params": {
+    "mode": "trend",
+    "ema": 200,
+    "k": 5
+   },
+   "exit": "ATR14 TP 1× SL 10× max 60",
+   "is_trades": 1395,
+   "is_mean_r": 0.012062,
+   "is_mean_pips": 12.84634,
+   "is_sharpe_a": 0.095223,
+   "is_sharpe_b": 0.033054,
+   "score": 0.033054
+  },
+  {
+   "mutation": "adx_silny+trend200",
+   "label": "tylko przy silnym trendzie (ADX14 > 25) + tylko z trendem SMA200",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 5
+   },
+   "exit": "ATR14 TP 1× SL 10× max 60",
+   "is_trades": 1370,
+   "is_mean_r": 0.009656,
+   "is_mean_pips": 8.771116,
+   "is_sharpe_a": 0.06768,
+   "is_sharpe_b": 0.029603,
+   "score": 0.029603
+  },
+  {
+   "mutation": "zmiennosc_wysoka+trend200",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100) + tylko z trendem SMA200",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 5
+   },
+   "exit": "ATR14 TP 1× SL 10× max 60",
+   "is_trades": 1120,
+   "is_mean_r": 0.010879,
+   "is_mean_pips": 12.008026,
+   "is_sharpe_a": 0.089839,
+   "is_sharpe_b": 0.029471,
+   "score": 0.029471
+  },
+  {
+   "mutation": "adx_silny+zmiennosc_wysoka",
+   "label": "tylko przy silnym trendzie (ADX14 > 25) + tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 200,
+    "k": 5
+   },
+   "exit": "ATR14 TP 0.3× SL 10× max 60",
+   "is_trades": 1986,
+   "is_mean_r": 0.004581,
+   "is_mean_pips": 5.928621,
+   "is_sharpe_a": 0.062819,
+   "is_sharpe_b": 0.026446,
+   "score": 0.026446
+  },
+  {
+   "mutation": "trail",
+   "label": "stop kroczący 1–3 × ATR14",
+   "family": "wyjście",
+   "params": {
+    "mode": "trend",
+    "ema": 200,
+    "k": 5
+   },
+   "exit": "ATR14 SL 2× kroczący 1.5× max 60",
+   "is_trades": 4979,
+   "is_mean_r": 0.021544,
+   "is_mean_pips": 5.63113,
+   "is_sharpe_a": 0.028424,
+   "is_sharpe_b": 0.02501,
+   "score": 0.02501
+  },
+  {
+   "mutation": "adx_silny+trend200",
+   "label": "tylko przy silnym trendzie (ADX14 > 25) + tylko z trendem SMA200",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 200,
+    "k": 5
+   },
+   "exit": "ATR14 TP 1× SL 10× max 60",
+   "is_trades": 1384,
+   "is_mean_r": 0.00973,
+   "is_mean_pips": 9.022394,
+   "is_sharpe_a": 0.083469,
+   "is_sharpe_b": 0.023819,
+   "score": 0.023819
+  },
+  {
+   "mutation": "zmiennosc_wysoka",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "przekształcenie",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 20
+   },
+   "exit": "ATR14 TP 1× SL 10× max 60",
+   "is_trades": 1156,
+   "is_mean_r": 0.014413,
+   "is_mean_pips": 13.78316,
+   "is_sharpe_a": 0.169142,
+   "is_sharpe_b": 0.021836,
+   "score": 0.021836
+  },
+  {
+   "mutation": "cofniecie20+trend200",
+   "label": "tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20) + tylko z trendem SMA200",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 20
+   },
+   "exit": "ATR14 TP 1× SL 3× max 60",
+   "is_trades": 1877,
+   "is_mean_r": 0.013367,
+   "is_mean_pips": 4.341961,
+   "is_sharpe_a": 0.02986,
+   "is_sharpe_b": 0.020901,
+   "score": 0.020901
+  },
+  {
+   "mutation": "trail",
+   "label": "stop kroczący 1–3 × ATR14",
+   "family": "wyjście",
+   "params": {
+    "mode": "trend",
+    "ema": 200,
+    "k": 20
+   },
+   "exit": "ATR14 SL 2× kroczący 1.5× max 20",
+   "is_trades": 5117,
+   "is_mean_r": 0.017584,
+   "is_mean_pips": 4.59728,
+   "is_sharpe_a": 0.020893,
+   "is_sharpe_b": 0.021894,
+   "score": 0.020893
+  },
+  {
+   "mutation": "trail",
+   "label": "stop kroczący 1–3 × ATR14",
+   "family": "wyjście",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 20
+   },
+   "exit": "ATR14 SL 2× kroczący 3× max 60",
+   "is_trades": 1689,
+   "is_mean_r": 0.040726,
+   "is_mean_pips": 8.520059,
+   "is_sharpe_a": 0.044448,
+   "is_sharpe_b": 0.020574,
+   "score": 0.020574
+  },
+  {
+   "mutation": "cofniecie20+trend200",
+   "label": "tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20) + tylko z trendem SMA200",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 200,
+    "k": 5
+   },
+   "exit": "ATR14 TP 1× SL 3× max 60",
+   "is_trades": 1887,
+   "is_mean_r": 0.011277,
+   "is_mean_pips": 3.63578,
+   "is_sharpe_a": 0.019967,
+   "is_sharpe_b": 0.019843,
+   "score": 0.019843
+  },
+  {
+   "mutation": "cofniecie20+trend200",
+   "label": "tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20) + tylko z trendem SMA200",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 200,
+    "k": 20
+   },
+   "exit": "ATR14 TP 1× SL 5× max 60",
+   "is_trades": 1475,
+   "is_mean_r": 0.008566,
+   "is_mean_pips": 5.6621,
+   "is_sharpe_a": 0.02139,
+   "is_sharpe_b": 0.019713,
+   "score": 0.019713
+  },
+  {
+   "mutation": "adx_silny+zmiennosc_wysoka",
+   "label": "tylko przy silnym trendzie (ADX14 > 25) + tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 5
+   },
+   "exit": "ATR14 TP 0.3× SL 10× max 60",
+   "is_trades": 2024,
+   "is_mean_r": 0.003046,
+   "is_mean_pips": 3.273603,
+   "is_sharpe_a": 0.035904,
+   "is_sharpe_b": 0.018402,
+   "score": 0.018402
+  },
+  {
+   "mutation": "trail",
+   "label": "stop kroczący 1–3 × ATR14",
+   "family": "wyjście",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 5
+   },
+   "exit": "ATR14 SL 2× kroczący 3× max 60",
+   "is_trades": 1719,
+   "is_mean_r": 0.026339,
+   "is_mean_pips": 6.229469,
+   "is_sharpe_a": 0.016707,
+   "is_sharpe_b": 0.018445,
+   "score": 0.016707
+  },
+  {
+   "mutation": "adx_silny+trend200",
+   "label": "tylko przy silnym trendzie (ADX14 > 25) + tylko z trendem SMA200",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 200,
+    "k": 20
+   },
+   "exit": "ATR14 TP 1× SL 5× max 60",
+   "is_trades": 1612,
+   "is_mean_r": 0.009109,
+   "is_mean_pips": 5.592765,
+   "is_sharpe_a": 0.036299,
+   "is_sharpe_b": 0.015069,
+   "score": 0.015069
+  },
+  {
+   "mutation": "adx_silny",
+   "label": "tylko przy silnym trendzie (ADX14 > 25)",
+   "family": "przekształcenie",
+   "params": {
+    "mode": "trend",
+    "ema": 200,
+    "k": 20
+   },
+   "exit": "ATR14 TP 1× SL 10× max 60",
+   "is_trades": 1314,
+   "is_mean_r": 0.008506,
+   "is_mean_pips": 6.075215,
+   "is_sharpe_a": 0.088642,
+   "is_sharpe_b": 0.014668,
+   "score": 0.014668
+  },
+  {
+   "mutation": "adx_silny+zmiennosc_wysoka",
+   "label": "tylko przy silnym trendzie (ADX14 > 25) + tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 20
+   },
+   "exit": "ATR14 TP 0.3× SL 10× max 60",
+   "is_trades": 1954,
+   "is_mean_r": 0.004357,
+   "is_mean_pips": 5.156302,
+   "is_sharpe_a": 0.08803,
+   "is_sharpe_b": 0.014613,
+   "score": 0.014613
+  },
+  {
+   "mutation": "zmiennosc_wysoka",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "przekształcenie",
+   "params": {
+    "mode": "trend",
+    "ema": 200,
+    "k": 5
+   },
+   "exit": "ATR14 TP 0.3× SL 10× max 60",
+   "is_trades": 2834,
+   "is_mean_r": 0.002685,
+   "is_mean_pips": 2.658147,
+   "is_sharpe_a": 0.041152,
+   "is_sharpe_b": 0.012232,
+   "score": 0.012232
+  },
+  {
+   "mutation": "cofniecie20",
+   "label": "tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20)",
+   "family": "przekształcenie",
+   "params": {
+    "mode": "trend",
+    "ema": 200,
+    "k": 20
+   },
+   "exit": "ATR14 TP 1× SL 5× max 60",
+   "is_trades": 1651,
+   "is_mean_r": 0.006651,
+   "is_mean_pips": 4.402597,
+   "is_sharpe_a": 0.028381,
+   "is_sharpe_b": 0.010735,
+   "score": 0.010735
+  },
+  {
+   "mutation": "zmiennosc_wysoka",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "przekształcenie",
+   "params": {
+    "mode": "trend",
+    "ema": 200,
+    "k": 20
+   },
+   "exit": "ATR14 TP 0.3× SL 10× max 60",
+   "is_trades": 2800,
+   "is_mean_r": 0.003048,
+   "is_mean_pips": 3.007625,
+   "is_sharpe_a": 0.057174,
+   "is_sharpe_b": 0.009805,
+   "score": 0.009805
+  },
+  {
+   "mutation": "trend200",
+   "label": "tylko z trendem SMA200",
+   "family": "przekształcenie",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 20
+   },
+   "exit": "ATR14 TP 1× SL 5× max 60",
+   "is_trades": 2651,
+   "is_mean_r": 0.004974,
+   "is_mean_pips": 2.598907,
+   "is_sharpe_a": 0.02221,
+   "is_sharpe_b": 0.007128,
+   "score": 0.007128
+  },
+  {
+   "mutation": "cofniecie20+trend200",
+   "label": "tylko po cofnięciu (kupno pod SMA20, sprzedaż nad SMA20) + tylko z trendem SMA200",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 5
+   },
+   "exit": "ATR14 TP 1× SL 10× max 60",
+   "is_trades": 1260,
+   "is_mean_r": 0.005697,
+   "is_mean_pips": 5.123972,
+   "is_sharpe_a": 0.066008,
+   "is_sharpe_b": 0.006134,
+   "score": 0.006134
+  },
+  {
+   "mutation": "siatka",
+   "label": "szersza siatka parametrów",
+   "family": "parametry",
+   "params": {
+    "mode": "trend",
+    "ema": 100,
+    "k": 12
+   },
+   "exit": "ATR14 TP 1× SL 5× max 60",
+   "is_trades": 2764,
+   "is_mean_r": 0.003496,
+   "is_mean_pips": 2.549645,
+   "is_sharpe_a": 0.01359,
+   "is_sharpe_b": 0.005685,
+   "score": 0.005685
+  },
+  {
+   "mutation": "adx_silny+zmiennosc_wysoka",
+   "label": "tylko przy silnym trendzie (ADX14 > 25) + tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "połączenie",
+   "params": {
+    "mode": "trend",
+    "ema": 200,
+    "k": 20
+   },
+   "exit": "ATR14 TP 0.3× SL 10× max 60",
+   "is_trades": 1918,
+   "is_mean_r": 0.00284,
+   "is_mean_pips": 2.7096,
+   "is_sharpe_a": 0.0681,
+   "is_sharpe_b": 0.004042,
+   "score": 0.004042
+  },
+  {
+   "mutation": "siatka",
+   "label": "szersza siatka parametrów",
+   "family": "parametry",
+   "params": {
+    "mode": "trend",
+    "ema": 150,
+    "k": 5
+   },
+   "exit": "ATR14 TP 1× SL 10× max 60",
+   "is_trades": 1995,
+   "is_mean_r": 0.002421,
+   "is_mean_pips": 0.23637,
+   "is_sharpe_a": 0.003941,
+   "is_sharpe_b": 0.01198,
+   "score": 0.003941
+  }
+ ],
+ "summary": "Mac sprawdził 1,004 odmian (22 rodzajów). 1 z 5 kandydatów dodatnich w OOS, żaden nie przeszedł wszystkich testów.",
+ "seconds": 989.5,
+ "oos_views": {
+  "strategy_versions": 1,
+  "window_codes": 5,
+  "window_explore": 15
+ }
+}
