@@ -31,9 +31,9 @@
   "sims": 1000,
   "actual_mean_pips": 10.625184,
   "percentile": 100.0,
-  "p5": -6.740692,
-  "p50": -1.930548,
-  "p95": 2.754281
+  "p5": -6.214242,
+  "p50": -1.692504,
+  "p95": 2.837781
  },
  "dsr": {
   "dsr": 0.693825,
@@ -45,17 +45,17 @@
   "kurtosis": 29.474293
  },
  "pbo": {
-  "pbo": 0.143512,
+  "pbo": 0.148096,
   "variants": 5,
   "combinations": 12870,
   "blocks": 16,
-  "logit_median": 1.609438
+  "logit_median": 0.693147
  },
  "walk_forward": {
   "windows": [
    {
-    "from": 1756452240,
-    "to": 1769452560,
+    "from": 1756478160,
+    "to": 1769491440,
     "variant_id": 2,
     "train_r": 0.528791,
     "test_trades": 63,
@@ -63,22 +63,22 @@
     "test_pips": 4.627798
    },
    {
-    "from": 1769452560,
-    "to": 1782452880,
+    "from": 1769491440,
+    "to": 1782504720,
     "variant_id": 2,
     "train_r": 0.493021,
-    "test_trades": 45,
-    "test_r": 0.603347,
-    "test_pips": 11.749284
+    "test_trades": 47,
+    "test_r": 0.63787,
+    "test_pips": 12.260802
    },
    {
-    "from": 1782452880,
-    "to": 1795453201,
+    "from": 1782504720,
+    "to": 1795518001,
     "variant_id": 2,
-    "train_r": 0.515691,
-    "test_trades": 66,
-    "test_r": 0.563642,
-    "test_pips": 11.39324
+    "train_r": 0.523826,
+    "test_trades": 64,
+    "test_r": 0.537049,
+    "test_pips": 11.006467
    }
   ],
   "trades": 174,
@@ -194,7 +194,7 @@
    {
     "test": "PBO < 0,3",
     "ok": true,
-    "value": 0.143512
+    "value": 0.148096
    },
    {
     "test": "DSR ≥ 0,95",
