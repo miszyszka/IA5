@@ -6,12 +6,12 @@
    "capital": 10000.0,
    "pct": 10.0,
    "start": 1794328948,
-   "computedAt": 1795629709,
-   "dataTo": 1795629600,
-   "equity": 10611.16,
-   "return_pct": 6.112,
+   "computedAt": 1795633311,
+   "dataTo": 1795633200,
+   "equity": 10561.71,
+   "return_pct": 5.617,
    "closed": 14,
-   "open": 2,
+   "open": 3,
    "strategies": [
     "RSI 2",
     "Powrót"
