@@ -17,6 +17,11 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
 **Znane ograniczenia:** kursy z ostatniego zamknięcia (kwota do otrzymania to „ok.”); HKD i DKK bez osobnych pól (system trzyma USD i EUR).
 
+## 2026-11-25 (wieczór) — strategia `eurusd_codziennie_24h`, STRATEGIE.md 0.51
+
+- Na prośbę Michała: tylko EUR/USD, codziennie jedna transakcja na dokładnie 24 h (open dnia D1 → zamknięcie dnia), kierunek z RSI(n) albo EMA(n) rosnącej/malejącej względem k dni temu; 56 wersji, jedno wyjście; eksploracja wyłączona. Sprawdzone na danych syntetycznych: transakcja w każdym dniu po rozgrzewce, każda 24 h, wynik ok. 7 MB.
+- ALMA (wersja 2) policzona: 🟡 4/5, DSR 0,56; najlepsza wersja trzyma pozycję 120 dni i traci przy koszcie nocy 0,5 pipsa, kapitał nie przeżywa przy żadnej wielkości pozycji — nie zamrażać.
+
 ## 2026-11-25 — wskaźnik ALMA i strategia `alma_d1_zwrot` (D-073), CLAUDE.md 0.64
 
 - `ind.alma(x, n, offset, sigma)` w bibliotece wskaźników z testem z wzorem z definicji (`tests/test_alma.py`).
