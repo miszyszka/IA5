@@ -1,6 +1,38 @@
 {
  "strategies": [
   {
+   "id": "e3JSrwBpB99xHMUJrPsP",
+   "name": "nowa",
+   "run_id": "20261125-181555",
+   "created": 1795630556,
+   "verdict": "red",
+   "verdict_note": "brak przewagi",
+   "n_variants": 56,
+   "hypothesis": "Na EUR/USD kierunek krótkiego impetu może przenosić się na następny dzień: jeśli RSI albo EMA rośnie,\nkolejny dzień częściej jest wzrostowy, jeśli spada — spadkowy. Codziennie jedna transakcja na 24 h (open dnia → zamknięcie\ndnia), kierunek z jednego wskaźnika: RSI(n) rosnące → long, malejące → short; albo EMA(n) rosnąca → long, malejąca → short.\n„Rośnie” = wartość dziś wyższa niż k dni temu. Silnik liczy wszystkie kombinacje n × k na tych samych zasadach wyjścia;\nwybór najlepszej tylko po IS, a kara za liczbę prób jest w DSR.",
+   "pairs": [
+    "AUDUSD",
+    "EURGBP",
+    "EURJPY",
+    "EURUSD",
+    "GBPUSD",
+    "USDCAD",
+    "USDCHF",
+    "USDJPY"
+   ],
+   "data_from": 846633600,
+   "data_to": 1795478400,
+   "source": "yahoo",
+   "engine_version": "0.14.0",
+   "best_exit": "po 1 świecach",
+   "is_mean_r": 0.010637,
+   "oos_mean_r": -0.012029,
+   "oos_mean_pips": -0.76049,
+   "oos_trades": 1896,
+   "demo": false,
+   "timeframe": "D1",
+   "d1_background": false
+  },
+  {
    "id": "wSKI1vQ0WgIVXq2m53BL",
    "name": "Powrót",
    "run_id": "20261125-175222",
