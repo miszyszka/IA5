@@ -1,6 +1,38 @@
 {
  "strategies": [
   {
+   "id": "Ew9wJBhihQZ0JSXfD1np",
+   "name": "codzienna",
+   "run_id": "20261125-182413",
+   "created": 1795631054,
+   "verdict": "red",
+   "verdict_note": "brak przewagi",
+   "n_variants": 72,
+   "hypothesis": "Mały TP i ogromny SL: cena często dochodzi do bliskiego celu w kierunku długiego trendu, a daleki stop\nrzadko pada. Kierunek z długiej EMA: tryb „trend” — EMA rośnie → long, spada → short; tryb „hamowanie” — spadek EMA\nzwalnia → long, wzrost EMA zwalnia → short (wejście przed zawróceniem). Wysoki win rate jest tu pewny — pytanie, czy rzadkie\nduże straty na SL go nie zjadają.",
+   "pairs": [
+    "AUDUSD",
+    "EURGBP",
+    "EURJPY",
+    "EURUSD",
+    "GBPUSD",
+    "USDCAD",
+    "USDCHF",
+    "USDJPY"
+   ],
+   "data_from": 846633600,
+   "data_to": 1795478400,
+   "source": "yahoo",
+   "engine_version": "0.14.0",
+   "best_exit": "ATR14 TP 1× SL 5× max 60",
+   "is_mean_r": 0.008969,
+   "oos_mean_r": -0.030079,
+   "oos_mean_pips": -12.414839,
+   "oos_trades": 1276,
+   "demo": false,
+   "timeframe": "D1",
+   "d1_background": false
+  },
+  {
    "id": "wSKI1vQ0WgIVXq2m53BL",
    "name": "Powrót",
    "run_id": "20261125-181606",
