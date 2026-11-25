@@ -2,6 +2,12 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-25 — wskaźnik ALMA i strategia `alma_d1_zwrot` (D-073), CLAUDE.md 0.64
+
+- `ind.alma(x, n, offset, sigma)` w bibliotece wskaźników z testem z wzorem z definicji (`tests/test_alma.py`).
+- Nowa strategia D1 `strategies/examples/alma_d1_zwrot.py`: zwrot ALMA albo przejście ceny przez ALMA; 12 wariantów wejścia; kontrola `scripts/check_strategy.py` = OK.
+- **Do zrobienia przez Michała:** Mac — `git pull`, `uv tool install -e runner --force`, restart `ia5 start`; potem wkleić strategię w dashboardzie.
+
 ## 2026-11-23 — eksploracja Maca, OOS na akcjach (pilotaż), dziennik OOS strategii (D-072), CLAUDE.md 0.63
 
 **Zrobione (na prośbę Michała: „żeby Mac liczył dłużej, więcej kreatywnych podejść… luki… świece akcji jako dodatkowy OOS”)**

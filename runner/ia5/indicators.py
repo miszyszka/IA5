@@ -23,6 +23,27 @@ def ema(x: pd.Series, n: int) -> pd.Series:
     return pd.Series(out, index=x.index)
 
 
+def alma(x: pd.Series, n: int = 9, offset: float = 0.85, sigma: float = 6.0) -> pd.Series:
+    """ALMA — Arnaud Legoux Moving Average (2009): średnia ważona krzywą Gaussa przesuniętą ku najnowszym świecom.
+
+    Wagi w oknie n świec (i = 0 najstarsza … n−1 bieżąca): w_i = exp(−(i − m)² / (2 s²)), m = offset·(n − 1), s = n / sigma;
+    ALMA[t] = Σ w_i·x[t−n+1+i] / Σ w_i (jak `ta.alma` w TradingView). offset bliżej 1 = szybsza i bardziej nerwowa,
+    bliżej 0,5 = gładsza i spóźniona; sigma większa = węższy dzwon (mniej świec naprawdę się liczy).
+    TA-Lib nie ma ALMA — wzorcem jest wzór z definicji (tests/test_alma.py, D-073). Tylko dane do t włącznie.
+    """
+    if n < 1 or sigma <= 0:
+        raise ValueError("alma: n ≥ 1 i sigma > 0")
+    m, s = offset * (n - 1), n / sigma
+    w = np.exp(-((np.arange(n) - m) ** 2) / (2 * s * s))
+    w = w / w.sum()
+    v = x.to_numpy(dtype=float)
+    out = np.full(len(v), np.nan)
+    if len(v) >= n:
+        win = np.lib.stride_tricks.sliding_window_view(v, n)
+        out[n - 1:] = win @ w            # okno z NaN daje NaN (jak SMA w rozgrzewce)
+    return pd.Series(out, index=x.index)
+
+
 def _wilder(v: np.ndarray, n: int, first: int) -> np.ndarray:
     """Średnia Wildera: ziarno = średnia v[first-n+1 .. first], potem (prev*(n-1) + v) / n."""
     out = np.full(len(v), np.nan)
