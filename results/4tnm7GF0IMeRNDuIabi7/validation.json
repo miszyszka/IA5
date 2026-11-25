@@ -6,38 +6,38 @@
   "nachylenie": 0.15,
   "szok": 0
  },
- "oos_trades": 164,
- "oos_mean_pips": 4.5825,
- "oos_mean_r": 0.212135,
+ "oos_trades": 169,
+ "oos_mean_pips": 5.130851,
+ "oos_mean_r": 0.247448,
  "is_mean_r": 0.387297,
  "pinned_variant": true,
  "rank_is": 2,
  "forward": {
   "since": 1793447191,
-  "trades": 13,
+  "trades": 18,
   "pre_trades": 599,
   "expected_pips": 5.427376,
   "expected_r": 0.341041,
-  "mean_pips": 7.735169,
-  "mean_r": 0.308887,
-  "sum_pips": 100.557198,
-  "win_rate": 0.615385,
-  "t_stat": 1.509611,
-  "z_vs_expected": 0.258034,
+  "mean_pips": 12.007838,
+  "mean_r": 0.613562,
+  "sum_pips": 216.141083,
+  "win_rate": 0.722222,
+  "t_stat": 2.882426,
+  "z_vs_expected": 0.865766,
   "bootstrap": {
-   "low": -1.976957,
-   "high": 16.752575,
-   "n": 13
+   "low": 3.52806,
+   "high": 19.822583,
+   "n": 18
   },
-  "nights_mean": 0.0
+  "nights_mean": 0.277778
  },
  "benchmark": {
   "sims": 1000,
-  "actual_mean_pips": 5.476398,
-  "percentile": 99.8,
-  "p5": -5.221224,
-  "p50": -0.958068,
-  "p95": 2.884504
+  "actual_mean_pips": 5.619351,
+  "percentile": 99.9,
+  "p5": -5.137416,
+  "p50": -1.023028,
+  "p95": 2.805152
  },
  "dsr": {
   "dsr": 0.747982,
@@ -49,7 +49,7 @@
   "kurtosis": 10.479273
  },
  "pbo": {
-  "pbo": 0.15742,
+  "pbo": 0.138928,
   "variants": 24,
   "combinations": 12870,
   "blocks": 16,
@@ -58,8 +58,8 @@
  "walk_forward": {
   "windows": [
    {
-    "from": 1756497600,
-    "to": 1769511600,
+    "from": 1756499040,
+    "to": 1769513760,
     "variant_id": 12,
     "train_r": 0.239822,
     "test_trades": 109,
@@ -67,8 +67,8 @@
     "test_pips": 8.31965
    },
    {
-    "from": 1769511600,
-    "to": 1782525600,
+    "from": 1769513760,
+    "to": 1782528480,
     "variant_id": 12,
     "train_r": 0.3595,
     "test_trades": 100,
@@ -76,109 +76,109 @@
     "test_pips": 7.137326
    },
    {
-    "from": 1782525600,
-    "to": 1795539601,
+    "from": 1782528480,
+    "to": 1795543201,
     "variant_id": 15,
     "train_r": 0.409948,
-    "test_trades": 101,
-    "test_r": 0.292491,
-    "test_pips": 4.611732
+    "test_trades": 106,
+    "test_r": 0.345002,
+    "test_pips": 5.484612
    }
   ],
-  "trades": 310,
-  "mean_r": 0.491058,
-  "mean_pips": 6.730192
+  "trades": 315,
+  "mean_r": 0.505576,
+  "mean_pips": 6.990296
  },
  "bootstrap": {
   "all": {
-   "low": 2.707701,
-   "high": 8.001972,
-   "n": 612
+   "low": 3.053483,
+   "high": 8.021996,
+   "n": 617
   },
   "oos": {
-   "low": 0.94575,
-   "high": 7.906346,
-   "n": 164
+   "low": 1.72163,
+   "high": 8.491015,
+   "n": 169
   }
  },
  "spread": {
-  "x1": 5.476398,
-  "x1_5": 4.661365,
-  "x2": 3.846333
+  "x1": 5.619351,
+  "x1_5": 4.804845,
+  "x2": 3.990339
  },
  "swap": {
-  "nights_mean": 0.792484,
-  "nights_total": 485.0,
-  "overnight_pct": 39.542484,
-  "x0_5": 5.080156,
-  "x1": 4.683914
+  "nights_mean": 0.794165,
+  "nights_total": 490.0,
+  "overnight_pct": 40.032415,
+  "x0_5": 5.222268,
+  "x1": 4.825185
  },
  "ambiguous_pct": 0.0,
  "equity": {
   "5.0": {
-   "final": 21624.286709,
-   "return_pct": 116.242867,
-   "cagr_pct": 45.869266,
+   "final": 21995.631911,
+   "return_pct": 119.956319,
+   "cagr_pct": 47.061676,
    "max_dd_pct": -10.02362,
    "max_dd_mae_pct": -15.72484,
-   "calmar": 4.576118,
-   "sharpe": 1.806622,
-   "sortino": 1.080301,
+   "calmar": 4.695078,
+   "sharpe": 1.840377,
+   "sortino": 1.101869,
    "longest_underwater_days": 89.708333,
-   "taken": 607,
+   "taken": 612,
    "skipped_margin": 5
   },
   "10.0": {
-   "final": 32270.12796,
-   "return_pct": 222.70128,
-   "cagr_pct": 77.448695,
+   "final": 33117.281883,
+   "return_pct": 231.172819,
+   "cagr_pct": 79.661112,
    "max_dd_pct": -16.598404,
    "max_dd_mae_pct": -29.414968,
-   "calmar": 4.666033,
-   "sharpe": 1.700518,
-   "sortino": 0.986344,
+   "calmar": 4.799323,
+   "sharpe": 1.731624,
+   "sortino": 1.006096,
    "longest_underwater_days": 105.041667,
-   "taken": 541,
-   "skipped_margin": 71
+   "taken": 543,
+   "skipped_margin": 74
   },
   "15.0": {
-   "final": 28525.200419,
-   "return_pct": 185.252004,
-   "cagr_pct": 67.050492,
+   "final": 29468.587709,
+   "return_pct": 194.685877,
+   "cagr_pct": 69.687436,
    "max_dd_pct": -23.827976,
    "max_dd_mae_pct": -31.831557,
-   "calmar": 2.81394,
-   "sharpe": 1.303523,
-   "sortino": 0.747485,
+   "calmar": 2.924606,
+   "sharpe": 1.335123,
+   "sortino": 0.770589,
    "longest_underwater_days": 140.875,
-   "taken": 444,
-   "skipped_margin": 168
+   "taken": 445,
+   "skipped_margin": 172
   },
   "20.0": {
-   "final": 23882.111663,
-   "return_pct": 138.821117,
-   "cagr_pct": 53.136124,
+   "final": 24387.744812,
+   "return_pct": 143.877448,
+   "cagr_pct": 54.680878,
    "max_dd_pct": -28.873558,
    "max_dd_mae_pct": -35.622507,
-   "calmar": 1.840304,
-   "sharpe": 1.007788,
-   "sortino": 0.540991,
+   "calmar": 1.893805,
+   "sharpe": 1.025281,
+   "sortino": 0.552585,
    "longest_underwater_days": 180.708333,
-   "taken": 368,
-   "skipped_margin": 244
+   "taken": 369,
+   "skipped_margin": 248
   },
   "30.0": {
-   "final": 16127.508883,
-   "return_pct": 61.275089,
-   "cagr_pct": 26.360186,
+   "final": 16307.267767,
+   "return_pct": 63.072678,
+   "cagr_pct": 27.032423,
    "max_dd_pct": -37.318797,
    "max_dd_mae_pct": -46.354676,
-   "calmar": 0.706351,
-   "sharpe": 0.604567,
-   "sortino": 0.287118,
+   "calmar": 0.724365,
+   "sharpe": 0.612367,
+   "sortino": 0.292443,
    "longest_underwater_days": 235.833333,
    "taken": 270,
-   "skipped_margin": 342
+   "skipped_margin": 347
   }
  },
  "verdict": {
@@ -188,17 +188,17 @@
    {
     "test": "expectancy netto OOS > 0",
     "ok": true,
-    "value": 4.5825
+    "value": 5.130851
    },
    {
     "test": "percentyl benchmarku ≥ 95",
     "ok": true,
-    "value": 99.8
+    "value": 99.9
    },
    {
     "test": "PBO < 0,3",
     "ok": true,
-    "value": 0.15742
+    "value": 0.138928
    },
    {
     "test": "DSR ≥ 0,95",
@@ -208,7 +208,7 @@
    {
     "test": "dodatni przy spreadzie ×1,5",
     "ok": true,
-    "value": 4.661365
+    "value": 4.804845
    }
   ]
  }

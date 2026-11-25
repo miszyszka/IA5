@@ -1,16 +1,16 @@
 # Raport strategii: RSI 2
 
-Run `20261124-210739` · silnik 0.14.0 · kod `05a4838aae5707ab` · dane `59af0fdff102d718`
+Run `20261125-164141` · silnik 0.14.0 · kod `05a4838aae5707ab` · dane `34141f793e3e4e43`
 
 ## Werdykt: 🟡 ŻÓŁTY — zaliczone 4 z 5 testów
 
 | test | wynik | wartość |
 |---|---|---|
-| expectancy netto OOS > 0 | ✔ | 4.58 |
-| percentyl benchmarku ≥ 95 | ✔ | 99.80 |
-| PBO < 0,3 | ✔ | 0.16 |
+| expectancy netto OOS > 0 | ✔ | 5.13 |
+| percentyl benchmarku ≥ 95 | ✔ | 99.90 |
+| PBO < 0,3 | ✔ | 0.14 |
 | DSR ≥ 0,95 | ✘ | 0.75 |
-| dodatni przy spreadzie ×1,5 | ✔ | 4.66 |
+| dodatni przy spreadzie ×1,5 | ✔ | 4.80 |
 
 ## Hipoteza
 
@@ -25,7 +25,7 @@ Wersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób 
 
 ## Dane i model wykonania
 
-- Pary: AUDUSD, EURGBP, EURJPY, EURUSD, GBPUSD, USDCAD, USDCHF, USDJPY; świece H1 od 2024-10-28 do 2026-11-24; źródło: yahoo; tło D1 (świece dzienne, cała historia Yahoo) w signals() — D-058.
+- Pary: AUDUSD, EURGBP, EURJPY, EURUSD, GBPUSD, USDCAD, USDCHF, USDJPY; świece H1 od 2024-10-28 do 2026-11-25; źródło: yahoo; tło D1 (świece dzienne, cała historia Yahoo) w signals() — D-058.
 
 - In-sample do 2026-05-19, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS. OOS tego okresu widziało już 2 wersji kodu strategii i 10 kandydatów eksploracji; ta strategia: 1 wersji.
 
@@ -43,22 +43,22 @@ Wersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób 
 
 - **Przetestowane warianty: 24** (8 wejścia × 3 wyjść).
 
-- Pominięte sygnały, średnio na wariant: 2 (limit otwartych pozycji w parze), 4.8 (brak danych do wyjścia); 0 wejść w rozgrzewce ATR, 0 sygnałów poza oknem 07:00–17:00 czasu polskiego (B11), anulowane transakcje, średnio na wariant: 0.0 (przerwa w dostępie do danych), 25.0 (sygnał, wejście lub wyjście na świecy uzupełnionej) — D-032.
+- Pominięte sygnały, średnio na wariant: 2 (limit otwartych pozycji w parze), 0.0 (brak danych do wyjścia); 0 wejść w rozgrzewce ATR, 0 sygnałów poza oknem 07:00–17:00 czasu polskiego (B11), anulowane transakcje, średnio na wariant: 0.0 (przerwa w dostępie do danych), 25.0 (sygnał, wejście lub wyjście na świecy uzupełnionej) — D-032.
 
 ## Top 10 wariantów (ranking po IS, min. 30 transakcji IS)
 
 | # | wyjście | parametry | IS trans. | IS śr. R | IS śr. pips | IS win % | OOS trans. | OOS śr. R | OOS śr. pips |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.15, szok=3.0 | 365 | 0.39 | 5.97 | 71.5 | 132 | 0.37 | 5.78 |
-| 2 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.15, szok=0 | 448 | 0.39 | 5.80 | 70.8 | 164 | 0.21 | 4.58 |
-| 3 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.25, szok=0 | 263 | 0.34 | 6.06 | 70.0 | 94 | 0.49 | 9.82 |
-| 4 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.25, szok=3.0 | 220 | 0.32 | 5.32 | 69.5 | 80 | 0.47 | 8.83 |
-| 5 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.25, szok=0 | 208 | 0.31 | 5.18 | 68.3 | 74 | 0.06 | 5.56 |
-| 6 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.15, szok=0 | 287 | 0.27 | 4.12 | 69.3 | 106 | -0.13 | 1.54 |
-| 7 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.25, szok=3.0 | 153 | 0.25 | 5.29 | 66.7 | 46 | 0.67 | 7.86 |
-| 8 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.15, szok=3.0 | 214 | 0.24 | 3.96 | 68.7 | 65 | 0.31 | 3.55 |
-| 9 | TP 1.5×ATR14, SL 2×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.15, szok=0 | 288 | 0.03 | 0.82 | 58.3 | 106 | -0.07 | -1.13 |
-| 10 | TP 1.5×ATR14, SL 2×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.15, szok=0 | 458 | 0.03 | 0.68 | 57.9 | 165 | 0.07 | 2.45 |
+| 1 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.15, szok=3.0 | 365 | 0.39 | 5.97 | 71.5 | 137 | 0.41 | 6.42 |
+| 2 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.15, szok=0 | 448 | 0.39 | 5.80 | 70.8 | 169 | 0.25 | 5.13 |
+| 3 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.25, szok=0 | 263 | 0.34 | 6.06 | 70.0 | 99 | 0.54 | 10.49 |
+| 4 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.25, szok=3.0 | 220 | 0.32 | 5.32 | 69.5 | 85 | 0.53 | 9.67 |
+| 5 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.25, szok=0 | 208 | 0.31 | 5.18 | 68.3 | 78 | 0.13 | 6.24 |
+| 6 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.15, szok=0 | 287 | 0.27 | 4.12 | 69.3 | 111 | -0.06 | 2.51 |
+| 7 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.25, szok=3.0 | 153 | 0.25 | 5.29 | 66.7 | 50 | 0.73 | 8.74 |
+| 8 | TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.15, szok=3.0 | 214 | 0.24 | 3.96 | 68.7 | 70 | 0.38 | 4.95 |
+| 9 | TP 1.5×ATR14, SL 2×ATR14, RSI 6 świec za 70/30, max 120 | ema=100, nachylenie=0.15, szok=0 | 288 | 0.03 | 0.82 | 58.3 | 111 | -0.04 | -0.04 |
+| 10 | TP 1.5×ATR14, SL 2×ATR14, RSI 6 świec za 70/30, max 120 | ema=200, nachylenie=0.15, szok=0 | 458 | 0.03 | 0.68 | 57.9 | 170 | 0.09 | 3.06 |
 
 ## Najlepszy wariant IS: TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 (ema=200, nachylenie=0.15, szok=0)
 
@@ -68,9 +68,9 @@ Wersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób 
 |---|---|---|---|---|
 | AUDUSD | 57 | 9.6 | 547.8 | 96.5 |
 | EURGBP | 71 | 0.0 | 3.2 | 56.3 |
-| EURJPY | 84 | 8.8 | 740.2 | 70.2 |
-| EURUSD | 76 | 6.3 | 482.6 | 75.0 |
-| GBPUSD | 78 | 4.9 | 381.5 | 76.9 |
+| EURJPY | 85 | 9.2 | 780.1 | 70.6 |
+| EURUSD | 77 | 6.5 | 499.7 | 75.3 |
+| GBPUSD | 81 | 5.4 | 439.9 | 77.8 |
 | USDCAD | 68 | -0.1 | -6.8 | 54.4 |
 | USDCHF | 66 | 10.5 | 690.2 | 80.3 |
 | USDJPY | 112 | 4.6 | 513.0 | 63.4 |
@@ -81,34 +81,34 @@ Wersja 2 (po wyniku wersji 1 na Yahoo — OOS tej wersji nie jest czysty, prób 
 |---|---|---|---|---|
 | 2024 | 61 | 2.3 | 138.6 | 65.6 |
 | 2025 | 309 | 5.9 | 1 835.6 | 69.3 |
-| 2026 | 242 | 5.7 | 1 377.3 | 73.6 |
+| 2026 | 247 | 6.0 | 1 492.9 | 74.1 |
 
 ### IS i OOS
 
 | próba | transakcje | śr. pips | suma pips | win % |
 |---|---|---|---|---|
 | IS | 448 | 5.8 | 2 600.0 | 70.8 |
-| OOS | 164 | 4.6 | 751.5 | 70.1 |
+| OOS | 169 | 5.1 | 867.1 | 71.0 |
 
 ### Kapitał
 
 | depozyt | kapitał końcowy | zwrot % | CAGR % | max obsunięcie % | obsunięcie z otwartymi (MAE) % | Sharpe | pominięte (depozyt) |
 |---|---|---|---|---|---|---|---|
-| 5.0% | 21 624 | 116.2 | 45.9 | -10.0 | -15.7 | 1.81 | 5 |
-| 10.0% | 32 270 | 222.7 | 77.4 | -16.6 | -29.4 | 1.70 | 71 |
-| 15.0% | 28 525 | 185.3 | 67.1 | -23.8 | -31.8 | 1.30 | 168 |
-| 20.0% | 23 882 | 138.8 | 53.1 | -28.9 | -35.6 | 1.01 | 244 |
-| 30.0% | 16 128 | 61.3 | 26.4 | -37.3 | -46.4 | 0.60 | 342 |
+| 5.0% | 21 996 | 120.0 | 47.1 | -10.0 | -15.7 | 1.84 | 5 |
+| 10.0% | 33 117 | 231.2 | 79.7 | -16.6 | -29.4 | 1.73 | 74 |
+| 15.0% | 29 469 | 194.7 | 69.7 | -23.8 | -31.8 | 1.34 | 172 |
+| 20.0% | 24 388 | 143.9 | 54.7 | -28.9 | -35.6 | 1.03 | 248 |
+| 30.0% | 16 307 | 63.1 | 27.0 | -37.3 | -46.4 | 0.61 | 347 |
 
 ### Czas trwania transakcji i pozycje otwarte (D-062)
 
-Dni = dni kalendarzowe od wejścia (open świecy) do wyjścia. Pozycja **OTWARTA** nie zamknęła się do końca danych (2026-11-24): jej „wyjście” to wycena po ostatnim close, a dni liczą się do tej daty. Zamknięte: **612**, otwarte: **0** (razem 612).
+Dni = dni kalendarzowe od wejścia (open świecy) do wyjścia. Pozycja **OTWARTA** nie zamknęła się do końca danych (2026-11-25): jej „wyjście” to wycena po ostatnim close, a dni liczą się do tej daty. Zamknięte: **617**, otwarte: **0** (razem 617).
 
 | grupa | transakcje | min | mediana | średnia | p90 | max | śr. pips netto | suma pips netto |
 |---|---|---|---|---|---|---|---|---|
-| zamknięte | 612 | 0 | 0 | 1 | 2 | 7 | 5.5 | 3 352 |
+| zamknięte | 617 | 0 | 0 | 1 | 2 | 7 | 5.6 | 3 467 |
 | OTWARTE na koniec danych | 0 | — | — | — | — | — | — | — |
-| wszystkie | 612 | 0 | 0 | 1 | 2 | 7 | 5.5 | 3 352 |
+| wszystkie | 617 | 0 | 0 | 1 | 2 | 7 | 5.6 | 3 467 |
 
 | para | kier. | wejście | wyjście / stan na | dni | dni handlu | status | powód | pips netto |
 |---|---|---|---|---|---|---|---|---|
@@ -502,42 +502,42 @@ Dni = dni kalendarzowe od wejścia (open świecy) do wyjścia. Pozycja **OTWARTA
 | USDCAD | long | 2026-10-13 | 2026-10-13 | 0 | 5 | zamknięta | seria RSI | -18.8 |
 | USDCAD | long | 2026-10-13 | 2026-10-13 | 0 | 4 | zamknięta | seria RSI | 0.2 |
 | GBPUSD | long | 2026-10-14 | 2026-10-14 | 0 | 5 | zamknięta | seria RSI | -33.7 |
-| GBPUSD | long | 2026-10-14 | 2026-10-14 | 0 | 4 | zamknięta | seria RSI | -0.5 |
 | GBPUSD | long | 2026-10-26 | 2026-10-29 | 3 | 79 | zamknięta | TP | 13.9 |
 | GBPUSD | long | 2026-10-26 | 2026-10-29 | 3 | 78 | zamknięta | TP | 13.7 |
 | USDCAD | short | 2026-10-27 | 2026-10-28 | 1 | 17 | zamknięta | TP | 18.6 |
 | USDCAD | short | 2026-10-27 | 2026-10-28 | 1 | 17 | zamknięta | TP | 18.1 |
-| GBPUSD | long | 2026-11-06 | 2026-11-06 | 0 | 5 | zamknięta | seria RSI | -19.5 |
-| GBPUSD | long | 2026-11-06 | 2026-11-06 | 0 | 4 | zamknięta | seria RSI | -4.7 |
 | EURJPY | short | 2026-11-19 | 2026-11-19 | 0 | 9 | zamknięta | TP | 27.3 |
-| EURJPY | short | 2026-11-19 | 2026-11-19 | 0 | 6 | zamknięta | TP | 28.3 |
-| USDCHF | long | 2026-11-24 | 2026-11-24 | 0 | 5 | zamknięta | seria RSI | -21.8 |
+| EURJPY | short | 2026-11-24 | 2026-11-25 | 0 | 12 | zamknięta | TP | 40.0 |
+| EURUSD | short | 2026-11-24 | 2026-11-25 | 0 | 13 | zamknięta | TP | 17.1 |
+| GBPUSD | short | 2026-11-24 | 2026-11-25 | 0 | 13 | zamknięta | TP | 19.6 |
+| GBPUSD | short | 2026-11-24 | 2026-11-25 | 0 | 12 | zamknięta | TP | 19.7 |
+| GBPUSD | short | 2026-11-24 | 2026-11-25 | 0 | 9 | zamknięta | TP | 19.1 |
 
-Tabela pokazuje wszystkie otwarte i najdłuższe zamknięte (400 z 612); pełna lista: trades.parquet i tabela transakcji w dashboardzie (kolumny „dni” i „status”).
+Tabela pokazuje wszystkie otwarte i najdłuższe zamknięte (400 z 617); pełna lista: trades.parquet i tabela transakcji w dashboardzie (kolumny „dni” i „status”).
 
 ## Walidacja
 
-- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 5.48 pips/transakcję, percentyl **99.8** (losowe: 5%=-5.22, mediana=-0.96, 95%=2.88).
+- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 5.62 pips/transakcję, percentyl **99.9** (losowe: 5%=-5.14, mediana=-1.02, 95%=2.81).
 
 - **Deflated Sharpe Ratio**: 0.748 (Sharpe na transakcję 0.226, próg przy 24 próbach 0.185).
 
-- **PBO** (CSCV, 16 bloków, 24 wariantów): 0.157 — szansa, że najlepszy wariant IS wypada poniżej mediany poza próbą.
+- **PBO** (CSCV, 16 bloków, 24 wariantów): 0.139 — szansa, że najlepszy wariant IS wypada poniżej mediany poza próbą.
 
-- **Walk-forward** (okna kotwiczone, wybór najlepszego wariantu przed każdym oknem): 310 transakcji, śr. 6.73 pips, 0.49 R.
+- **Walk-forward** (okna kotwiczone, wybór najlepszego wariantu przed każdym oknem): 315 transakcji, śr. 6.99 pips, 0.51 R.
 
-- **Bootstrap 95%** średnich pipsów: całość [2.71; 8.00], OOS [0.95; 7.91].
+- **Bootstrap 95%** średnich pipsów: całość [3.05; 8.02], OOS [1.72; 8.49].
 
-- **Spread**: ×1 5.48, ×1,5 4.66, ×2 3.85 pips/transakcję.
+- **Spread**: ×1 5.62, ×1,5 4.80, ×2 3.99 pips/transakcję.
 
 - TP i SL w tej samej świecy bez rozstrzygnięcia: 0.00% transakcji.
 
-- **Noce (swap pominięty, O5)**: średnio 0.8 nocy na transakcję, 40% transakcji przez 21:00 UTC; wynik netto przy koszcie nocy 0,5 pipsa: 5.08, 1 pips: 4.68 pips/transakcję.
+- **Noce (swap pominięty, O5)**: średnio 0.8 nocy na transakcję, 40% transakcji przez 21:00 UTC; wynik netto przy koszcie nocy 0,5 pipsa: 5.22, 1 pips: 4.83 pips/transakcję.
 
 ## Forward test od zamrożenia (W4, D-056)
 
 - Zamrożona 2026-10-31; oceniany wariant: TP 1.5×ATR14, RSI 6 świec za 70/30, max 120 (zamrożony, nie ranking); oczekiwanie sprzed zamrożenia: 5.43 pips / 0.34 R na transakcję (599 transakcji).
-- **Forward: 13 transakcji, śr. 7.74 pips (0.31 R), suma 101 pips, win 62%, t = 1.51; bootstrap 95% [-1.98; 16.75].**
-- Odchylenie od oczekiwania: z = 0.26 (|z| ≥ 2 = forward nie wygląda jak backtest; przy małym n liczba ta jest głównie szumem — potrzeba setek transakcji, żeby odróżnić +3 pipsy od zera).
+- **Forward: 18 transakcji, śr. 12.01 pips (0.61 R), suma 216 pips, win 72%, t = 2.88; bootstrap 95% [3.53; 19.82].**
+- Odchylenie od oczekiwania: z = 0.87 (|z| ≥ 2 = forward nie wygląda jak backtest; przy małym n liczba ta jest głównie szumem — potrzeba setek transakcji, żeby odróżnić +3 pipsy od zera).
 
 ## Znane ograniczenia
 
