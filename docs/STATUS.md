@@ -7,6 +7,7 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 **Zrobione (na prośbę Michała)**
 - **Stocks** zniknęło ze strony (zakładka, kod, test, style). Dane spółek i liczenie w tle zostają (pilotaż OOS z D-072).
 - **REV** pokazuje tylko: nagłówek (metoda, dzień podziału, kursy, następne przeliczenie) → **Moje konto** (pole na każdą walutę; obok na żywo w zł, mam %, system %, „kup / sprzedaj … / ✓”, zgodność) → **Przewalutuj teraz** („X PLN → ok. Y CHF”, „Wpisz wykonanie”) → **Zapisz przewalutowanie** (sprzedaję → dostaję + opłata, kurs i koszt wobec rynku na żywo, okno potwierdzenia ze stanami przed → po) → **Moje przewalutowania** (✕ cofa saldo, CSV).
+- **Wygląd:** wersja „Karty” wybrana z 4 prototypów — karty walut, pierścień zgodności, przepływy „X → ok. Y” z „Zrobione — wpisz”. CLAUDE.md 0.66.
 - Usunięte z REV: wynik wirtualnego portfela, wykresy, ranking, dziennik systemu, badanie metody, historia.
 - Zapis: Firestore `wallet/rev` + kopia w przeglądarce. Testy logiki w Node (`tests/web/rev.test.mjs`): plan przewalutowań, kurs i koszt, salda przed/po, cofnięcie, CSV.
 - Sprawdzone w przeglądarce (bez Firebase) na prawdziwym `rev/state.json`: wpisanie sald → plan → zapis wymiany z opłatą → salda i reszta planu przeliczone.

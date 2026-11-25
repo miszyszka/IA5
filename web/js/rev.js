@@ -1,4 +1,4 @@
-// Zakładka REV (D-063, uproszczona w D-074): moje prawdziwe konto walutowe wobec systemu.
+// Zakładka REV (D-063, uproszczona w D-074; karty walut — wybór z prototypu): moje prawdziwe konto walutowe wobec systemu.
 // System (podział i kursy) — rev/state.json z gałęzi data. Moje salda i moje przewalutowania — Firestore wallet/rev
 // (1 odczyt przy wejściu + zmiany, 1 zapis na zmianę), kopia w przeglądarce; bez logowania albo bez reguł — tylko przeglądarka.
 import { getJSON } from './data.js';
@@ -106,15 +106,18 @@ function tick(st = store.state.rev) {
 
 // ---------- moje konto ----------
 
+// D-074 v2: „Moje waluty” jako karty (wybór Michała z prototypu, wersja 3 „Karty”).
+const ARROW = '<svg viewBox="0 0 60 12" fill="none" aria-hidden="true"><path d="M0 6h56M50 1l6 5-6 5" stroke="currentColor" stroke-width="1.5"/></svg>';
+
 function accountPanel(st) {
   const codes = walletCurrencies(st);
   const w = st.today?.weights || {};
   // tylko to, co ważne: PLN, waluty systemu i te, które masz; resztę pokazuje „Pozostałe waluty”
   const extra = codes.filter((c) => c !== 'PLN' && !((w[c] || 0) > 1e-9) && !(Number(W.data.balances[c]) > 0));
   refs.cells = {};
-  const rows = codes.map((code) => {
+  const cards = codes.map((code) => {
     const inp = h('input', {
-      type: 'text', inputmode: 'decimal', class: 'amt', 'aria-label': `Ile masz ${code}`, placeholder: '0',
+      type: 'text', inputmode: 'decimal', class: 'amt', 'aria-label': `Ile masz ${code}`, placeholder: '0,00',
       value: W.data.balances[code] ? inputValue(W.data.balances[code], code) : '',
       oninput: (e) => {
         const v = parseAmount(e.target.value);
@@ -127,24 +130,34 @@ function accountPanel(st) {
       onchange: (e) => { if (!e.target.classList.contains('bad')) persist(); },
       onkeydown: (e) => { if (e.key === 'Enter') e.target.blur(); },
     });
-    const c = { val: h('td', { class: 'r' }), my: h('td', { class: 'r' }), sys: h('td', { class: 'r' }), diff: h('td', { class: 'r todo' }) };
+    const c = { tag: h('span', { class: 'tag' }), pln: h('div', { class: 'pln' }), meB: h('b'), syB: h('b'), meP: h('span'), syP: h('span') };
+    c.card = h('div', { class: 'ccard', hidden: !ui.allCur && extra.includes(code) },
+      h('div', { class: 'ccard-top' }, h('span', { class: 'flag' }, code), c.tag),
+      h('label', { class: 'amtbox' }, inp, h('span', {}, code)),
+      c.pln,
+      h('div', { class: 'dual' },
+        h('div', { class: 'l me' }, h('span', {}, 'mam'), h('span', { class: 't' }, c.meB), c.meP),
+        h('div', { class: 'l sy' }, h('span', {}, 'system'), h('span', { class: 't' }, c.syB), c.syP)));
     refs.cells[code] = c;
-    return h('tr', { hidden: !ui.allCur && extra.includes(code) }, h('td', { class: 'txt' }, h('b', {}, code)),
-      h('td', {}, h('span', { class: 'amt-wrap' }, inp, h('span', { class: 'cur' }, code))), c.val, c.my, c.sys, c.diff);
+    return c.card;
   });
   const more = extra.length ? h('button', { class: 'link small', onclick: () => { ui.allCur = !ui.allCur; render(); } },
-    ui.allCur ? 'Ukryj waluty, których nie masz i system nie trzyma' : `Pozostałe waluty (${extra.join(', ')}) — system ich teraz nie trzyma`) : '';
-  refs.foot = { total: h('td', { class: 'r' }), match: h('td', { class: 'r' }) };
-  refs.plan = h('div', { class: 'rev-plan' });
+    ui.allCur ? 'Ukryj waluty, których nie masz i system nie trzyma' : `+ Pozostałe waluty (${extra.join(', ')})`) : '';
+  refs.ringNum = h('b', {}, '—');
+  refs.ring = h('div', { class: 'ring', role: 'img' }, h('div', {}, h('div', {}, refs.ringNum, h('small', {}, 'zgodne'))));
+  refs.total = h('b', { class: 'mono' });
+  refs.plan = h('div', { class: 'flowlist' });
   refs.save = h('span', { class: 'hint save' });
-  const p = h('section', { class: 'panel' },
-    h('div', { class: 'phead' }, h('h3', {}, 'Moje konto'), refs.save),
-    h('div', { class: 'tablewrap' }, h('table', { class: 'data static rev-wallet' },
-      h('thead', {}, h('tr', {}, ...['waluta', 'mam na koncie', 'w złotych', 'mam', 'system', 'do wyrównania'].map((l, i) => h('th', { class: i > 1 ? 'r' : '' }, l)))),
-      h('tbody', {}, ...rows),
-      h('tfoot', {}, h('tr', {}, h('td', { class: 'txt' }, 'razem'), h('td', {}), refs.foot.total, h('td', { class: 'r' }, '100%'), h('td', { class: 'r' }, '100%'), refs.foot.match)))),
+  const held = codes.filter((c) => (w[c] || 0) > 1e-9).length;
+  const p = h('section', { class: 'rev-cards' },
+    h('div', { class: 'cards-head' },
+      h('div', {}, h('h2', {}, 'Moje waluty'),
+        h('p', {}, `System trzyma ${held} ${held === 1 ? 'walutę' : held < 5 ? 'waluty' : 'walut'} · razem u Ciebie `, refs.total),
+        h('p', {}, refs.save)),
+      refs.ring),
+    h('div', { class: 'cards' }, ...cards),
     more ? h('div', { class: 'more-cur' }, more) : '',
-    h('h3', { class: 'sub' }, 'Przewalutuj teraz'), refs.plan);
+    h('div', { class: 'flows' }, h('h3', { class: 'sub' }, 'Przepływy, które wyrównają konto'), refs.plan));
   saveHint();
   updateCalc(st);
   return p;
@@ -156,23 +169,29 @@ function updateCalc(st) {
   for (const r of v.rows) {
     const c = refs.cells?.[r.code];
     if (!c) continue;
-    c.val.textContent = r.px ? (r.value ? zl(r.value) : '—') : 'brak kursu';
-    c.my.textContent = v.total > 0 ? `${num(r.myPct, 1)}%` : '—';
-    c.sys.textContent = `${num(r.sysPct, 1)}%`;
     const ok = v.total <= 0 || Math.abs(r.diff) < min;
-    c.diff.textContent = v.total <= 0 ? '' : ok ? '✓' : `${r.diff > 0 ? 'kup' : 'sprzedaj'} ${money(Math.abs(r.diffUnits), r.code)}`;
-    c.diff.dataset.state = ok ? 'ok' : r.diff > 0 ? 'buy' : 'sell';
+    c.pln.textContent = r.px ? `= ${zl(r.value || 0)}` : 'brak kursu';
+    c.meB.style.width = `${Math.min(100, r.myPct)}%`;
+    c.syB.style.width = `${Math.min(100, r.sysPct)}%`;
+    c.meP.textContent = `${num(r.myPct, 1)}%`;
+    c.syP.textContent = `${num(r.sysPct, 1)}%`;
+    c.tag.textContent = v.total <= 0 ? '—' : ok ? 'zgodne' : `${r.diff > 0 ? 'kup' : 'sprzedaj'} ${money(Math.abs(r.diffUnits), r.code)}`;
+    c.tag.dataset.state = v.total <= 0 ? '' : ok ? 'ok' : 'todo';
+    c.card.classList.toggle('need', !ok);
   }
-  refs.foot.total.textContent = zl(v.total);
-  refs.foot.match.textContent = v.match == null ? '' : `zgodność ${num(v.match, 1)}%`;
+  refs.total.textContent = zl(v.total);
+  refs.ring.style.setProperty('--p', v.match ?? 0);
+  refs.ringNum.textContent = v.match == null ? '—' : `${Math.floor(v.match)}%`;
+  refs.ring.setAttribute('aria-label', v.match == null ? 'zgodność nieznana' : `zgodność z systemem ${num(v.match, 1)}%`);
   const plan = v.total > 0 ? planConversions(v, min) : [];
-  refs.plan.replaceChildren(
-    v.total <= 0 ? h('p', { class: 'muted' }, 'Wpisz, ile masz teraz w każdej walucie (puste = 0). Obok od razu pojawi się, co i na co wymienić, żeby konto było jak u systemu.')
-      : !plan.length ? h('p', { class: 'okline' }, '✓ Konto zgadza się z systemem. Nic nie wymieniaj do następnego przeliczenia.')
-        : h('ol', {}, ...plan.map((c) => h('li', {},
-          h('span', { class: 'leg' }, h('b', {}, money(c.fromAmt, c.from)), h('span', { class: 'arrow', 'aria-hidden': 'true' }, '→'), h('span', {}, `ok. ${money(c.toAmt, c.to)}`),
-            h('span', { class: 'muted' }, ` · ${zl(c.pln)}`)),
-          h('button', { class: 'btn small', onclick: () => prefill(c) }, 'Wpisz wykonanie')))));
+  refs.plan.replaceChildren(...[
+    v.total <= 0 ? h('div', { class: 'flow empty' }, 'Wpisz, ile masz w każdej walucie (puste = 0) — tu pojawi się, co i na co wymienić.')
+      : !plan.length ? h('div', { class: 'flow done' }, '✓ Konto zgadza się z systemem. Nic nie wymieniaj do następnego przeliczenia.')
+        : plan.map((c) => h('div', { class: 'flow' },
+          h('span', { class: 'fchip' }, money(c.fromAmt, c.from)), h('span', { class: 'arr', html: ARROW }),
+          h('span', { class: 'fchip' }, `ok. ${money(c.toAmt, c.to)}`), h('span', { class: 'muted pln' }, zl(c.pln)),
+          h('button', { class: 'btn light', onclick: () => prefill(c) }, 'Zrobione — wpisz'))),
+  ].flat());
   quote();
 }
 
