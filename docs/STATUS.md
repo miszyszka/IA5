@@ -2,6 +2,21 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-25 — REV uproszczony do „Moje konto”, zakładka Stocks usunięta ze strony (D-074), CLAUDE.md 0.65
+
+**Zrobione (na prośbę Michała)**
+- **Stocks** zniknęło ze strony (zakładka, kod, test, style). Dane spółek i liczenie w tle zostają (pilotaż OOS z D-072).
+- **REV** pokazuje tylko: nagłówek (metoda, dzień podziału, kursy, następne przeliczenie) → **Moje konto** (pole na każdą walutę; obok na żywo w zł, mam %, system %, „kup / sprzedaj … / ✓”, zgodność) → **Przewalutuj teraz** („X PLN → ok. Y CHF”, „Wpisz wykonanie”) → **Zapisz przewalutowanie** (sprzedaję → dostaję + opłata, kurs i koszt wobec rynku na żywo, okno potwierdzenia ze stanami przed → po) → **Moje przewalutowania** (✕ cofa saldo, CSV).
+- Usunięte z REV: wynik wirtualnego portfela, wykresy, ranking, dziennik systemu, badanie metody, historia.
+- Zapis: Firestore `wallet/rev` + kopia w przeglądarce. Testy logiki w Node (`tests/web/rev.test.mjs`): plan przewalutowań, kurs i koszt, salda przed/po, cofnięcie, CSV.
+- Sprawdzone w przeglądarce (bez Firebase) na prawdziwym `rev/state.json`: wpisanie sald → plan → zapis wymiany z opłatą → salda i reszta planu przeliczone.
+
+**Do zrobienia przez Michała**
+1. **Reguły Firestore:** Firebase → Firestore → Rules → wklej nowy `firestore.rules` (z `<OWNER_UID>` zamienionym na Twój UID) → **Publish**. Bez tego REV zapisuje konto tylko w tej przeglądarce (napis w panelu „Moje konto”).
+2. Na Macu nic nie trzeba.
+
+**Znane ograniczenia:** kursy z ostatniego zamknięcia (kwota do otrzymania to „ok.”); HKD i DKK bez osobnych pól (system trzyma USD i EUR).
+
 ## 2026-11-25 — wskaźnik ALMA i strategia `alma_d1_zwrot` (D-073), CLAUDE.md 0.64
 
 - `ind.alma(x, n, offset, sigma)` w bibliotece wskaźników z testem z wzorem z definicji (`tests/test_alma.py`).

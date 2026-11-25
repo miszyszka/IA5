@@ -1,23 +1,30 @@
-// Zakładka REV (D-063): wirtualne 10 000 zł rozkładane co wtorek 08:00 na przecenione waluty (limit 50% na koszyk).
-// Wszystko liczy Mac (badanie) i GitHub Actions (portfel); strona czyta rev/ z gałęzi data — 0 odczytów Firestore (R8).
-import { bars, disposeAll, plnLines } from './charts.js';
-import { getJSON, getText } from './data.js';
-import { allocation, basketLabel, candleDay, countdown, fmtWarsaw, ledgerByDecision, ledgerCSV, liveSummary, nextDecisionMs, rankingRows, VERDICT_ICON, verdictBadge } from './revlogic.js';
-import { $, ago, cls, copy, download, h, num, signed, store, toast } from './util.js';
+// Zakładka REV (D-063, uproszczona w D-074): moje prawdziwe konto walutowe wobec systemu.
+// System (podział i kursy) — rev/state.json z gałęzi data. Moje salda i moje przewalutowania — Firestore wallet/rev
+// (1 odczyt przy wejściu + zmiany, 1 zapis na zmianę), kopia w przeglądarce; bez logowania albo bez reguł — tylko przeglądarka.
+import { getJSON } from './data.js';
+import { saveWallet, watchWallet } from './fb.js';
+import {
+  applyTx, candleDay, checkTx, countdown, fmtRate, fmtWarsaw, inputValue, minConversionPln, money, nextDecisionMs,
+  normWallet, parseAmount, planConversions, verdictBadge, walletCSV, walletCurrencies, walletRows,
+} from './revlogic.js';
+import { $, download, h, num, store, toast } from './util.js';
 
-const ui = { more: 6, allVariants: false };
-const kpi = (label, val, c = '') => h('div', { class: 'kpi' }, h('small', {}, label), h('b', { class: c }, val));
-const panel = (title, hint, ...body) => h('section', { class: 'panel' }, h('div', { class: 'phead' }, h('h3', {}, title), hint ? h('span', { class: 'hint' }, hint) : null), ...body);
+const LS = 'ia5.rev.wallet';
+const readLocal = () => { try { return JSON.parse(localStorage.getItem(LS) || 'null'); } catch { return null; } };
+const writeLocal = (d) => { try { localStorage.setItem(LS, JSON.stringify(d)); } catch { /* prywatne okno */ } };
+const W = { data: normWallet(readLocal()), mode: 'nologin', err: null, unsub: null, saving: false };
+const keyOf = (d) => JSON.stringify({ b: d.balances, t: d.tx });
+const hasData = (d) => d.tx.length > 0 || Object.values(d.balances).some((x) => x);
+
+const ui = { form: { from: 'PLN', fromAmt: '', to: '', toAmt: '', fee: '', feeCur: '' }, toHint: '', more: 10, allCur: false };
+const refs = {};   // komórki liczone na żywo (bez przebudowy pól, żeby nie gubić kursora)
+const zl = (x) => `${num(x, 2)} zł`;
 const day = (ts) => (ts ? fmtWarsaw(ts).slice(0, 10) : '—');
-const zl = (x, d = 2) => `${num(x, d)} zł`;
-const CHECK = {
-  oos_excess: 'Nadwyżka nad równym podziałem na sprawdzianie (OOS), % rocznie', random: 'Percentyl wobec 1000 losowych podziałów (OOS)',
-  dsr: 'DSR — czy to nie szczęście wśród wszystkich prób (IS)', pbo: 'PBO — ryzyko przeuczenia (cała historia)', lag: 'Wymiana dzień później (OOS), % rocznie',
-};
+const panel = (title, hint, ...body) => h('section', { class: 'panel' }, h('div', { class: 'phead' }, h('h3', {}, title), hint ? h('span', { class: 'hint' }, hint) : null), ...body);
 
 export async function loadRev() {
   try {
-    const [st, res] = await Promise.all([getJSON('rev/state.json'), getJSON('rev/research.json')]);
+    const [st, res] = await Promise.all([getJSON('rev/state.json'), getJSON('rev/research.json').catch(() => null)]);
     store.set('revError', null);
     if (st?.computedAt !== store.state.rev?.computedAt) store.set('rev', st);
     if (res?.computedAt !== store.state.revResearch?.computedAt) store.set('revResearch', res);
@@ -26,135 +33,291 @@ export async function loadRev() {
   }
 }
 
+// ---------- zapis konta ----------
+
+const editing = () => { const a = document.activeElement; return a && a.tagName === 'INPUT' && $('#view-rev')?.contains(a); };
+
+async function connect(user) {
+  W.unsub?.();
+  W.unsub = null;
+  if (!user) { W.mode = 'nologin'; render(); return; }
+  W.mode = 'loading';
+  W.unsub = await watchWallet((doc, err) => {
+    if (err) { W.mode = 'local'; W.err = err.code || err.message; render(); return; }
+    W.mode = 'cloud'; W.err = null;
+    if (!doc) { if (hasData(W.data)) persist(); else render(); return; }   // pierwszy raz: zapis z przeglądarki idzie do chmury
+    const d = normWallet(doc);
+    if (keyOf(d) === keyOf(W.data)) { saveHint(); return; }
+    if (editing()) return;   // właśnie piszesz — Twoja wersja jest nowsza i zaraz się zapisze
+    W.data = d; writeLocal(d); render();
+  });
+}
+
+async function persist() {
+  W.data = { ...W.data, updatedAt: Math.floor(Date.now() / 1000) };
+  writeLocal(W.data);
+  if (W.mode !== 'cloud') { saveHint(); return true; }
+  W.saving = true; saveHint();
+  try {
+    await saveWallet(W.data);
+    return true;
+  } catch (e) {
+    W.mode = 'local'; W.err = e.code || e.message;
+    toast('Nie udało się zapisać w chmurze — zapisane w tej przeglądarce.', 'bad', 8000);
+    return false;
+  } finally { W.saving = false; saveHint(); }
+}
+
+function saveHint() {
+  const el = refs.save;
+  if (!el) return;
+  const t = W.saving ? ['zapisuję…', ''] : W.mode === 'cloud' ? ['zapisane na Twoim koncie', 'ok']
+    : W.mode === 'loading' ? ['wczytuję…', '']
+      : W.mode === 'nologin' ? ['zapisane tylko w tej przeglądarce — zaloguj się, żeby mieć to wszędzie', 'warn']
+        : [/permission/i.test(W.err || '') ? 'zapisane tylko w tej przeglądarce — wklej nowe reguły Firestore (docs/SETUP.md)' : `zapisane tylko w tej przeglądarce (${W.err})`, 'warn'];
+  el.textContent = t[0];
+  el.dataset.state = t[1];
+}
+
+// ---------- nagłówek ----------
+
 function header(st, res) {
   const b = verdictBadge(res);
-  const s = liveSummary(st);
-  const now = Date.now();
-  const next = st?.next_rebalance ? st.next_rebalance * 1000 : nextDecisionMs(now);
-  const nextText = !next ? '—' : next <= now ? `${fmtWarsaw(next / 1000).slice(5)} · czeka na kursy z poniedziałku (najpóźniej 20:00)`
-    : `${fmtWarsaw(next / 1000).slice(5)} · ${countdown(next - now)}`;
-  const started = st && st.rebalances?.length;
-  return h('div', { class: 'ihead panel' }, h('h2', {}, 'REV'),
-    h('div', { class: 'istatus', 'data-state': { green: 'ok', yellow: 'warn', red: 'bad' }[b.color] || 'mute' }, h('i', { class: 'dot flat' }),
-      h('b', {}, res ? res.frozen.label : 'brak badania'), h('span', {}, res ? `werdykt badania ${b.text}` : ''),
-      st ? h('span', { class: 'muted' }, ` · ostatnia zmiana stanu ${ago(st.computedAt)}`) : ''),
-    h('p', { class: 'muted small' }, 'Pierwszy podział od razu po badaniu, potem co wtorek o 08:00 (cena z zamknięcia poniedziałku) cały kapitał jest dzielony na waluty proporcjonalnie do tego, jak bardzo są teraz tanie wobec złotego. Żaden koszyk — waluta, blok o sztywnym kursie ani PLN — nie ma więcej niż 50%; PLN do 75%, gdy metoda ma zawór złotówkowy albo hamulec i właśnie działa. Bez spreadów i opłat.'),
-    h('div', { class: 'kpis small' },
-      kpi('Kapitał teraz', zl(s.total), cls(s.change)), kpi('Od startu', `${signed(s.change, 2)} zł (${signed(s.pct, 2)}%)`, cls(s.change)),
-      kpi('Równy podział', `${zl(s.equal)} (${signed(s.equalPct, 2)}%)`, cls(s.equalPct)),
-      kpi('Następne przeliczenie', nextText),
-      kpi('Przewalutowania', started ? `${st.rebalances.length} wtorków, ${st.ledger.length} zmian` : '—')));
+  const last = st?.rebalances?.at(-1);
+  refs.cd = h('b', { class: 'mono' }, '');
+  const head = h('section', { class: 'panel rev-head' },
+    h('div', { class: 'rev-title' }, h('h2', {}, 'REV'),
+      h('span', { class: 'muted' }, st?.method?.label || 'brak metody'), res ? h('span', { class: 'muted' }, `· werdykt badania ${b.text}`) : ''),
+    h('div', { class: 'rev-facts' },
+      h('div', {}, h('small', {}, 'Podział systemu z'), h('b', {}, last ? day(last.ts) : '—')),
+      h('div', {}, h('small', {}, 'Kursy z zamknięcia'), h('b', {}, candleDay(st?.today?.ts))),
+      h('div', {}, h('small', {}, 'Następne przeliczenie'), h('span', {}, h('b', {}, nextLabel(st)), ' ', refs.cd))));
+  tick(st);
+  return head;
 }
 
-function allocationPanel(st) {
-  const rows = allocation(st);
-  const el = h('div', { class: 'chart' });
-  const list = h('div', { class: 'tablewrap' }, h('table', { class: 'data compact static' },
-    h('thead', {}, h('tr', {}, ...['koszyk', 'wartość', 'udział'].map((l) => h('th', {}, l)))),
-    h('tbody', {}, ...rows.map((r) => h('tr', {}, h('td', { class: 'txt' }, h('b', {}, r.label)), h('td', { class: 'r' }, zl(r.value)), h('td', { class: 'r' }, `${num(r.pct, 1)}%`))))));
-  const valve = st.rebalances?.at(-1)?.pln_valve;
-  const p = panel('Gdzie jest kapitał dziś', `wycena z zamknięcia ${candleDay(st.today?.ts)} · blok o sztywnym kursie to jeden słupek` + (valve ? ' · zawór złotówkowy włączony: PLN do 75%' : ''), el, list);
-  return { p, draw: () => rows.length && bars(el, rows, 50) };
+const nextMs = (st) => (st?.next_rebalance ? st.next_rebalance * 1000 : nextDecisionMs(Date.now()));
+const nextLabel = (st) => { const t = nextMs(st); return t ? `wt ${fmtWarsaw(t / 1000).slice(8, 10)}.${fmtWarsaw(t / 1000).slice(5, 7)} 08:00` : '—'; };
+function tick(st = store.state.rev) {
+  if (!refs.cd) return;
+  const t = nextMs(st), now = Date.now();
+  refs.cd.textContent = !t ? '' : t <= now ? '· czeka na kursy z poniedziałku' : `· ${countdown(t - now)}`;
 }
 
-function equityPanel(st) {
-  const v = st.valuation || [];
-  const el = h('div', { class: 'chart tall' });
-  const ts = [st.start_ts, ...v.map((x) => x[0])];
-  const series = [
-    { name: 'REV', ts, values: [st.capital0, ...v.map((x) => x[1])], color: '--accent' },
-    { name: 'Równy podział', ts, values: [st.capital0, ...v.map((x) => x[2])], color: '--muted' },
-    { name: '10 000 zł (wszystko w PLN)', ts, values: ts.map(() => st.capital0), color: '--dim', dash: true },
-  ];
-  const marks = (st.rebalances || []).filter((r) => r.changes > 0).map((r) => r.ts);
-  return { p: panel('Kapitał w złotówkach', 'gdyby dziś wszystko wymienić na złote · kropki = wtorki z przewalutowaniem', el), draw: () => v.length && plnLines(el, series, marks) };
-}
+// ---------- moje konto ----------
 
-function rankingPanel(st) {
-  const rows = rankingRows(st);
-  const f = (x) => (x == null ? '—' : signed(x, 2));
-  return panel('Ranking dziś', `oceny z przeliczenia ${day(st.rebalances?.at(-1)?.ts)} · dodatnia = tania (przecena) / rośnie (trend) wobec koszyka walut`,
-    h('div', { class: 'tablewrap' }, h('table', { class: 'data compact static' },
-      h('thead', {}, h('tr', {}, ...['koszyk', 'ocena metody', 'przecena 5 lat', 'trend 3 mies.', 'cel', 'teraz', 'różnica'].map((l) => h('th', {}, l)))),
-      h('tbody', {}, ...rows.map((r) => h('tr', {}, h('td', { class: 'txt' }, h('b', {}, r.label)), h('td', { class: `r ${cls(r.score)}` }, f(r.score)),
-        h('td', { class: `r ${cls(r.value)}` }, f(r.value)), h('td', { class: `r ${cls(r.trend)}` }, f(r.trend)), h('td', { class: 'r' }, r.target > 0 ? h('b', {}, `${num(r.target, 1)}%`) : `${num(r.target, 1)}%`),
-        h('td', { class: 'r' }, `${num(r.now, 1)}%`), h('td', { class: `r ${cls(Math.abs(r.change) < 0.05 ? 0 : r.change)}` }, `${signed(Math.abs(r.change) < 0.05 ? 0 : r.change, 1)} p.p.`)))))));
-}
-
-function ledgerPanel(st) {
-  const groups = ledgerByDecision(st);
-  const rb = new Map((st.rebalances || []).map((r) => [r.ts, r]));
-  const body = groups.slice(0, ui.more).flatMap((g) => {
-    const r = rb.get(g.ts) || {};
-    const note = [r.pln_valve ? 'zawór złotówkowy: PLN do 75%' : '', r.held?.length ? `nie sprzedane na stracie: ${r.held.join(', ')}` : '', r.late?.length ? `cena sprzed poniedziałku: ${r.late.join(', ')}` : '', r.frozen?.length ? `bez notowań: ${r.frozen.join(', ')}` : ''].filter(Boolean).join(' · ');
-    return [h('tr', { class: 'grp' }, h('td', { colspan: 6, class: 'txt' }, h('b', {}, `${fmtWarsaw(g.ts)} · ${g.rows.filter((x) => x.basket !== 'PLN').length} zmian · przewalutowano ${zl(r.turnover_pln || 0, 0)}`), note ? h('span', { class: 'muted' }, ` · ${note}`) : '')),
-      ...g.rows.map((x) => h('tr', {}, h('td', { class: 'txt' }, basketLabel(x.basket, st.blocs)), h('td', { class: 'txt' }, x.value_pln > 0 ? 'kupno' : 'sprzedaż'),
-        h('td', { class: 'r' }, num(Math.abs(x.units_after - x.units_before), 2)), h('td', { class: 'r' }, num(x.price, 4)),
-        h('td', { class: `r ${cls(x.value_pln)}` }, `${signed(x.value_pln, 2)} zł`), h('td', { class: 'txt' }, x.price_day || '')))];
+function accountPanel(st) {
+  const codes = walletCurrencies(st);
+  const w = st.today?.weights || {};
+  // tylko to, co ważne: PLN, waluty systemu i te, które masz; resztę pokazuje „Pozostałe waluty”
+  const extra = codes.filter((c) => c !== 'PLN' && !((w[c] || 0) > 1e-9) && !(Number(W.data.balances[c]) > 0));
+  refs.cells = {};
+  const rows = codes.map((code) => {
+    const inp = h('input', {
+      type: 'text', inputmode: 'decimal', class: 'amt', 'aria-label': `Ile masz ${code}`, placeholder: '0',
+      value: W.data.balances[code] ? inputValue(W.data.balances[code], code) : '',
+      oninput: (e) => {
+        const v = parseAmount(e.target.value);
+        const bad = Number.isNaN(v) || v < 0;
+        e.target.classList.toggle('bad', bad);
+        if (bad) return;
+        W.data = { ...W.data, balances: { ...W.data.balances, [code]: v ?? 0 } };
+        updateCalc(st);
+      },
+      onchange: (e) => { if (!e.target.classList.contains('bad')) persist(); },
+      onkeydown: (e) => { if (e.key === 'Enter') e.target.blur(); },
+    });
+    const c = { val: h('td', { class: 'r' }), my: h('td', { class: 'r' }), sys: h('td', { class: 'r' }), diff: h('td', { class: 'r todo' }) };
+    refs.cells[code] = c;
+    return h('tr', { hidden: !ui.allCur && extra.includes(code) }, h('td', { class: 'txt' }, h('b', {}, code)),
+      h('td', {}, h('span', { class: 'amt-wrap' }, inp, h('span', { class: 'cur' }, code))), c.val, c.my, c.sys, c.diff);
   });
-  return panel('Transakcje', 'wszystkie przewalutowania — wartość w złotych po kursie z zamknięcia poniedziałku',
-    h('div', { class: 'row end' }, h('button', { class: 'btn ghost small', onclick: () => download('rev-transakcje.csv', ledgerCSV(st), 'text/csv') }, 'Pobierz CSV')),
-    groups.length ? h('div', { class: 'tablewrap' }, h('table', { class: 'data compact static' },
-      h('thead', {}, h('tr', {}, ...['koszyk', 'ruch', 'ilość', 'kurs (zł za 1)', 'wartość', 'dzień ceny'].map((l) => h('th', {}, l)))), h('tbody', {}, ...body))) : h('div', { class: 'empty small' }, 'Jeszcze bez przewalutowań.'),
-    groups.length > ui.more ? h('button', { class: 'btn ghost small', onclick: () => { ui.more += 10; render(); } }, `Pokaż starsze (${groups.length - ui.more})`) : '');
+  const more = extra.length ? h('button', { class: 'link small', onclick: () => { ui.allCur = !ui.allCur; render(); } },
+    ui.allCur ? 'Ukryj waluty, których nie masz i system nie trzyma' : `Pozostałe waluty (${extra.join(', ')}) — system ich teraz nie trzyma`) : '';
+  refs.foot = { total: h('td', { class: 'r' }), match: h('td', { class: 'r' }) };
+  refs.plan = h('div', { class: 'rev-plan' });
+  refs.save = h('span', { class: 'hint save' });
+  const p = h('section', { class: 'panel' },
+    h('div', { class: 'phead' }, h('h3', {}, 'Moje konto'), refs.save),
+    h('div', { class: 'tablewrap' }, h('table', { class: 'data static rev-wallet' },
+      h('thead', {}, h('tr', {}, ...['waluta', 'mam na koncie', 'w złotych', 'mam', 'system', 'do wyrównania'].map((l, i) => h('th', { class: i > 1 ? 'r' : '' }, l)))),
+      h('tbody', {}, ...rows),
+      h('tfoot', {}, h('tr', {}, h('td', { class: 'txt' }, 'razem'), h('td', {}), refs.foot.total, h('td', { class: 'r' }, '100%'), h('td', { class: 'r' }, '100%'), refs.foot.match)))),
+    more ? h('div', { class: 'more-cur' }, more) : '',
+    h('h3', { class: 'sub' }, 'Przewalutuj teraz'), refs.plan);
+  saveHint();
+  updateCalc(st);
+  return p;
 }
 
-function researchPanel(res) {
-  const p = res.periods, v = res.validation, ver = res.verdict;
-  const pctf = (x, d = 2) => (x == null ? '—' : signed(x, d));
-  const sh = (x) => x?.sharpe ?? x?.ir ?? null;   // D-065: wybór po Sharpe w PLN (REV 1: IR wobec równego podziału)
-  const all = [...res.variants].sort((a, b) => (sh(b.is) ?? -9) - (sh(a.is) ?? -9));
-  const shown = ui.allVariants ? all : all.filter((x, i) => i < 12 || x.id === res.winner);
-  const vt = h('table', { class: 'data compact static' }, h('thead', {}, h('tr', {}, ...['wariant', 'Sharpe IS', 'CAGR IS', 'Sharpe OOS', 'CAGR OOS', 'nadwyżka OOS % r.', 'wzrost w 52 tyg. (OOS)', 'maks. spadek OOS', 'PLN 75% (tyg.)'].map((l) => h('th', {}, l)))),
-    h('tbody', {}, ...shown.map((x) => h('tr', { class: x.id === res.winner ? 'sel' : '' }, h('td', { class: 'txt' }, x.id === res.winner ? h('b', {}, `${x.label} ← zwycięzca`) : x.label),
-      h('td', { class: 'r' }, num(sh(x.is), 2)), h('td', { class: `r ${cls(x.is.cagr_pct)}` }, pctf(x.is.cagr_pct)),
-      h('td', { class: 'r' }, num(sh(x.oos), 2)), h('td', { class: `r ${cls(x.oos.cagr_pct)}` }, pctf(x.oos.cagr_pct)), h('td', { class: `r ${cls(x.oos.excess_pct_yr)}` }, pctf(x.oos.excess_pct_yr)),
-      h('td', { class: 'r' }, x.oos.up52 == null ? '—' : `${num(x.oos.up52, 0)}%`),
-      h('td', { class: 'r neg' }, x.oos.max_dd_pct == null ? '—' : `${num(x.oos.max_dd_pct, 1)}%`), h('td', { class: 'r' }, x.pln75_pct ? `${num(x.pln75_pct, 0)}%` : '—')))));
-  const more = all.length > shown.length || ui.allVariants ? h('button', { class: 'btn ghost small', onclick: () => { ui.allVariants = !ui.allVariants; render(); } },
-    ui.allVariants ? 'Pokaż mniej' : `Pokaż wszystkie (${all.length})`) : '';
-  const ct = h('table', { class: 'data compact static' }, h('thead', {}, h('tr', {}, ...['test', 'wynik', 'próg', ''].map((l) => h('th', {}, l)))),
-    h('tbody', {}, ...ver.checks.map((c) => h('tr', {}, h('td', { class: 'txt' }, CHECK[c.id] || c.id), h('td', { class: 'r' }, c.value == null ? '—' : num(c.value, 2)), h('td', { class: 'txt' }, c.need),
-      h('td', { class: c.ok ? 'pos' : 'neg' }, c.ok ? '✓' : '✗')))));
-  const el = h('div', { class: 'chart' });
-  const hist = res.history;
-  const series = [{ name: `${res.winner} (zwycięzca)`, ts: hist.ts, values: hist.winner, color: '--accent' }, { name: 'Równy podział', ts: hist.ts, values: hist.equal, color: '--muted' }];
-  const draw = () => hist.ts.length > 1 && plnLines(el, series, [], [{ ts: p.is_end_ts, label: 'sprawdzian (OOS)' }]);
-  const body = h('details', { class: 'panel fdetails', open: true }, h('summary', {}, h('b', {}, 'Badanie metody'), h('span', { class: 'hint' }, ' — historia, nie wynik na żywo')),
-    h('p', { class: 'muted small' }, `${res.variants.length} metod sprawdzonych na tych samych wtorkach od ${day(p.start_ts)}. Wybór tylko na pierwszych 75% (IS, do ${day(p.is_end_ts)}) — ${v.selection === 'sharpe_pln' ? 'najrówniejszy wzrost kapitału w złotych (Sharpe)' : 'najlepszy wynik wobec równego podziału'}; dalej sprawdzian, którego wybór nie widział (OOS, do ${day(p.oos_end_ts)}). Werdykt ${VERDICT_ICON[ver.color]} ${ver.passed}/${ver.of}. Koszyki: ${res.universe.map((c) => basketLabel(c, res.blocs)).join(', ')}.` + (Object.keys(res.rejected || {}).length ? ` Pominięte (rzadkie kursy): ${Object.keys(res.rejected).join(', ')}.` : '')),
-    h('div', { class: 'tablewrap' }, vt), more, h('h3', {}, 'Czy to nie przypadek'), h('div', { class: 'tablewrap' }, ct),
-    h('p', { class: 'muted small' }, `Losowe podziały: ${v.random_paths} ścieżek. Bootstrap nadwyżki OOS: ${pctf(v.boot?.low)} … ${pctf(v.boot?.high)}% rocznie. Największy spadek (wycena dzienna): metoda ${num(v.max_dd_daily_pct?.winner, 1)}%, równy podział ${num(v.max_dd_daily_pct?.equal, 1)}%. Zmian koszyka rocznie: ${num(v.trades_per_year, 0)}.`),
-    h('h3', {}, 'Jak metoda działałaby w przeszłości'), el,
-    h('div', { class: 'row' }, h('button', { class: 'btn ghost small', onclick: async () => toast((await copy(await getText('rev/report.md'))) ? 'Skopiowano raport dla Claude.' : 'Nie udało się skopiować.', 'ok') }, 'Kopiuj raport dla Claude')));
-  return { p: body, draw };
+function updateCalc(st) {
+  const v = walletRows(st, W.data.balances);
+  const min = minConversionPln(v.total);
+  for (const r of v.rows) {
+    const c = refs.cells?.[r.code];
+    if (!c) continue;
+    c.val.textContent = r.px ? (r.value ? zl(r.value) : '—') : 'brak kursu';
+    c.my.textContent = v.total > 0 ? `${num(r.myPct, 1)}%` : '—';
+    c.sys.textContent = `${num(r.sysPct, 1)}%`;
+    const ok = v.total <= 0 || Math.abs(r.diff) < min;
+    c.diff.textContent = v.total <= 0 ? '' : ok ? '✓' : `${r.diff > 0 ? 'kup' : 'sprzedaj'} ${money(Math.abs(r.diffUnits), r.code)}`;
+    c.diff.dataset.state = ok ? 'ok' : r.diff > 0 ? 'buy' : 'sell';
+  }
+  refs.foot.total.textContent = zl(v.total);
+  refs.foot.match.textContent = v.match == null ? '' : `zgodność ${num(v.match, 1)}%`;
+  const plan = v.total > 0 ? planConversions(v, min) : [];
+  refs.plan.replaceChildren(
+    v.total <= 0 ? h('p', { class: 'muted' }, 'Wpisz, ile masz teraz w każdej walucie (puste = 0). Obok od razu pojawi się, co i na co wymienić, żeby konto było jak u systemu.')
+      : !plan.length ? h('p', { class: 'okline' }, '✓ Konto zgadza się z systemem. Nic nie wymieniaj do następnego przeliczenia.')
+        : h('ol', {}, ...plan.map((c) => h('li', {},
+          h('span', { class: 'leg' }, h('b', {}, money(c.fromAmt, c.from)), h('span', { class: 'arrow', 'aria-hidden': 'true' }, '→'), h('span', {}, `ok. ${money(c.toAmt, c.to)}`),
+            h('span', { class: 'muted' }, ` · ${zl(c.pln)}`)),
+          h('button', { class: 'btn small', onclick: () => prefill(c) }, 'Wpisz wykonanie')))));
+  quote();
 }
+
+function prefill(c) {
+  ui.form = { from: c.from, fromAmt: inputValue(c.fromAmt, c.from), to: c.to, toAmt: '', fee: '', feeCur: c.from };
+  ui.toHint = `ok. ${inputValue(c.toAmt, c.to)}`;
+  render();
+  const el = refs.toAmt;
+  el?.scrollIntoView({ block: 'center' });
+  el?.focus();
+}
+
+// ---------- zapis przewalutowania ----------
+
+function formTx(st) {
+  const f = ui.form;
+  const t = { from: f.from, fromAmt: parseAmount(f.fromAmt) ?? 0, to: f.to, toAmt: parseAmount(f.toAmt) ?? 0, fee: parseAmount(f.fee) ?? 0, feeCur: f.feeCur || f.from };
+  return { t, c: checkTx(t, W.data.balances, st.last_px) };
+}
+
+function formPanel(st) {
+  const codes = walletCurrencies(st);
+  if (!ui.form.to) ui.form.to = codes.find((c) => c !== ui.form.from) || '';
+  const sel = (key, label) => h('select', { 'aria-label': label, onchange: (e) => { ui.form[key] = e.target.value; if (key === 'from' && !ui.form.feeTouched) ui.form.feeCur = e.target.value; syncFee(); quote(); } },
+    ...codes.map((c) => h('option', { value: c, selected: (ui.form[key] || (key === 'feeCur' ? ui.form.from : '')) === c }, c)));
+  const amt = (key, label, ph = '0,00') => h('input', { type: 'text', inputmode: 'decimal', class: 'amt', 'aria-label': label, placeholder: ph, value: ui.form[key],
+    oninput: (e) => { ui.form[key] = e.target.value; e.target.classList.toggle('bad', Number.isNaN(parseAmount(e.target.value))); quote(); },
+    onkeydown: (e) => { if (e.key === 'Enter') submit(st); } });
+  refs.toAmt = amt('toAmt', 'Ile dostajesz', ui.toHint || '0,00');
+  refs.feeSel = sel('feeCur', 'Waluta opłaty');
+  refs.feeSel.addEventListener('change', () => { ui.form.feeTouched = true; });
+  refs.quote = h('div', { class: 'rev-quote' });
+  return panel('Zapisz przewalutowanie', 'wpisz dokładnie to, co pokazał bank',
+    h('div', { class: 'txform' },
+      h('label', {}, 'Sprzedaję', h('span', { class: 'pair' }, amt('fromAmt', 'Ile sprzedajesz'), sel('from', 'Waluta, którą sprzedajesz'))),
+      h('span', { class: 'arrow big', 'aria-hidden': 'true' }, '→'),
+      h('label', {}, 'Dostaję na konto', h('span', { class: 'pair' }, refs.toAmt, sel('to', 'Waluta, którą dostajesz'))),
+      h('label', { class: 'fee' }, 'Opłata (pobrana osobno)', h('span', { class: 'pair' }, amt('fee', 'Opłata', '0'), refs.feeSel)),
+      h('button', { class: 'btn accent', onclick: () => submit(st) }, 'Zapisz…')),
+    refs.quote);
+}
+
+function syncFee() {
+  if (refs.feeSel && !ui.form.feeTouched) { ui.form.feeCur = ui.form.from; refs.feeSel.value = ui.form.from; }
+}
+
+function quote() {
+  const st = store.state.rev;
+  if (!refs.quote || !st) return;
+  const f = ui.form;
+  if (!f.fromAmt && !f.toAmt) { refs.quote.replaceChildren(h('span', { class: 'muted' }, 'Kurs, koszt wobec rynku i salda po transakcji pojawią się tutaj.')); return; }
+  const { t, c } = formTx(st);
+  const bits = [];
+  if (c.rate) bits.push(h('span', {}, 'kurs ', h('b', {}, fmtRate(t.from, t.to, c.rate))));
+  if (c.mktRate) bits.push(h('span', { class: 'muted' }, `rynek ${fmtRate(t.from, t.to, c.mktRate)}`));
+  if (c.costPln != null) bits.push(h('span', {}, 'koszt ', h('b', {}, `${num(c.costPln, 2)} zł`), h('span', { class: 'muted' }, ` (${num(c.costPct, 2)}%)`)));
+  const msgs = c.ok || !t.fromAmt || !t.toAmt ? c.warnings : c.errors;
+  refs.quote.replaceChildren(h('div', { class: 'row wrap' }, ...bits), ...msgs.map((m) => h('div', { class: 'warnline' }, m)));
+}
+
+function confirmBox(t, c) {
+  return new Promise((resolve) => {
+    const done = (v) => { dlg.close(); resolve(v); };
+    const fee = t.fee > 0 ? money(t.fee, t.feeCur) : 'brak';
+    const dlg = h('dialog', { class: 'modal small rev-confirm' },
+      h('h3', {}, 'Zapisać to przewalutowanie?'),
+      h('div', { class: 'leg big' }, h('b', {}, money(t.fromAmt, t.from)), h('span', { class: 'arrow' }, '→'), h('b', {}, money(t.toAmt, t.to))),
+      h('dl', {},
+        h('dt', {}, 'kurs'), h('dd', {}, fmtRate(t.from, t.to, c.rate)),
+        h('dt', {}, 'opłata'), h('dd', {}, fee),
+        h('dt', {}, 'koszt wobec rynku'), h('dd', {}, c.costPln == null ? '—' : `${num(c.costPln, 2)} zł (${num(c.costPct, 2)}%)`),
+        ...c.changed.flatMap((code) => [h('dt', {}, `stan ${code}`), h('dd', {}, `${money(Number(W.data.balances[code]) || 0, code)} → ${money(c.after[code], code)}`)])),
+      ...c.warnings.map((m) => h('p', { class: 'warnline' }, m)),
+      h('div', { class: 'row end' }, h('button', { class: 'btn ghost', onclick: () => done(false) }, 'Wróć'), h('button', { class: 'btn accent', onclick: () => done(true) }, 'Potwierdź i zapisz')));
+    dlg.addEventListener('close', () => { dlg.remove(); resolve(false); });
+    document.body.append(dlg);
+    dlg.showModal();
+  });
+}
+
+async function submit(st) {
+  const { t, c } = formTx(st);
+  if (!c.ok) { quote(); toast(c.errors[0], 'bad', 6000); return; }
+  if (!(await confirmBox(t, c))) return;
+  const px = st.last_px || {};
+  const mkt = Object.fromEntries([t.from, t.to, t.feeCur].filter((x) => px[x]).map((x) => [x, px[x]]));
+  const tx = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, at: Math.floor(Date.now() / 1000), from: t.from, fromAmt: t.fromAmt,
+    to: t.to, toAmt: t.toAmt, fee: t.fee, feeCur: t.feeCur, mkt, pxDay: candleDay(st.today?.ts), costPln: c.costPln == null ? null : Math.round(c.costPln * 100) / 100 };
+  W.data = { ...W.data, balances: c.after, tx: [...W.data.tx, tx] };
+  ui.form = { from: t.from, fromAmt: '', to: t.to, toAmt: '', fee: '', feeCur: t.from };
+  ui.toHint = '';
+  render();
+  if (await persist()) toast('Zapisano. Stan konta zaktualizowany.', 'ok');
+}
+
+// ---------- moje przewalutowania ----------
+
+function historyPanel() {
+  const tx = [...W.data.tx].sort((a, b) => b.at - a.at);
+  const shown = tx.slice(0, ui.more);
+  const del = async (t) => {
+    const back = applyTx(W.data.balances, t, -1);
+    const ok = await new Promise((resolve) => {
+      const done = (v) => { dlg.close(); resolve(v); };
+      const dlg = h('dialog', { class: 'modal small' }, h('h3', {}, 'Usunąć tę transakcję?'),
+        h('p', {}, `${money(t.fromAmt, t.from)} → ${money(t.toAmt, t.to)} z ${fmtWarsaw(t.at)}. Salda wrócą do stanu sprzed niej: `
+          + [...new Set([t.from, t.to, t.feeCur || t.from])].map((c) => money(back[c], c)).join(', ') + '.'),
+        h('div', { class: 'row end' }, h('button', { class: 'btn ghost', onclick: () => done(false) }, 'Anuluj'), h('button', { class: 'btn danger', onclick: () => done(true) }, 'Usuń')));
+      dlg.addEventListener('close', () => { dlg.remove(); resolve(false); });
+      document.body.append(dlg);
+      dlg.showModal();
+    });
+    if (!ok) return;
+    W.data = { ...W.data, balances: back, tx: W.data.tx.filter((x) => x.id !== t.id) };
+    render();
+    persist();
+  };
+  return panel('Moje przewalutowania', tx.length ? `${tx.length} · tylko to, co zapisałeś` : '',
+    tx.length ? h('div', { class: 'tablewrap' }, h('table', { class: 'data static compact' },
+      h('thead', {}, h('tr', {}, ...['data', 'sprzedane', 'otrzymane', 'kurs', 'opłata', 'koszt wobec rynku', ''].map((l, i) => h('th', { class: i && i < 6 ? 'r' : '' }, l)))),
+      h('tbody', {}, ...shown.map((t) => h('tr', {},
+        h('td', { class: 'txt' }, fmtWarsaw(t.at)), h('td', { class: 'r' }, money(t.fromAmt, t.from)), h('td', { class: 'r' }, money(t.toAmt, t.to)),
+        h('td', { class: 'r' }, fmtRate(t.from, t.to, t.toAmt / t.fromAmt)), h('td', { class: 'r' }, t.fee ? money(t.fee, t.feeCur || t.from) : '—'),
+        h('td', { class: 'r' }, t.costPln == null ? '—' : `${num(t.costPln, 2)} zł`),
+        h('td', { class: 'r' }, h('button', { class: 'btn ghost small icon', title: 'Usuń (cofa zmianę salda)', 'aria-label': 'Usuń transakcję', onclick: () => del(t) }, '✕'))))))) : h('p', { class: 'muted' }, 'Jeszcze nic. Po wymianie w banku wpisz ją wyżej — tu zostanie ślad z kursem i opłatą.'),
+    h('div', { class: 'row between' },
+      tx.length > ui.more ? h('button', { class: 'btn ghost small', onclick: () => { ui.more += 20; render(); } }, `Pokaż starsze (${tx.length - ui.more})`) : h('span'),
+      tx.length ? h('button', { class: 'btn ghost small', onclick: () => download('rev-moje-przewalutowania.csv', walletCSV(W.data.tx), 'text/csv') }, 'Pobierz CSV') : ''));
+}
+
+// ---------- całość ----------
 
 function render() {
   const root = $('#view-rev');
-  if (store.state.route?.view !== 'rev') return;
+  if (store.state.route?.view !== 'rev' || !root) return;
   const st = store.state.rev, res = store.state.revResearch;
-  disposeAll();
   const err = store.state.revError ? h('div', { class: 'banner warn' }, `GitHub: ${store.state.revError}`) : '';
-  if (!res) {
-    root.replaceChildren(header(null, null), err, h('div', { class: 'empty' }, h('h3', {}, 'Badanie metody jeszcze się nie odbyło'),
-      h('p', {}, 'Krok: w Apps Script wklej nowy Code.gs i uruchom raz backfillPLN(), potem restart ia5 start (docs/SETUP.md, „Kursy złotówkowe”).')));
+  if (!st?.last_px || !st?.today?.weights) {
+    root.replaceChildren(header(st, res), err, h('div', { class: 'empty' }, h('h3', {}, 'System REV jeszcze nie ma podziału'),
+      h('p', {}, 'Podział pojawi się po pierwszym badaniu na Macu (docs/SETUP.md, „Kursy złotówkowe”).')));
     return;
   }
-  const red = res.verdict.color === 'red' ? h('div', { class: 'banner warn' }, 'Metoda nie pokonała równego podziału na sprawdzianie — portfel działa, ale kieruj się nim ostrożnie; obok równy podział.') : '';
-  const rp = researchPanel(res);
-  if (!st || !st.rebalances?.length) {
-    const next = nextDecisionMs(Date.now());
-    const start = st?.start_ts ? st.start_ts * 1000 : next;
-    root.replaceChildren(header(st, res), err, red, h('div', { class: 'empty' }, h('h3', {}, `Portfel startuje we wtorek ${fmtWarsaw(start / 1000)} — ${countdown(start - Date.now())}`),
-      h('p', {}, 'Wtedy 10 000 zł zostanie rozłożone na waluty według zamrożonej metody.')), rp.p);
-    rp.draw();
-    return;
-  }
-  const a = allocationPanel(st), e = equityPanel(st);
-  root.replaceChildren(header(st, res), err, red, a.p, e.p, rankingPanel(st), ledgerPanel(st), rp.p,
-    (st.archive || []).length ? panel('Poprzednie metody', 'po zmianie metody portfel startuje od nowa (R6)', h('ul', { class: 'plain small' },
-      ...st.archive.map((x) => h('li', {}, `${x.method?.label || x.method?.id}: ${day(x.start_ts)} – ${day(x.end_ts)}, ${zl(x.final)} (równy podział ${zl(x.equal_final)})`)))) : '');
-  a.draw(); e.draw(); rp.draw();
+  const red = res?.verdict?.color === 'red' ? h('div', { class: 'banner warn' }, 'Metoda nie pokonała równego podziału na sprawdzianie — kieruj się nią ostrożnie.') : '';
+  root.replaceChildren(header(st, res), err, red, accountPanel(st), formPanel(st), historyPanel());
+  quote();
 }
 
 export function renderRev() { render(); }
@@ -163,5 +326,7 @@ export function initRev() {
   store.on('rev', () => render());
   store.on('revResearch', () => render());
   store.on('revError', () => render());
-  setInterval(() => { if (store.state.route?.view === 'rev') render(); }, 60 * 1000);   // odliczanie do wtorku
+  store.on('user', (u) => connect(u));
+  setInterval(() => { if (store.state.route?.view === 'rev') tick(); }, 30 * 1000);   // tylko odliczanie — bez przebudowy pól
 }
+

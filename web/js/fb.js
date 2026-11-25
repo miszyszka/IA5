@@ -155,20 +155,18 @@ export async function deleteInvestor(id) {
   await fb.F.updateDoc(fb.F.doc(fb.db, 'investors', id), { status: 'do_usuniecia' });
 }
 
-// ---------- Stocks (D-071) ----------
 
-/** Nasłuch stocks/config (tylko właściciel — reguły S1). cb(doc | null, błąd). Budżet: 1 odczyt przy wejściu + zmiany. */
-export async function watchStocksConfig(cb) {
+// ---------- REV — moje konto (D-074) ----------
+
+/** Nasłuch wallet/rev: moje salda i moje przewalutowania (tylko właściciel). Budżet: 1 odczyt przy wejściu + zmiany. */
+export async function watchWallet(cb) {
   const fb = await firebase();
   if (!fb) return cb(null, { code: 'brak-firebase' });
-  return fb.F.onSnapshot(fb.F.doc(fb.db, 'stocks', 'config'), (s) => cb(s.exists() ? s.data() : null, null), (e) => cb(null, e));
+  return fb.F.onSnapshot(fb.F.doc(fb.db, 'wallet', 'rev'), (s) => cb(s.exists() ? s.data() : null, null), (e) => cb(null, e));
 }
 
-/** „Policz backtest”: zapis spółek, udziałów, kapitału i pasma ze statusem do_policzenia (Mac słucha tego dokumentu). */
-export async function saveStocksConfig({ tickers, capital, band }) {
-  const { fb, u } = await need();
-  await fb.F.setDoc(fb.F.doc(fb.db, 'stocks', 'config'), {
-    tickers: tickers.map((r) => ({ t: r.t, w: Number(r.w) })), capital: Number(capital), band: Number(band),
-    status: 'do_policzenia', requestedAt: Math.floor(Date.now() / 1000), updatedBy: u.uid,
-  }, { merge: true });
+/** Zapis całego konta (salda + lista transakcji) — 1 zapis na zmianę. */
+export async function saveWallet({ balances, tx }) {
+  const { fb } = await need();
+  await fb.F.setDoc(fb.F.doc(fb.db, 'wallet', 'rev'), { balances, tx, updatedAt: Math.floor(Date.now() / 1000) });
 }

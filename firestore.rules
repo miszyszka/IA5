@@ -23,6 +23,15 @@ service cloud.firestore {
       allow update: if isOwner() && d == "config" && cfgOk()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["tickers", "capital", "band", "status", "requestedAt", "updatedBy"]);
     }
+    // D-074: REV — moje konto: salda walut i moje przewalutowania (pisze tylko strona, Mac nie czyta).
+    match /wallet/{d} {
+      allow read: if isOwner() && d == "rev";
+      allow write: if isOwner() && d == "rev"
+        && request.resource.data.keys().hasOnly(["balances", "tx", "updatedAt"])
+        && request.resource.data.balances is map && request.resource.data.balances.size() <= 40
+        && request.resource.data.tx is list && request.resource.data.tx.size() <= 3000
+        && request.resource.data.updatedAt is number;
+    }
     match /strategies/{id} {
       allow read, delete: if isOwner();
       allow create: if isOwner()

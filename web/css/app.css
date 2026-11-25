@@ -80,6 +80,7 @@ section.panel { margin: var(--gap) 0; }
 .btn { font: inherit; font-weight: 500; color: var(--text); background: transparent; border: 1px solid var(--line-2); border-radius: var(--r-ctl);
   padding: 6px 12px; cursor: pointer; white-space: nowrap; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
 .btn:hover { border-color: var(--muted); }
+.btn { transition: transform 120ms ease-out; } .btn:active:not(:disabled) { transform: scale(.97); }   /* odczuwalne naciśnięcie (D-074) */
 .btn:disabled { opacity: .4; cursor: not-allowed; }
 .btn.accent { background: var(--accent); border-color: var(--accent); color: #140A02; font-weight: 600; }
 .btn.accent:hover { background: #FF8A33; }
@@ -455,25 +456,52 @@ ul.plain { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 2px;
 .banner.upcoming { margin: 10px 0; color: var(--text); }
 .banner.upcoming .upc-min { color: var(--warn); font-weight: 600; }
 
-/* REV (D-063): nagłówek grupy przewalutowań w tabeli transakcji */
-table.data tr.grp td { background: var(--raised); font-family: inherit; }
-
-/* Stocks (D-071): ustawienia portfela */
-.stk-capital { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-end; margin-bottom: 14px; }
-.stk-capital label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; }
-.stk-capital input.big { font: 600 22px var(--mono); width: 200px; padding: 8px 10px; }
-input.num { font-family: var(--mono); text-align: right; }
-input.w-pct { width: 84px; padding: 3px 6px; }
-.stk-table td .row input[type=text] { width: 200px; text-transform: uppercase; }
-.stk-table tr.addrow td { background: transparent; }
-.warn-t { color: var(--warn); }
-#stk-settings .row.between { margin-top: 10px; gap: 12px; }
-
-.stk-next { display: flex; flex-wrap: wrap; gap: 6px 24px; align-items: baseline; border: 1px solid var(--accent-line); border-radius: var(--r-ctl); padding: 10px 14px; }
-.stk-next small { display: block; color: var(--muted); font-size: 11px; }
-.stk-cd { font: 600 22px var(--mono); color: var(--accent); }
-ol.stk-orders { margin: 6px 0 10px; padding-left: 22px; display: grid; gap: 3px; font-family: var(--mono); font-size: 13px; }
-ol.stk-orders li.buy::marker, ol.stk-orders li.buy { color: var(--ok); } ol.stk-orders li.sell::marker, ol.stk-orders li.sell { color: var(--bad); }
-ol.stk-orders li span { font-family: Inter, system-ui, sans-serif; font-size: 12px; }
-table.stk-rec { max-width: 560px; } table.data tr.sum td { border-top: 1px solid var(--line-2); }
-.stk-days { display: grid; gap: 12px; } .stk-day { border-top: 1px solid var(--line); padding-top: 8px; }
+/* REV (D-074): moje konto wobec systemu, zapis przewalutowania */
+.rev-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 32px; }
+.rev-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.rev-facts { display: flex; flex-wrap: wrap; gap: 6px 28px; }
+.rev-facts small { display: block; color: var(--muted); font-size: 11px; }
+.rev-facts b, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.rev-facts .mono { font-weight: 400; color: var(--muted); }
+.hint.save[data-state=ok] { color: var(--muted); } .hint.save[data-state=ok]::before { content: "● "; color: var(--ok); font-size: 9px; vertical-align: 2px; }
+.hint.save[data-state=warn] { color: var(--warn); }
+table.rev-wallet { font-size: 13.5px; }
+table.rev-wallet td, table.rev-wallet th { padding: 6px 10px; vertical-align: middle; }
+table.data th.r, table.data td.r { text-align: right; }
+table.rev-wallet tbody tr:hover { background: transparent; }
+table.rev-wallet tfoot td { border-bottom: 0; border-top: 1px solid var(--line-2); color: var(--muted); font-family: var(--mono); }
+td.todo[data-state=ok] { color: var(--dim); }
+td.todo[data-state=buy], td.todo[data-state=sell] { color: var(--text); }
+.amt-wrap { display: inline-flex; align-items: center; gap: 6px; }
+.amt-wrap .cur { color: var(--dim); font-size: 11px; width: 26px; text-align: left; }
+input.amt { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; width: 140px; padding: 5px 8px; }
+input.amt.bad { border-color: var(--bad); }
+table.rev-wallet td:first-child { width: 70px; }
+.more-cur { margin-top: 8px; }
+h3.sub { margin: 18px 0 8px; font-size: 13px; color: var(--muted); font-weight: 500; }
+.rev-plan ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.rev-plan li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px;
+  border: 1px solid var(--line-2); border-radius: var(--r-ctl); padding: 8px 8px 8px 12px; }
+.rev-plan p { margin: 0; }
+.okline { color: var(--ok); }
+.leg { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.leg.big { font-size: 17px; margin: 12px 0 14px; }
+.arrow { color: var(--dim); }
+.txform { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 14px; }
+.txform .pair { display: inline-flex; gap: 6px; }
+.txform .pair select { width: 78px; }
+.txform .arrow.big { font-size: 18px; padding-bottom: 6px; }
+.txform .fee input.amt { width: 90px; }
+.txform .btn.accent { margin-left: auto; }
+.rev-quote { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); display: grid; gap: 6px; font-size: 13px; min-height: 30px; }
+.rev-quote .row { gap: 6px 20px; }
+.rev-quote b { font-family: var(--mono); font-weight: 600; }
+.warnline { color: var(--warn); font-size: 12.5px; }
+.rev-confirm dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0 0 14px; font-size: 13px; }
+.rev-confirm dt { color: var(--muted); } .rev-confirm dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) {
+  .txform .arrow.big { display: none; }
+  .txform .btn.accent { margin-left: 0; width: 100%; }
+  input.amt { width: 110px; }
+  table.rev-wallet th:nth-child(3), table.rev-wallet td:nth-child(3), table.rev-wallet th:nth-child(4), table.rev-wallet td:nth-child(4) { display: none; }
+}
