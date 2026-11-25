@@ -22,6 +22,7 @@ Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 - `ind.alma(x, n, offset, sigma)` w bibliotece wskaźników z testem z wzorem z definicji (`tests/test_alma.py`).
 - Nowa strategia D1 `strategies/examples/alma_d1_zwrot.py`: zwrot ALMA albo przejście ceny przez ALMA; 12 wariantów wejścia; kontrola `scripts/check_strategy.py` = OK.
 - **Do zrobienia przez Michała:** Mac — `git pull`, `uv tool install -e runner --force`, restart `ia5 start`; potem wkleić strategię w dashboardzie.
+- **Wersja 2:** wersja 1 dała 444 MB transakcji (limit GitHub 100 MB) i zablokowała publikację; teraz 3 wersje, sam zwrot po ≥ 3–5 dniach. **Znany problem:** `publish.py` nie chroni przed plikiem > 100 MB — do naprawy.
 
 ## 2026-11-23 — eksploracja Maca, OOS na akcjach (pilotaż), dziennik OOS strategii (D-072), CLAUDE.md 0.63
 
