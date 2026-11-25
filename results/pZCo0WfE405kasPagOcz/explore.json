@@ -1,0 +1,734 @@
+{
+ "version": "1",
+ "timeframe": "H1",
+ "units": 37,
+ "trials": 7562,
+ "mutations": [
+  "adx_silny",
+  "adx_slaby",
+  "odwrocony",
+  "oryginal",
+  "potwierdzenie",
+  "potwierdzenie+adx_silny",
+  "potwierdzenie+przeciw200",
+  "potwierdzenie+zmiennosc_wysoka",
+  "przeciw200",
+  "przeciw200+adx_silny",
+  "siatka",
+  "trail",
+  "trend200",
+  "tylko_short",
+  "zmiennosc_niska",
+  "zmiennosc_wysoka",
+  "zmiennosc_wysoka+adx_silny",
+  "zmiennosc_wysoka+przeciw200"
+ ],
+ "interrupted": null,
+ "reference": {
+  "mutation": "oryginal",
+  "label": "oryginał",
+  "family": "oryginał",
+  "params": {
+   "rsi_level": 25
+  },
+  "exit": "po 4 świecach",
+  "is_trades": 63,
+  "is_mean_r": 0.237733,
+  "is_mean_pips": 2.604925,
+  "is_sharpe_a": 0.146237,
+  "is_sharpe_b": 0.123631,
+  "score": 0.123631,
+  "oos": {
+   "trades": 26,
+   "mean_r": -0.448767,
+   "mean_pips": -8.604814,
+   "t_stat": -1.883977,
+   "bootstrap": {
+    "low": -17.684779,
+    "high": -0.225789,
+    "n": 26
+   }
+  }
+ },
+ "candidates": [
+  {
+   "rank": 1,
+   "mutation": "potwierdzenie",
+   "label": "potwierdzenie: następna świeca zamyka się w kierunku sygnału",
+   "family": "przekształcenie",
+   "params": {
+    "rsi_level": 25
+   },
+   "exit": "po 120 świecach",
+   "is": {
+    "trades": 34,
+    "mean_r": 1.929302,
+    "mean_pips": 36.011715,
+    "sharpe_a": 0.22165,
+    "sharpe_b": 0.378012,
+    "score": 0.22165
+   },
+   "oos": {
+    "trades": 11,
+    "mean_r": 0.703272,
+    "mean_pips": 2.350164,
+    "t_stat": 0.088546,
+    "bootstrap": {
+     "low": -44.707132,
+     "high": 53.51184,
+     "n": 11
+    }
+   },
+   "dsr": {
+    "dsr": 0.175685,
+    "sharpe": 0.31689,
+    "sharpe0": 0.48809,
+    "trials": 5568,
+    "trades": 34,
+    "skew": -0.271402,
+    "kurtosis": 2.10138
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 27.783336,
+    "percentile": 93.2,
+    "p5": -29.446124,
+    "p50": -0.448158,
+    "p95": 30.632454
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "HYPOTHESIS = \"\"\"Dlaczego ta strategia ma działać — 1–3 zdania, spisane PRZED liczeniem.\"\"\"\n\nPARAMS = {\n    \"rsi_level\": [25, 30],    # każda wartość = osobny wariant wejścia\n}\n\n# TIMEFRAME = \"D1\"     # świece dzienne (cała historia Yahoo) zamiast H1 — D-058; tło D1 w strategii H1: ind.d1(df), ind.d1_to_h1(df, x)\n\ndef signals(df, p, ind):\n    # df: świece H1 jednej pary (open, high, low, close), indeks = czas otwarcia UTC\n    # zwróć +1 (long) / -1 (short) / 0 na świecy, której ZAMKNIĘCIE daje sygnał\n    rsi = ind.rsi(df.close, 14)\n    trend = ind.rising(ind.sma(df.close, 200), 5)\n    return (trend & ind.cross_below(rsi, p[\"rsi_level\"])).astype(\"int8\")\n\n\n# ---- Eksploracja Maca (D-072): potwierdzenie: następna świeca zamyka się w kierunku sygnału ----\n# Wybrane tylko po IS spośród 7,562 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_potwierdzenie(df, s, p, ind):\n    prev = s.shift(1).fillna(0.0)\n    return prev.where(np.sign(prev) == np.sign(df.close - df.open), 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_potwierdzenie(df, s, p, ind)\n    return s\n\nPARAMS = {'rsi_level': [25]}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: potwierdzenie: następna świeca zamyka się w kierunku sygnału. Wybrana po IS spośród 7,562 prób.'\n",
+   "code_hash": "46f83182e5e5c611",
+   "verdict": {
+    "color": "yellow",
+    "text": "dodatnia w OOS, ale nie przechodzi wszystkich testów"
+   }
+  },
+  {
+   "rank": 2,
+   "mutation": "potwierdzenie+zmiennosc_wysoka",
+   "label": "potwierdzenie: następna świeca zamyka się w kierunku sygnału + tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "połączenie",
+   "params": {
+    "rsi_level": 30
+   },
+   "exit": "po 120 świecach",
+   "is": {
+    "trades": 36,
+    "mean_r": 1.725705,
+    "mean_pips": 20.088209,
+    "sharpe_a": 0.169805,
+    "sharpe_b": 0.374783,
+    "score": 0.169805
+   },
+   "oos": {
+    "trades": 10,
+    "mean_r": -3.041587,
+    "mean_pips": -64.310696,
+    "t_stat": -1.101065,
+    "bootstrap": {
+     "low": -183.479921,
+     "high": 31.519359,
+     "n": 10
+    }
+   },
+   "dsr": {
+    "dsr": 0.127981,
+    "sharpe": 0.293754,
+    "sharpe0": 0.48809,
+    "trials": 5568,
+    "trades": 36,
+    "skew": -0.026675,
+    "kurtosis": 1.763038
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 1.740621,
+    "percentile": 52.7,
+    "p5": -31.493763,
+    "p50": 0.575091,
+    "p95": 33.141953
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "HYPOTHESIS = \"\"\"Dlaczego ta strategia ma działać — 1–3 zdania, spisane PRZED liczeniem.\"\"\"\n\nPARAMS = {\n    \"rsi_level\": [25, 30],    # każda wartość = osobny wariant wejścia\n}\n\n# TIMEFRAME = \"D1\"     # świece dzienne (cała historia Yahoo) zamiast H1 — D-058; tło D1 w strategii H1: ind.d1(df), ind.d1_to_h1(df, x)\n\ndef signals(df, p, ind):\n    # df: świece H1 jednej pary (open, high, low, close), indeks = czas otwarcia UTC\n    # zwróć +1 (long) / -1 (short) / 0 na świecy, której ZAMKNIĘCIE daje sygnał\n    rsi = ind.rsi(df.close, 14)\n    trend = ind.rising(ind.sma(df.close, 200), 5)\n    return (trend & ind.cross_below(rsi, p[\"rsi_level\"])).astype(\"int8\")\n\n\n# ---- Eksploracja Maca (D-072): potwierdzenie: następna świeca zamyka się w kierunku sygnału + tylko przy podwyższonej zmienności (ATR14 > ATR100) ----\n# Wybrane tylko po IS spośród 7,562 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_potwierdzenie(df, s, p, ind):\n    prev = s.shift(1).fillna(0.0)\n    return prev.where(np.sign(prev) == np.sign(df.close - df.open), 0.0)\n\ndef _ia5_zmiennosc_wysoka(df, s, p, ind):\n    return s.where(ind.atr(df, 14) > ind.atr(df, 100), 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_potwierdzenie(df, s, p, ind)\n    s = _ia5_zmiennosc_wysoka(df, s, p, ind)\n    return s\n\nPARAMS = {'rsi_level': [30]}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: potwierdzenie: następna świeca zamyka się w kierunku sygnału + tylko przy podwyższonej zmienności (ATR14 > ATR100). Wybrana po IS spośród 7,562 prób.'\n",
+   "code_hash": "bfc212bdfe109103",
+   "verdict": {
+    "color": "red",
+    "text": "nie przetrwała OOS"
+   }
+  },
+  {
+   "rank": 3,
+   "mutation": "potwierdzenie+adx_silny",
+   "label": "potwierdzenie: następna świeca zamyka się w kierunku sygnału + tylko przy silnym trendzie (ADX14 > 25)",
+   "family": "połączenie",
+   "params": {
+    "rsi_level": 30
+   },
+   "exit": "po 96 świecach",
+   "is": {
+    "trades": 49,
+    "mean_r": 1.003329,
+    "mean_pips": 15.300384,
+    "sharpe_a": 0.235784,
+    "sharpe_b": 0.139932,
+    "score": 0.139932
+   },
+   "oos": {
+    "trades": 11,
+    "mean_r": -0.713561,
+    "mean_pips": -40.032829,
+    "t_stat": -0.707285,
+    "bootstrap": {
+     "low": -163.086577,
+     "high": 50.032994,
+     "n": 11
+    }
+   },
+   "dsr": {
+    "dsr": 0.02253,
+    "sharpe": 0.172681,
+    "sharpe0": 0.48809,
+    "trials": 5568,
+    "trades": 49,
+    "skew": -0.937643,
+    "kurtosis": 4.624674
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 5.155962,
+    "percentile": 61.7,
+    "p5": -25.460981,
+    "p50": 1.197402,
+    "p95": 25.448888
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "HYPOTHESIS = \"\"\"Dlaczego ta strategia ma działać — 1–3 zdania, spisane PRZED liczeniem.\"\"\"\n\nPARAMS = {\n    \"rsi_level\": [25, 30],    # każda wartość = osobny wariant wejścia\n}\n\n# TIMEFRAME = \"D1\"     # świece dzienne (cała historia Yahoo) zamiast H1 — D-058; tło D1 w strategii H1: ind.d1(df), ind.d1_to_h1(df, x)\n\ndef signals(df, p, ind):\n    # df: świece H1 jednej pary (open, high, low, close), indeks = czas otwarcia UTC\n    # zwróć +1 (long) / -1 (short) / 0 na świecy, której ZAMKNIĘCIE daje sygnał\n    rsi = ind.rsi(df.close, 14)\n    trend = ind.rising(ind.sma(df.close, 200), 5)\n    return (trend & ind.cross_below(rsi, p[\"rsi_level\"])).astype(\"int8\")\n\n\n# ---- Eksploracja Maca (D-072): potwierdzenie: następna świeca zamyka się w kierunku sygnału + tylko przy silnym trendzie (ADX14 > 25) ----\n# Wybrane tylko po IS spośród 7,562 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_potwierdzenie(df, s, p, ind):\n    prev = s.shift(1).fillna(0.0)\n    return prev.where(np.sign(prev) == np.sign(df.close - df.open), 0.0)\n\ndef _ia5_adx_silny(df, s, p, ind):\n    return s.where(ind.adx(df, 14)[\"adx\"] > 25, 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_potwierdzenie(df, s, p, ind)\n    s = _ia5_adx_silny(df, s, p, ind)\n    return s\n\nPARAMS = {'rsi_level': [30]}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: potwierdzenie: następna świeca zamyka się w kierunku sygnału + tylko przy silnym trendzie (ADX14 > 25). Wybrana po IS spośród 7,562 prób.'\n",
+   "code_hash": "a7f651ca5a7d9ffb",
+   "verdict": {
+    "color": "red",
+    "text": "nie przetrwała OOS"
+   }
+  },
+  {
+   "rank": 4,
+   "mutation": "zmiennosc_wysoka",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "przekształcenie",
+   "params": {
+    "rsi_level": 25
+   },
+   "exit": "po 4 świecach",
+   "is": {
+    "trades": 49,
+    "mean_r": 0.250796,
+    "mean_pips": 2.209062,
+    "sharpe_a": 0.179873,
+    "sharpe_b": 0.124717,
+    "score": 0.124717
+   },
+   "oos": {
+    "trades": 18,
+    "mean_r": -0.602228,
+    "mean_pips": -13.523456,
+    "t_stat": -2.328882,
+    "bootstrap": {
+     "low": -24.346109,
+     "high": -2.905042,
+     "n": 18
+    }
+   },
+   "dsr": {
+    "dsr": 0.006733,
+    "sharpe": 0.146738,
+    "sharpe0": 0.48809,
+    "trials": 5568,
+    "trades": 49,
+    "skew": 0.668342,
+    "kurtosis": 3.586245
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": -2.017584,
+    "percentile": 45.2,
+    "p5": -7.840115,
+    "p50": -1.577657,
+    "p95": 4.172286
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "HYPOTHESIS = \"\"\"Dlaczego ta strategia ma działać — 1–3 zdania, spisane PRZED liczeniem.\"\"\"\n\nPARAMS = {\n    \"rsi_level\": [25, 30],    # każda wartość = osobny wariant wejścia\n}\n\n# TIMEFRAME = \"D1\"     # świece dzienne (cała historia Yahoo) zamiast H1 — D-058; tło D1 w strategii H1: ind.d1(df), ind.d1_to_h1(df, x)\n\ndef signals(df, p, ind):\n    # df: świece H1 jednej pary (open, high, low, close), indeks = czas otwarcia UTC\n    # zwróć +1 (long) / -1 (short) / 0 na świecy, której ZAMKNIĘCIE daje sygnał\n    rsi = ind.rsi(df.close, 14)\n    trend = ind.rising(ind.sma(df.close, 200), 5)\n    return (trend & ind.cross_below(rsi, p[\"rsi_level\"])).astype(\"int8\")\n\n\n# ---- Eksploracja Maca (D-072): tylko przy podwyższonej zmienności (ATR14 > ATR100) ----\n# Wybrane tylko po IS spośród 7,562 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_zmiennosc_wysoka(df, s, p, ind):\n    return s.where(ind.atr(df, 14) > ind.atr(df, 100), 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_zmiennosc_wysoka(df, s, p, ind)\n    return s\n\nPARAMS = {'rsi_level': [25]}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: tylko przy podwyższonej zmienności (ATR14 > ATR100). Wybrana po IS spośród 7,562 prób.'\n",
+   "code_hash": "817500e3b270fc50",
+   "verdict": {
+    "color": "red",
+    "text": "nie przetrwała OOS"
+   }
+  },
+  {
+   "rank": 5,
+   "mutation": "przeciw200",
+   "label": "tylko przeciw trendowi SMA200",
+   "family": "przekształcenie",
+   "params": {
+    "rsi_level": 25
+   },
+   "exit": "RSI do 50, SL 2×ATR14, max 120",
+   "is": {
+    "trades": 55,
+    "mean_r": 0.182017,
+    "mean_pips": 4.862303,
+    "sharpe_a": 0.187777,
+    "sharpe_b": 0.119459,
+    "score": 0.119459
+   },
+   "oos": {
+    "trades": 23,
+    "mean_r": 0.004525,
+    "mean_pips": -3.204574,
+    "t_stat": -0.42407,
+    "bootstrap": {
+     "low": -18.043944,
+     "high": 11.342676,
+     "n": 23
+    }
+   },
+   "dsr": {
+    "dsr": 0.00545,
+    "sharpe": 0.146244,
+    "sharpe0": 0.48809,
+    "trials": 5568,
+    "trades": 55,
+    "skew": 0.196479,
+    "kurtosis": 1.435333
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 2.483609,
+    "percentile": 92.2,
+    "p5": -6.01385,
+    "p50": -1.557844,
+    "p95": 2.965682
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "HYPOTHESIS = \"\"\"Dlaczego ta strategia ma działać — 1–3 zdania, spisane PRZED liczeniem.\"\"\"\n\nPARAMS = {\n    \"rsi_level\": [25, 30],    # każda wartość = osobny wariant wejścia\n}\n\n# TIMEFRAME = \"D1\"     # świece dzienne (cała historia Yahoo) zamiast H1 — D-058; tło D1 w strategii H1: ind.d1(df), ind.d1_to_h1(df, x)\n\ndef signals(df, p, ind):\n    # df: świece H1 jednej pary (open, high, low, close), indeks = czas otwarcia UTC\n    # zwróć +1 (long) / -1 (short) / 0 na świecy, której ZAMKNIĘCIE daje sygnał\n    rsi = ind.rsi(df.close, 14)\n    trend = ind.rising(ind.sma(df.close, 200), 5)\n    return (trend & ind.cross_below(rsi, p[\"rsi_level\"])).astype(\"int8\")\n\n\n# ---- Eksploracja Maca (D-072): tylko przeciw trendowi SMA200 ----\n# Wybrane tylko po IS spośród 7,562 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_przeciw200(df, s, p, ind):\n    m = ind.sma(df.close, 200)\n    return s.where(((s > 0) & (df.close < m)) | ((s < 0) & (df.close > m)), 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_przeciw200(df, s, p, ind)\n    return s\n\nPARAMS = {'rsi_level': [25]}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: tylko przeciw trendowi SMA200. Wybrana po IS spośród 7,562 prób.'\n",
+   "code_hash": "1e2a785d3a15aadf",
+   "verdict": {
+    "color": "yellow",
+    "text": "dodatnia w OOS, ale nie przechodzi wszystkich testów"
+   }
+  }
+ ],
+ "is_table": [
+  {
+   "mutation": "potwierdzenie",
+   "label": "potwierdzenie: następna świeca zamyka się w kierunku sygnału",
+   "family": "przekształcenie",
+   "params": {
+    "rsi_level": 25
+   },
+   "exit": "po 120 świecach",
+   "is_trades": 34,
+   "is_mean_r": 1.929302,
+   "is_mean_pips": 36.011715,
+   "is_sharpe_a": 0.22165,
+   "is_sharpe_b": 0.378012,
+   "score": 0.22165
+  },
+  {
+   "mutation": "potwierdzenie+zmiennosc_wysoka",
+   "label": "potwierdzenie: następna świeca zamyka się w kierunku sygnału + tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "połączenie",
+   "params": {
+    "rsi_level": 30
+   },
+   "exit": "po 120 świecach",
+   "is_trades": 36,
+   "is_mean_r": 1.725705,
+   "is_mean_pips": 20.088209,
+   "is_sharpe_a": 0.169805,
+   "is_sharpe_b": 0.374783,
+   "score": 0.169805
+  },
+  {
+   "mutation": "potwierdzenie+zmiennosc_wysoka",
+   "label": "potwierdzenie: następna świeca zamyka się w kierunku sygnału + tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "połączenie",
+   "params": {
+    "rsi_level": 25
+   },
+   "exit": "RSI do 50, SL 1×ATR14, max 120",
+   "is_trades": 30,
+   "is_mean_r": 0.33629,
+   "is_mean_pips": 4.778969,
+   "is_sharpe_a": 0.189513,
+   "is_sharpe_b": 0.166304,
+   "score": 0.166304
+  },
+  {
+   "mutation": "potwierdzenie+adx_silny",
+   "label": "potwierdzenie: następna świeca zamyka się w kierunku sygnału + tylko przy silnym trendzie (ADX14 > 25)",
+   "family": "połączenie",
+   "params": {
+    "rsi_level": 30
+   },
+   "exit": "po 96 świecach",
+   "is_trades": 49,
+   "is_mean_r": 1.003329,
+   "is_mean_pips": 15.300384,
+   "is_sharpe_a": 0.235784,
+   "is_sharpe_b": 0.139932,
+   "score": 0.139932
+  },
+  {
+   "mutation": "zmiennosc_wysoka",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "przekształcenie",
+   "params": {
+    "rsi_level": 25
+   },
+   "exit": "po 4 świecach",
+   "is_trades": 49,
+   "is_mean_r": 0.250796,
+   "is_mean_pips": 2.209062,
+   "is_sharpe_a": 0.179873,
+   "is_sharpe_b": 0.124717,
+   "score": 0.124717
+  },
+  {
+   "mutation": "przeciw200",
+   "label": "tylko przeciw trendowi SMA200",
+   "family": "przekształcenie",
+   "params": {
+    "rsi_level": 25
+   },
+   "exit": "RSI do 50, SL 2×ATR14, max 120",
+   "is_trades": 55,
+   "is_mean_r": 0.182017,
+   "is_mean_pips": 4.862303,
+   "is_sharpe_a": 0.187777,
+   "is_sharpe_b": 0.119459,
+   "score": 0.119459
+  },
+  {
+   "mutation": "przeciw200+adx_silny",
+   "label": "tylko przeciw trendowi SMA200 + tylko przy silnym trendzie (ADX14 > 25)",
+   "family": "połączenie",
+   "params": {
+    "rsi_level": 25
+   },
+   "exit": "po 12 świecach",
+   "is_trades": 42,
+   "is_mean_r": 0.287571,
+   "is_mean_pips": 4.852172,
+   "is_sharpe_a": 0.171342,
+   "is_sharpe_b": 0.109766,
+   "score": 0.109766
+  },
+  {
+   "mutation": "adx_silny",
+   "label": "tylko przy silnym trendzie (ADX14 > 25)",
+   "family": "przekształcenie",
+   "params": {
+    "rsi_level": 25
+   },
+   "exit": "po 12 świecach",
+   "is_trades": 47,
+   "is_mean_r": 0.246997,
+   "is_mean_pips": 3.559392,
+   "is_sharpe_a": 0.12441,
+   "is_sharpe_b": 0.109077,
+   "score": 0.109077
+  },
+  {
+   "mutation": "zmiennosc_wysoka+adx_silny",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100) + tylko przy silnym trendzie (ADX14 > 25)",
+   "family": "połączenie",
+   "params": {
+    "rsi_level": 25
+   },
+   "exit": "po 12 świecach",
+   "is_trades": 37,
+   "is_mean_r": 0.257766,
+   "is_mean_pips": 2.877308,
+   "is_sharpe_a": 0.152313,
+   "is_sharpe_b": 0.109021,
+   "score": 0.109021
+  },
+  {
+   "mutation": "zmiennosc_wysoka+przeciw200",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100) + tylko przeciw trendowi SMA200",
+   "family": "połączenie",
+   "params": {
+    "rsi_level": 25
+   },
+   "exit": "po 12 świecach",
+   "is_trades": 41,
+   "is_mean_r": 0.360118,
+   "is_mean_pips": 5.257481,
+   "is_sharpe_a": 0.263729,
+   "is_sharpe_b": 0.104929,
+   "score": 0.104929
+  },
+  {
+   "mutation": "potwierdzenie",
+   "label": "potwierdzenie: następna świeca zamyka się w kierunku sygnału",
+   "family": "przekształcenie",
+   "params": {
+    "rsi_level": 30
+   },
+   "exit": "po 120 świecach",
+   "is_trades": 66,
+   "is_mean_r": 1.23099,
+   "is_mean_pips": 17.127529,
+   "is_sharpe_a": 0.29962,
+   "is_sharpe_b": 0.096782,
+   "score": 0.096782
+  },
+  {
+   "mutation": "siatka",
+   "label": "szersza siatka parametrów",
+   "family": "parametry",
+   "params": {
+    "rsi_level": 28
+   },
+   "exit": "po 4 świecach",
+   "is_trades": 115,
+   "is_mean_r": 0.202693,
+   "is_mean_pips": 1.018569,
+   "is_sharpe_a": 0.174825,
+   "is_sharpe_b": 0.095335,
+   "score": 0.095335
+  },
+  {
+   "mutation": "odwrocony",
+   "label": "odwrócony sygnał",
+   "family": "przekształcenie",
+   "params": {
+    "rsi_level": 30
+   },
+   "exit": "po 72 świecach",
+   "is_trades": 118,
+   "is_mean_r": 0.640737,
+   "is_mean_pips": 11.211075,
+   "is_sharpe_a": 0.092465,
+   "is_sharpe_b": 0.156523,
+   "score": 0.092465
+  },
+  {
+   "mutation": "zmiennosc_niska",
+   "label": "tylko przy spokojnym rynku (ATR14 < ATR100)",
+   "family": "przekształcenie",
+   "params": {
+    "rsi_level": 30
+   },
+   "exit": "ATR5 TP 1.5× SL 2× max 120",
+   "is_trades": 65,
+   "is_mean_r": 0.091559,
+   "is_mean_pips": 1.202671,
+   "is_sharpe_a": 0.081771,
+   "is_sharpe_b": 0.140835,
+   "score": 0.081771
+  },
+  {
+   "mutation": "potwierdzenie+przeciw200",
+   "label": "potwierdzenie: następna świeca zamyka się w kierunku sygnału + tylko przeciw trendowi SMA200",
+   "family": "połączenie",
+   "params": {
+    "rsi_level": 30
+   },
+   "exit": "po 120 świecach",
+   "is_trades": 35,
+   "is_mean_r": 0.717877,
+   "is_mean_pips": 15.282248,
+   "is_sharpe_a": 0.07724,
+   "is_sharpe_b": 0.13227,
+   "score": 0.07724
+  },
+  {
+   "mutation": "przeciw200",
+   "label": "tylko przeciw trendowi SMA200",
+   "family": "przekształcenie",
+   "params": {
+    "rsi_level": 30
+   },
+   "exit": "po 6 świecach",
+   "is_trades": 99,
+   "is_mean_r": 0.132565,
+   "is_mean_pips": -1.465248,
+   "is_sharpe_a": 0.1545,
+   "is_sharpe_b": 0.030502,
+   "score": 0.030502
+  },
+  {
+   "mutation": "trend200",
+   "label": "tylko z trendem SMA200",
+   "family": "przekształcenie",
+   "params": {
+    "rsi_level": 30
+   },
+   "exit": "ATR14 TP 2× SL 3× max 24",
+   "is_trades": 52,
+   "is_mean_r": 0.054862,
+   "is_mean_pips": 1.951609,
+   "is_sharpe_a": 0.028926,
+   "is_sharpe_b": 0.120622,
+   "score": 0.028926
+  },
+  {
+   "mutation": "zmiennosc_wysoka",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "przekształcenie",
+   "params": {
+    "rsi_level": 30
+   },
+   "exit": "ATR14 TP 1× SL 3× max 24",
+   "is_trades": 87,
+   "is_mean_r": 0.019423,
+   "is_mean_pips": -0.178893,
+   "is_sharpe_a": 0.0138,
+   "is_sharpe_b": 0.05467,
+   "score": 0.0138
+  },
+  {
+   "mutation": "zmiennosc_wysoka+adx_silny",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100) + tylko przy silnym trendzie (ADX14 > 25)",
+   "family": "połączenie",
+   "params": {
+    "rsi_level": 30
+   },
+   "exit": "po 2 świecach",
+   "is_trades": 60,
+   "is_mean_r": 0.04126,
+   "is_mean_pips": 0.539942,
+   "is_sharpe_a": 0.013589,
+   "is_sharpe_b": 0.051651,
+   "score": 0.013589
+  },
+  {
+   "mutation": "odwrocony",
+   "label": "odwrócony sygnał",
+   "family": "przekształcenie",
+   "params": {
+    "rsi_level": 25
+   },
+   "exit": "po 72 świecach",
+   "is_trades": 56,
+   "is_mean_r": 0.289066,
+   "is_mean_pips": 7.150746,
+   "is_sharpe_a": 0.013434,
+   "is_sharpe_b": 0.08063,
+   "score": 0.013434
+  },
+  {
+   "mutation": "zmiennosc_wysoka+przeciw200",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100) + tylko przeciw trendowi SMA200",
+   "family": "połączenie",
+   "params": {
+    "rsi_level": 30
+   },
+   "exit": "RSI do 50, SL 3×ATR14, max 120",
+   "is_trades": 54,
+   "is_mean_r": 0.068159,
+   "is_mean_pips": 2.585687,
+   "is_sharpe_a": 0.225917,
+   "is_sharpe_b": -0.012424,
+   "score": -0.012424
+  },
+  {
+   "mutation": "przeciw200+adx_silny",
+   "label": "tylko przeciw trendowi SMA200 + tylko przy silnym trendzie (ADX14 > 25)",
+   "family": "połączenie",
+   "params": {
+    "rsi_level": 30
+   },
+   "exit": "ATR5 TP 0.5× SL 2× max 24",
+   "is_trades": 70,
+   "is_mean_r": -0.0073,
+   "is_mean_pips": -1.81212,
+   "is_sharpe_a": -0.018713,
+   "is_sharpe_b": -0.013672,
+   "score": -0.018713
+  },
+  {
+   "mutation": "adx_silny",
+   "label": "tylko przy silnym trendzie (ADX14 > 25)",
+   "family": "przekształcenie",
+   "params": {
+    "rsi_level": 30
+   },
+   "exit": "ATR5 TP 0.5× SL 3× max 24",
+   "is_trades": 92,
+   "is_mean_r": -0.009773,
+   "is_mean_pips": -0.643101,
+   "is_sharpe_a": -0.015507,
+   "is_sharpe_b": -0.034069,
+   "score": -0.034069
+  },
+  {
+   "mutation": "trail",
+   "label": "stop kroczący 1–3 × ATR14",
+   "family": "wyjście",
+   "params": {
+    "rsi_level": 25
+   },
+   "exit": "ATR14 SL 2× kroczący 1× max 72",
+   "is_trades": 67,
+   "is_mean_r": 0.004345,
+   "is_mean_pips": -2.251087,
+   "is_sharpe_a": -0.034411,
+   "is_sharpe_b": 0.031034,
+   "score": -0.034411
+  },
+  {
+   "mutation": "siatka",
+   "label": "szersza siatka parametrów",
+   "family": "parametry",
+   "params": {
+    "rsi_level": 35
+   },
+   "exit": "po 120 świecach",
+   "is_trades": 190,
+   "is_mean_r": -0.456922,
+   "is_mean_pips": -4.474327,
+   "is_sharpe_a": -0.052169,
+   "is_sharpe_b": -0.068912,
+   "score": -0.068912
+  },
+  {
+   "mutation": "trail",
+   "label": "stop kroczący 1–3 × ATR14",
+   "family": "wyjście",
+   "params": {
+    "rsi_level": 30
+   },
+   "exit": "ATR14 SL 2× kroczący 1× max 72",
+   "is_trades": 162,
+   "is_mean_r": -0.063258,
+   "is_mean_pips": -2.855042,
+   "is_sharpe_a": -0.150556,
+   "is_sharpe_b": -0.097528,
+   "score": -0.150556
+  }
+ ],
+ "summary": "Mac sprawdził 7,562 odmian (18 rodzajów). 2 z 5 kandydatów dodatnich w OOS, żaden nie przeszedł wszystkich testów.",
+ "seconds": 80.5,
+ "oos_views": {
+  "strategy_versions": 1,
+  "window_codes": 3,
+  "window_explore": 15
+ }
+}
