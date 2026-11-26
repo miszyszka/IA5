@@ -1,10 +1,10 @@
 {
  "id": "wSKI1vQ0WgIVXq2m53BL",
  "name": "Powrót",
- "run_id": "20261126-102740",
- "engine_version": "0.14.0",
+ "run_id": "20261126-190931",
+ "engine_version": "0.15.0",
  "code_hash": "12864a1b4312df32",
- "data_hash": "388443ce7abf7d77",
+ "data_hash": "e9cd4c18446167e5",
  "oos_views": {
   "strategy_versions": 1,
   "window_codes": 3,
@@ -14,6 +14,9 @@
  "timeframe": "H1",
  "d1_background": true,
  "d1_hash": "15ac3b8adf1ac34a",
+ "execute": null,
+ "entry_hour": null,
+ "execute_skipped": null,
  "candles": "pełne",
  "pairs": [
   "AUDUSD",
@@ -30,7 +33,7 @@
  ],
  "n_variants": 5,
  "n_exits": 5,
- "oos_cutoff": 1779281100,
+ "oos_cutoff": 1779305400,
  "sizing": [
   5.0,
   10.0,
@@ -39,11 +42,18 @@
   30.0
  ],
  "pyramid": 1,
+ "rules": {
+  "sizing_mode": "margin",
+  "vol_target": null,
+  "max_ccy": null,
+  "brake": null
+ },
+ "swap_version": "0 (O5: swapy = 0, tabela niewypełniona)",
  "max_pairs": null,
  "pair_rank": null,
  "hours": "bez okna",
  "data_from": 1730073600,
- "data_to": 1795683600,
+ "data_to": 1795716000,
  "data_clean": {
   "AUDUSD": {
    "version": "6",
@@ -128,8 +138,8 @@
  },
  "hypothesis": "FX-POWRÓT v2 (pomysł z 20.10.2026, reguły z IA4 sekcja 7b). Po gwałtownym impulsie w górę (zamknięcie ≥ 2 × ATR100\nwyżej niż poprzednie) kurs często cofa się w stronę ceny sprzed impulsu. Pierwsza czerwona świeca w ciągu 3 świec\npo impulsie pokazuje, że kupujący się wyczerpali — short z celem w połowie drogi od szczytu do bazy, bez stopu,\nlimit 60 świec.\nRóżnice wobec oryginału (ograniczenia IA5): 8 par zamiast 10; warunek „open wejścia ≥ baza + 0,5 ATR” sprawdzany na\nzamknięciu świecy sygnału (open następnej nie jest znany w chwili sygnału); TP jako poziom ceny P − ½(P − B) silnik\nna razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach ATR14 (patrz EXITS).",
  "trades_rows": 1362,
- "created": 1795688860,
- "seconds": 3.4,
+ "created": 1795720171,
+ "seconds": 4.1,
  "verdict": "yellow",
  "frozen_at": 1794328953,
  "frozen_variant": 2

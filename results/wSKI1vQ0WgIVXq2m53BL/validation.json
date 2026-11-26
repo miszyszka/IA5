@@ -2,10 +2,10 @@
  "best_variant_id": 2,
  "best_exit": "ATR14 TP 1.5× SL 0× max 60",
  "best_params": {},
- "oos_trades": 75,
- "oos_mean_pips": 11.006661,
- "oos_mean_r": 0.558959,
- "is_mean_r": 0.515308,
+ "oos_trades": 74,
+ "oos_mean_pips": 10.931277,
+ "oos_mean_r": 0.54814,
+ "is_mean_r": 0.519314,
  "pinned_variant": true,
  "rank_is": 1,
  "forward": {
@@ -13,7 +13,7 @@
   "trades": 2,
   "pre_trades": 283,
   "expected_pips": 10.56237,
-  "expected_r": 0.520606,
+  "expected_r": 0.520609,
   "mean_pips": 19.513288,
   "mean_r": 1.402591,
   "sum_pips": 39.026577,
@@ -31,18 +31,18 @@
   "sims": 1000,
   "actual_mean_pips": 10.625184,
   "percentile": 100.0,
-  "p5": -6.406169,
-  "p50": -1.62086,
-  "p95": 2.597634
+  "p5": -6.756167,
+  "p50": -1.728107,
+  "p95": 2.900714
  },
  "dsr": {
-  "dsr": 0.693825,
-  "sharpe": 0.213179,
-  "sharpe0": 0.160485,
+  "dsr": 0.701323,
+  "sharpe": 0.215287,
+  "sharpe0": 0.160251,
   "trials": 5,
-  "trades": 210,
-  "skew": -4.393316,
-  "kurtosis": 29.474293
+  "trades": 211,
+  "skew": -4.404709,
+  "kurtosis": 29.609576
  },
  "pbo": {
   "pbo": 0.15812,
@@ -77,12 +77,12 @@
     "variant_id": 2,
     "train_r": 0.523826,
     "test_trades": 64,
-    "test_r": 0.537049,
+    "test_r": 0.537065,
     "test_pips": 11.006467
    }
   ],
   "trades": 174,
-  "mean_r": 0.525522,
+  "mean_r": 0.525528,
   "mean_pips": 9.035764
  },
  "bootstrap": {
@@ -92,9 +92,9 @@
    "n": 285
   },
   "oos": {
-   "low": 4.151944,
-   "high": 17.959778,
-   "n": 75
+   "low": 3.849072,
+   "high": 17.827299,
+   "n": 74
   }
  },
  "spread": {
@@ -122,7 +122,10 @@
    "sortino": 1.067344,
    "longest_underwater_days": 100.416667,
    "taken": 285,
-   "skipped_margin": 0
+   "skipped_margin": 0,
+   "skipped_ccy": 0,
+   "skipped_brake": 0,
+   "capped": 0
   },
   "10.0": {
    "final": 20537.947556,
@@ -135,7 +138,10 @@
    "sortino": 1.064327,
    "longest_underwater_days": 100.708333,
    "taken": 285,
-   "skipped_margin": 0
+   "skipped_margin": 0,
+   "skipped_ccy": 0,
+   "skipped_brake": 0,
+   "capped": 0
   },
   "15.0": {
    "final": 28990.840304,
@@ -148,7 +154,10 @@
    "sortino": 1.06041,
    "longest_underwater_days": 100.791667,
    "taken": 285,
-   "skipped_margin": 0
+   "skipped_margin": 0,
+   "skipped_ccy": 0,
+   "skipped_brake": 0,
+   "capped": 0
   },
   "20.0": {
    "final": 40484.8786,
@@ -161,7 +170,10 @@
    "sortino": 1.055455,
    "longest_underwater_days": 103.708333,
    "taken": 285,
-   "skipped_margin": 0
+   "skipped_margin": 0,
+   "skipped_ccy": 0,
+   "skipped_brake": 0,
+   "capped": 0
   },
   "30.0": {
    "final": 61494.74828,
@@ -174,8 +186,17 @@
    "sortino": 0.935829,
    "longest_underwater_days": 104.708333,
    "taken": 272,
-   "skipped_margin": 13
+   "skipped_margin": 13,
+   "skipped_ccy": 0,
+   "skipped_brake": 0,
+   "capped": 0
   }
+ },
+ "rules": {
+  "sizing_mode": "margin",
+  "vol_target": null,
+  "max_ccy": null,
+  "brake": null
  },
  "verdict": {
   "color": "yellow",
@@ -184,7 +205,7 @@
    {
     "test": "expectancy netto OOS > 0",
     "ok": true,
-    "value": 11.006661
+    "value": 10.931277
    },
    {
     "test": "percentyl benchmarku ≥ 95",
@@ -199,12 +220,297 @@
    {
     "test": "DSR ≥ 0,95",
     "ok": false,
-    "value": 0.693825
+    "value": 0.701323
    },
    {
     "test": "dodatni przy spreadzie ×1,5",
     "ok": true,
     "value": 9.854833
+   }
+  ]
+ },
+ "correlation": {
+  "min_weeks": 26,
+  "others": [
+   {
+    "id": "2W3eWBPjoorOBt24EX23",
+    "name": "RSI 3",
+    "frozen": false,
+    "variant": 13,
+    "corr": 0.015,
+    "weeks": 99
+   },
+   {
+    "id": "3rHGP7Mun8YI8U2J2OxE",
+    "name": "5 X EMA",
+    "frozen": false,
+    "variant": 229,
+    "corr": -0.057,
+    "weeks": 105
+   },
+   {
+    "id": "3zFstW5UcXQ6sndsnYQA",
+    "name": "D2",
+    "frozen": false,
+    "variant": 0,
+    "corr": 0.101,
+    "weeks": 106
+   },
+   {
+    "id": "4tnm7GF0IMeRNDuIabi7",
+    "name": "RSI 2",
+    "frozen": true,
+    "variant": 12,
+    "corr": -0.015,
+    "weeks": 107
+   },
+   {
+    "id": "6wzKUigQvRVkWOImnKtK",
+    "name": "D4",
+    "frozen": false,
+    "variant": 0,
+    "corr": 0.048,
+    "weeks": 107
+   },
+   {
+    "id": "7V4brQfDOVLvr8QEYMcX",
+    "name": "clean average",
+    "frozen": false,
+    "variant": 705,
+    "corr": 0.024,
+    "weeks": 69
+   },
+   {
+    "id": "DaIZwlcCaYfGs0ZmDI7l",
+    "name": "D1",
+    "frozen": false,
+    "variant": 112,
+    "corr": -0.114,
+    "weeks": 107
+   },
+   {
+    "id": "ED4hNQCGi0Rg4gK6jyg6",
+    "name": "RSI D1",
+    "frozen": false,
+    "variant": 35,
+    "corr": 0.01,
+    "weeks": 101
+   },
+   {
+    "id": "Ew9wJBhihQZ0JSXfD1np",
+    "name": "codzienna",
+    "frozen": false,
+    "variant": 16,
+    "corr": 0.165,
+    "weeks": 109
+   },
+   {
+    "id": "FaC8c8947CS977MriiYh",
+    "name": "simple",
+    "frozen": false,
+    "variant": 149,
+    "corr": 0.016,
+    "weeks": 103
+   },
+   {
+    "id": "GMdgF9FKlAtMzjKEZXYk",
+    "name": "Strategia 5",
+    "frozen": false,
+    "variant": 11,
+    "corr": 0.337,
+    "weeks": 105
+   },
+   {
+    "id": "HCqK5n7ki7Z0XjpggXpQ",
+    "name": "Pivot",
+    "frozen": false,
+    "variant": 4,
+    "corr": 0.032,
+    "weeks": 102
+   },
+   {
+    "id": "KitxeCBn7ZWKho2zYmoW",
+    "name": "D5",
+    "frozen": false,
+    "variant": 5,
+    "corr": -0.212,
+    "weeks": 106
+   },
+   {
+    "id": "NrcZrD4fykbUX5eodAL5",
+    "name": "Powrót v2 jedna para",
+    "frozen": false,
+    "variant": 0,
+    "corr": 0.788,
+    "weeks": 107
+   },
+   {
+    "id": "RZCwW9uvlicidWNRsCJG",
+    "name": "RSI jedna para",
+    "frozen": false,
+    "variant": 0,
+    "corr": -0.113,
+    "weeks": 105
+   },
+   {
+    "id": "SFf1uGSBdtjFsbtH5Ycc",
+    "name": "d1",
+    "frozen": false,
+    "variant": 943,
+    "corr": -0.078,
+    "weeks": 106
+   },
+   {
+    "id": "YDcZPsJ371jeFuIZjE43",
+    "name": "simple",
+    "frozen": false,
+    "variant": 0,
+    "corr": -0.04,
+    "weeks": 106
+   },
+   {
+    "id": "YSSalALB5AQehpnf94Be",
+    "name": "H4",
+    "frozen": false,
+    "variant": 705,
+    "corr": 0.024,
+    "weeks": 69
+   },
+   {
+    "id": "c1NcRLKwkR5F1TfYbqsq",
+    "name": "4H",
+    "frozen": false,
+    "variant": 5,
+    "corr": -0.203,
+    "weeks": 106
+   },
+   {
+    "id": "cC40yi3w3Gl2xNncHWC5",
+    "name": "3 Candles",
+    "frozen": false,
+    "variant": 7,
+    "corr": 0.142,
+    "weeks": 106
+   },
+   {
+    "id": "cFku7f9m1TzM6b128riD",
+    "name": "Alma v1",
+    "frozen": false,
+    "variant": 246,
+    "corr": 0.142,
+    "weeks": 106
+   },
+   {
+    "id": "e3JSrwBpB99xHMUJrPsP",
+    "name": "nowa",
+    "frozen": false,
+    "variant": 55,
+    "corr": 0.031,
+    "weeks": 109
+   },
+   {
+    "id": "gS5vAwpoki9NADRyaaVe",
+    "name": "D3",
+    "frozen": false,
+    "variant": 0,
+    "corr": 0.136,
+    "weeks": 107
+   },
+   {
+    "id": "hRzWYLPPe1SUUe3IJGQ4",
+    "name": "Alma v.1",
+    "frozen": false,
+    "variant": 479,
+    "corr": -0.044,
+    "weeks": 108
+   },
+   {
+    "id": "he4qSTthOfv5exMNgmcs",
+    "name": "codzienna",
+    "frozen": false,
+    "variant": 16,
+    "corr": 0.165,
+    "weeks": 109
+   },
+   {
+    "id": "i9UEKiJDiXs4fQubz8Pj",
+    "name": "Simple v2",
+    "frozen": false,
+    "variant": 945,
+    "corr": -0.056,
+    "weeks": 103
+   },
+   {
+    "id": "mB57hHQjIFNWzdEnNGUK",
+    "name": "Gigant",
+    "frozen": false,
+    "variant": 0,
+    "corr": -0.22,
+    "weeks": 104
+   },
+   {
+    "id": "mdfhNPnTFUGogdHTkckR",
+    "name": "CRT v2",
+    "frozen": false,
+    "variant": 31,
+    "corr": 0.015,
+    "weeks": 103
+   },
+   {
+    "id": "pZCo0WfE405kasPagOcz",
+    "name": "Alma v.1",
+    "frozen": false,
+    "variant": 13,
+    "corr": -0.007,
+    "weeks": 100
+   },
+   {
+    "id": "rsIKBhxgTGLuifEfiXwy",
+    "name": "Combined 1",
+    "frozen": false,
+    "variant": 0,
+    "corr": -0.012,
+    "weeks": 103
+   },
+   {
+    "id": "rw28o7Q3tq6AssepIzis",
+    "name": "Strategia 6",
+    "frozen": false,
+    "variant": 2,
+    "corr": -0.045,
+    "weeks": 104
+   },
+   {
+    "id": "vUEk86p1XCUADJSGaY7w",
+    "name": "RSI w wyraźnym trendzie",
+    "frozen": false,
+    "variant": 0,
+    "corr": 0.019,
+    "weeks": 103
+   },
+   {
+    "id": "vbvsZQo9ot2nn62HFHfu",
+    "name": "power of 3",
+    "frozen": false,
+    "variant": 5,
+    "corr": -0.203,
+    "weeks": 106
+   },
+   {
+    "id": "yNiRuui7kP8m0aR1aV3K",
+    "name": "D4 v2",
+    "frozen": false,
+    "variant": 1,
+    "corr": 0.045,
+    "weeks": 107
+   },
+   {
+    "id": "zW7WPoc4gYMDv1SSKYMt",
+    "name": "RSI - Dzienne v.1",
+    "frozen": false,
+    "variant": 1,
+    "corr": 0.204,
+    "weeks": 106
    }
   ]
  }

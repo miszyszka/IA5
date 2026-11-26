@@ -1,15 +1,15 @@
 # Raport strategii: Powrót
 
-Run `20261126-102740` · silnik 0.14.0 · kod `12864a1b4312df32` · dane `388443ce7abf7d77`
+Run `20261126-190931` · silnik 0.15.0 · kod `12864a1b4312df32` · dane `e9cd4c18446167e5`
 
 ## Werdykt: 🟡 ŻÓŁTY — zaliczone 4 z 5 testów
 
 | test | wynik | wartość |
 |---|---|---|
-| expectancy netto OOS > 0 | ✔ | 11.01 |
+| expectancy netto OOS > 0 | ✔ | 10.93 |
 | percentyl benchmarku ≥ 95 | ✔ | 100.00 |
 | PBO < 0,3 | ✔ | 0.16 |
-| DSR ≥ 0,95 | ✘ | 0.69 |
+| DSR ≥ 0,95 | ✘ | 0.70 |
 | dodatni przy spreadzie ×1,5 | ✔ | 9.85 |
 
 ## Hipoteza
@@ -38,6 +38,8 @@ na razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach 
 
 - Kapitał 10,000 USD, dźwignia 30:1, depozyt na pozycję: 5%, 10%, 15%, 20%, 30%; suma depozytów ≤ 100% kapitału.
 
+- Zasady portfela: bez limitu walut, hamulca i celu zmienności.
+
 ## Skala przeszukiwania
 
 - **Przetestowane warianty: 5** (1 wejścia × 5 wyjść).
@@ -48,11 +50,11 @@ na razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach 
 
 | # | wyjście | parametry | IS trans. | IS śr. R | IS śr. pips | IS win % | OOS trans. | OOS śr. R | OOS śr. pips |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | ATR14 TP 1.5× SL 0× max 60 | — | 210 | 0.52 | 10.49 | 83.3 | 75 | 0.56 | 11.01 |
-| 2 | ATR14 TP 1× SL 0× max 60 | — | 216 | 0.44 | 8.75 | 91.2 | 79 | 0.51 | 9.28 |
-| 3 | ATR14 TP 2× SL 0× max 60 | — | 200 | 0.10 | 4.83 | 72.0 | 73 | 0.52 | 11.42 |
+| 1 | ATR14 TP 1.5× SL 0× max 60 | — | 211 | 0.52 | 10.52 | 83.4 | 74 | 0.55 | 10.93 |
+| 2 | ATR14 TP 1× SL 0× max 60 | — | 217 | 0.44 | 8.76 | 91.2 | 78 | 0.51 | 9.27 |
+| 3 | ATR14 TP 2× SL 0× max 60 | — | 201 | 0.11 | 4.91 | 72.1 | 72 | 0.50 | 11.26 |
 | 4 | po 60 świecach | — | 182 | -0.12 | -0.92 | 46.2 | 64 | -0.02 | 7.92 |
-| 5 | ATR14 TP 3× SL 0× max 60 | — | 193 | -0.20 | -1.12 | 55.4 | 70 | 0.33 | 11.47 |
+| 5 | ATR14 TP 3× SL 0× max 60 | — | 194 | -0.19 | -0.93 | 55.7 | 69 | 0.29 | 11.13 |
 
 ## Najlepszy wariant IS: ATR14 TP 1.5× SL 0× max 60 (—)
 
@@ -81,18 +83,18 @@ na razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach 
 
 | próba | transakcje | śr. pips | suma pips | win % |
 |---|---|---|---|---|
-| IS | 210 | 10.5 | 2 202.7 | 83.3 |
-| OOS | 75 | 11.0 | 825.5 | 85.3 |
+| IS | 211 | 10.5 | 2 219.3 | 83.4 |
+| OOS | 74 | 10.9 | 808.9 | 85.1 |
 
 ### Kapitał
 
-| depozyt | kapitał końcowy | zwrot % | CAGR % | max obsunięcie % | obsunięcie z otwartymi (MAE) % | Sharpe | pominięte (depozyt) |
-|---|---|---|---|---|---|---|---|
-| 5.0% | 14 402 | 44.0 | 19.4 | -6.6 | -7.7 | 2.19 | 0 |
-| 10.0% | 20 538 | 105.4 | 41.8 | -13.1 | -15.4 | 2.19 | 0 |
-| 15.0% | 28 991 | 189.9 | 67.6 | -19.5 | -23.0 | 2.18 | 0 |
-| 20.0% | 40 485 | 304.8 | 97.1 | -25.9 | -30.6 | 2.18 | 0 |
-| 30.0% | 61 495 | 514.9 | 141.5 | -38.3 | -45.6 | 2.00 | 13 |
+| depozyt | kapitał końcowy | zwrot % | CAGR % | max obsunięcie % | obsunięcie z otwartymi (MAE) % | Sharpe | pominięte (depozyt) | pominięte (limit walut) | pominięte (hamulec) |
+|---|---|---|---|---|---|---|---|---|---|
+| 5.0% | 14 402 | 44.0 | 19.4 | -6.6 | -7.7 | 2.19 | 0 | 0 | 0 |
+| 10.0% | 20 538 | 105.4 | 41.8 | -13.1 | -15.4 | 2.19 | 0 | 0 | 0 |
+| 15.0% | 28 991 | 189.9 | 67.6 | -19.5 | -23.0 | 2.18 | 0 | 0 | 0 |
+| 20.0% | 40 485 | 304.8 | 97.1 | -25.9 | -30.6 | 2.18 | 0 | 0 | 0 |
+| 30.0% | 61 495 | 514.9 | 141.5 | -38.3 | -45.6 | 2.00 | 13 | 0 | 0 |
 
 ### Czas trwania transakcji i pozycje otwarte (D-062)
 
@@ -394,21 +396,23 @@ Dni = dni kalendarzowe od wejścia (open świecy) do wyjścia. Pozycja **OTWARTA
 
 ## Walidacja
 
-- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 10.63 pips/transakcję, percentyl **100.0** (losowe: 5%=-6.41, mediana=-1.62, 95%=2.60).
+- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 10.63 pips/transakcję, percentyl **100.0** (losowe: 5%=-6.76, mediana=-1.73, 95%=2.90).
 
-- **Deflated Sharpe Ratio**: 0.694 (Sharpe na transakcję 0.213, próg przy 5 próbach 0.160).
+- **Deflated Sharpe Ratio**: 0.701 (Sharpe na transakcję 0.215, próg przy 5 próbach 0.160).
 
 - **PBO** (CSCV, 16 bloków, 5 wariantów): 0.158 — szansa, że najlepszy wariant IS wypada poniżej mediany poza próbą.
 
 - **Walk-forward** (okna kotwiczone, wybór najlepszego wariantu przed każdym oknem): 174 transakcji, śr. 9.04 pips, 0.53 R.
 
-- **Bootstrap 95%** średnich pipsów: całość [5.99; 14.89], OOS [4.15; 17.96].
+- **Bootstrap 95%** średnich pipsów: całość [5.99; 14.89], OOS [3.85; 17.83].
 
 - **Spread**: ×1 10.63, ×1,5 9.85, ×2 9.08 pips/transakcję.
 
 - TP i SL w tej samej świecy bez rozstrzygnięcia: 0.00% transakcji.
 
 - **Noce (swap pominięty, O5)**: średnio 1.6 nocy na transakcję, 64% transakcji przez 21:00 UTC; wynik netto przy koszcie nocy 0,5 pipsa: 9.85, 1 pips: 9.07 pips/transakcję.
+
+- **Korelacja z innymi strategiami** (D-075, tygodniowe sumy R najlepszego wariantu, min. 26 wspólnych tygodni): Powrót v2 jedna para +0.79, Strategia 5 +0.34, Gigant -0.22, D5 -0.21, RSI - Dzienne v.1 +0.20, 4H -0.20, power of 3 -0.20, codzienna +0.17. Niska (|r| < 0,3) = dobry składnik księgi.
 
 ## Forward test od zamrożenia (W4, D-056)
 
@@ -420,7 +424,7 @@ Dni = dni kalendarzowe od wejścia (open świecy) do wyjścia. Pozycja **OTWARTA
 
 - Dane: świece H1 Yahoo (jedno źródło, D-039) — historia od ok. 2 lat wstecz i rośnie; krótka historia = mało transakcji w OOS, a wyniki są wrażliwe na jeden reżim rynku. Yahoo nie podaje bid/ask ani wolumenu.
 
-- Brak swapów. Spread stały z tabeli. TP i SL w tej samej świecy H1 — przyjmowany SL (brak danych wewnątrz świecy).
+- Swapy: tabela 0 (O5: swapy = 0, tabela niewypełniona) (D-075; przy 0 — pominięte, O5). Spread stały z tabeli. TP i SL w tej samej świecy H1 — przyjmowany SL (brak danych wewnątrz świecy).
 
 - Kapitał: zwrot liczony na nominale w walucie kwotowanej (dla EUR/GBP, EUR/JPY, USD/JPY, USD/CHF, USD/CAD przybliżenie — pomija zmianę kursu przeliczenia w trakcie transakcji).
 
