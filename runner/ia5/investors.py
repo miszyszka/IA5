@@ -292,11 +292,18 @@ def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print, d1_dir: 
             tf = meta.get("timeframe", "H1")
             info.update({"params": meta["params"][pid], "exit": ex.label(), "timeframe": tf})
             all_rules.append({k_: meta.get(k_) for k_ in ("max_ccy", "vol_target", "brake")})
-            if tf == "D1":   # D-058: strategia na świecach dziennych
-                if not d1_frames:
-                    d1_frames.update({f.stem: pd.read_parquet(f) for f in sorted(Path(d1_dir).glob("*.parquet"))})
-                    d1_preps.update({p: prepare(df) for p, df in d1_frames.items()})
-                data, prp = d1_frames, d1_preps
+            if meta.get("execute") == "H1":   # D-075: sygnał D1, wykonanie na świecach H1 o ENTRY_HOUR
+                from .frames import execute_on_h1, load
+
+                sig, _lost = execute_on_h1(sig, load("D1", h1_dir, d1_dir), h1, int(meta["entry_hour"]))
+                data, prp = h1, preps
+            elif tf in ("D1", "W1"):   # D-058: strategia na świecach dziennych; D-075: tygodniowych
+                if tf not in d1_frames:
+                    from .frames import load
+
+                    d1_frames[tf] = load(tf, h1_dir, d1_dir)
+                    d1_preps[tf] = {p: prepare(df) for p, df in d1_frames[tf].items()}
+                data, prp = d1_frames[tf], d1_preps[tf]
             else:
                 data, prp = h1, preps
             mine = []

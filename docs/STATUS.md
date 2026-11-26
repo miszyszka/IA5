@@ -2,6 +2,25 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-26 — narzędzia do strategii o małych spadkach, silnik 0.15.0 (D-075), CLAUDE.md 0.68, STRATEGIE.md 0.52
+
+**Zrobione (na prośbę Michała: „czego brakuje… zrób całość i odpowiednio udokumentuj”)** — wszystko opcjonalne; strategia bez nowych ustawień liczy się jak dotąd.
+- **Portfel:** `SIZING_MODE = "risk"` (stawka = % kapitału do SL), `VOL_TARGET` (cel zmienności kapitału), `MAX_CCY` (limit pozycji na walutę), `BRAKE` (pauza po spadku) — w Pythonie i w karcie strategii (ta sama logika, test zgodności JS = Python); u inwestora limit walut, cel zmienności i hamulec.
+- **Wyjścia:** opcje `be` (breakeven), `stale` (bez zysku po N świecach), `weekend` (zamknięcie przed weekendem), `tp1` + `part` (częściowe TP) dla każdego rodzaju wyjścia.
+- **Swapy:** tabela `config.SWAP_PIPS` (dziś zera — O5 otwarte) odejmowana w silniku, benchmarku, `ia5 search` i u inwestorów.
+- **Wskaźniki:** `roc`, `kama`, `willr`, `cci` (TA-Lib), `efficiency_ratio`, `ibs`, `keltner`, `zscore`, `pct_rank`, `inside_bar`, `narrowest`.
+- **Wszystkie pary w strategii:** `ind.pairs`, `ind.pair_close`, `ind.strength` (siła walut) — detektor look-ahead tnie i zaburza też inne pary.
+- **Interwały:** `TIMEFRAME = "W1"` (tygodniowe z dziennych); `EXECUTE = "H1"` + `ENTRY_HOUR` — sygnał D1, wejście rano na H1.
+- **Korelacja:** w walidacji, karcie i raporcie; `ia5 korelacja` — macierz wszystkich strategii.
+- **Przykład:** `strategies/examples/ksiega_v2.py` (trzy składniki `d1_skladana` + trend Donchian 55, stawka od ryzyka, cel zmienności 8%, max 3 na walutę); kontrola OK; liczy się na danych syntetycznych (~40 s, 0,3 MB transakcji).
+- Testy: 6 nowych plików (`tests/test_*_d075.py`), rozszerzony test zgodności kapitału JS = Python.
+
+**Do zrobienia przez Michała**
+1. Mac: `git pull`, `uv tool install -e runner --force`, restart `ia5 start`. Silnik 0.15.0 oznaczy stare wyniki jako nieaktualne — przy domyślnych ustawieniach liczby wyjdą te same.
+2. Wkleić `strategies/examples/ksiega_v2.py` w dashboard; porównać cfg 0 (pełna) / 1 (bez trendu) / 2 (sam trend) i korelację z `d1_skladana` w walidacji.
+3. Swapy (O5): gdy wybierzesz brokera — podaj stawki swap long/short dla 8 par, wpiszę je do `SWAP_PIPS`.
+
+**Znane ograniczenia:** eksploracja Maca pomija W1 i `EXECUTE`; zapowiedź sygnału inwestora tylko dla H1; u inwestora `SIZING_MODE = "risk"` nie działa (jego % to depozyt); silnik liczony tylko na danych syntetycznych w tej sesji (bez dostępu do świec Yahoo).
 ## 2026-11-26 — naprawa publikacji strony (Pages), CLAUDE.md 0.67
 
 - Wdrożenie strony padało: `deploy-pages` nie widział paczki z `upload-pages-artifact@v3` („No artifacts named github-pages”), także po ponowieniu. Workflow `pages.yml` przeszedł na `actions/upload-pages-artifact@v5`. Strona na żywo stała na wersji REV z tabelą — po tej poprawce pojawią się karty walut.

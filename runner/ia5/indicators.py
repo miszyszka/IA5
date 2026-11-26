@@ -293,6 +293,55 @@ def session(df: pd.DataFrame) -> pd.Series:
     return pd.Series(np.select([h < 7, h < 13, h < 21], ["azja", "europa", "usa"], "poza"), index=df.index)
 
 
+# ---------- D-075: wszystkie pary naraz — siła walut, ceny innych par ----------
+
+_PAIRS: dict[int, dict] = {}
+CURRENCIES = ("EUR", "USD", "JPY", "GBP", "AUD", "CHF", "CAD")
+
+
+def attach_pairs(df: pd.DataFrame, d: dict | None) -> None:
+    """Podpina świece wszystkich par (znane do końca df) — używa sandbox przed wywołaniem signals()."""
+    _PAIRS.clear()
+    if d is None:
+        df.attrs.pop("pairs_key", None)
+        return
+    _PAIRS[id(d)] = d
+    df.attrs["pairs_key"] = id(d)
+
+
+def pairs(df: pd.DataFrame) -> dict | None:
+    """Świece wszystkich 8 par na tym samym interwale co df (słownik para → DataFrame open/high/low/close, indeks = czas
+    otwarcia), tylko świece zamknięte najpóźniej razem z ostatnią świecą df. Własna para też jest w słowniku.
+    None, gdy liczenie idzie bez innych par. Do porównania z df użyj ind.pair_close albo reindex(df.index, method="ffill")."""
+    return _PAIRS.get(df.attrs.get("pairs_key"))
+
+
+def pair_close(df: pd.DataFrame, name: str) -> pd.Series:
+    """Zamknięcie innej pary na świecach df (ostatnia znana świeca o czasie ≤ świeca df — zamyka się nie później). NaN = brak."""
+    d = pairs(df)
+    if d is None or name not in d:
+        return pd.Series(np.nan, index=df.index)
+    return d[name]["close"].reindex(df.index, method="ffill")
+
+
+def strength(df: pd.DataFrame, n: int = 24) -> pd.DataFrame:
+    """Siła walut: dla każdej z 7 walut średnia logarytmicznych zmian z n świec wszystkich par, w których występuje
+    (waluta bazowa +, kwotowana −), na świecach df. Kolumny EUR, USD, JPY, GBP, AUD, CHF, CAD. Dla pary X/Y:
+    strength[X] − strength[Y] > 0 = X silniejsza. Brak innych par → NaN."""
+    d = pairs(df)
+    out = {c: [] for c in CURRENCIES}
+    if d:
+        for name, f in d.items():
+            r = np.log(f["close"] / f["close"].shift(n)).reindex(df.index, method="ffill")
+            b, q = name[:3], name[3:]
+            if b in out:
+                out[b].append(r)
+            if q in out:
+                out[q].append(-r)
+    return pd.DataFrame({c: (pd.concat(v, axis=1).mean(axis=1) if v else pd.Series(np.nan, index=df.index)) for c, v in out.items()},
+                        index=df.index)
+
+
 # ---------- tło D1 dla strategii H1 (D-058) ----------
 
 _D1: dict[int, pd.DataFrame] = {}   # tło D1 trzymane tu, a w df.attrs tylko klucz: pandas kopiuje attrs przy KAŻDEJ operacji

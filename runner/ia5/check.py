@@ -85,11 +85,21 @@ def check_code_on(code: str, h1_dir: Path, d1_dir: Path | None = None) -> dict:
         warnings.append(f"{n_var} wariantów — przy tak dużym przeszukaniu DSR i PBO mocno ukarzą wynik (W2). Zawęź PARAMS.")
     if meta.get("pyramid", 1) > 1:
         info.append(f"Dokładanie: do {meta['pyramid']} pozycji naraz w parze (PYRAMID, D-034).")
-    if meta.get("timeframe") == "D1":
+    if meta.get("execute") == "H1":
+        info.append(f"Sygnał na zamknięciu dnia (D1), wejście na świecy H1 o {meta.get('entry_hour')}:00 czasu polskiego (EXECUTE, D-075); "
+                    "wyjścia na H1 — liczenie tylko w okresie świec H1.")
+    elif meta.get("timeframe") == "W1":
+        info.append("Świece tygodniowe (TIMEFRAME = W1, D-075, z dziennych): sygnał na zamknięciu tygodnia, wejście na open następnego.")
+    elif meta.get("timeframe") == "D1":
         info.append("Świece dzienne (TIMEFRAME = D1, D-058): sygnał na zamknięciu dnia, wejście na open następnego; bez okna B11.")
+    if meta.get("cross_pairs"):
+        info.append("Strategia widzi wszystkie pary (ind.pairs / pair_close / strength, D-075).")
+    rl = [f"{k}={meta[k]}" for k in ("sizing_mode", "vol_target", "max_ccy", "brake") if meta.get(k) and meta.get(k) != "margin"]
+    if rl:
+        info.append("Zasady portfela (D-075): " + ", ".join(rl) + " — tylko w symulacji kapitału.")
     elif meta.get("d1_background"):
         info.append("Tło D1: strategia H1 widzi zamknięte świece dzienne (ind.d1 / ind.d1_to_h1, D-058).")
-    if meta.get("hours") is False and meta.get("timeframe") != "D1":
+    if meta.get("hours") is False and meta.get("timeframe") not in ("D1", "W1"):
         info.append("Bez okna godzin: wejścia o każdej porze (HOURS = False, D-034).")
     w = sig["sig"].abs() if len(sig) else sig["sig"]
     if len(w) and (w != 1).any():
@@ -97,8 +107,9 @@ def check_code_on(code: str, h1_dir: Path, d1_dir: Path | None = None) -> dict:
     if not meta.get("hypothesis"):
         warnings.append("Brak HYPOTHESIS — spisz w 1–3 zdaniach, dlaczego to ma działać, zanim zobaczysz wynik.")
 
-    data_dir = Path(d1_dir) if meta.get("timeframe") == "D1" else h1_dir
-    bars = {f.stem: len(pd.read_parquet(f, columns=["ts"])) for f in sorted(data_dir.glob("*.parquet"))}
+    from .frames import load
+
+    bars = {p: len(df) for p, df in load(meta.get("timeframe", "H1"), h1_dir, d1_dir).items()}
     rows = []
     for pid, p in enumerate(params):
         for pair, n in bars.items():

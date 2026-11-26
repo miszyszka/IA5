@@ -237,12 +237,19 @@ def run_file(code: str, name: str, h1_dir: Path, out_root: Path, log=print,
         raise SystemExit(f"Błąd: look-ahead (B2) — {bad['pair']}, wariant parametrów {bad['param_id']}: "
                          "sygnały zmieniają się po dopisaniu przyszłych świec.")
     tf = meta.get("timeframe", "H1")
-    data_dir = Path(d1_dir) if tf == "D1" else h1_dir          # D-058: strategia D1 liczy na świecach dziennych
+    exe = meta.get("execute")                                   # D-075: sygnał D1, wykonanie na H1
+    data_dir = Path(d1_dir) if tf in ("D1", "W1") and not exe else h1_dir   # D-058: strategia D1/W1 liczy na świecach dziennych
     src = ready_source(data_dir)
     if require_source and src != require_source:
         raise SystemExit(f"Dane do liczenia w {data_dir} nie pochodzą w całości z {require_source} (źródło: {src or 'nieznane'}) — "
                          "ia5 start przebuduje je z kopii świec Yahoo.")
-    h1 = {f.stem: pd.read_parquet(f) for f in sorted(data_dir.glob("*.parquet"))}
+    from .frames import execute_on_h1, load
+
+    h1 = load("H1" if exe else tf, h1_dir, d1_dir)
+    exec_lost = None
+    if exe == "H1":
+        sig, exec_lost = execute_on_h1(sig, load("D1", h1_dir, d1_dir), h1, int(meta["entry_hour"]))
+        log(f"Wykonanie na H1 o {meta['entry_hour']}:00 czasu polskiego: {len(sig)} sygnałów; pominięte {exec_lost} (D-075).")
     signals, levels = {}, {}
     for pid in range(len(meta["params"])):
         for pair, df in h1.items():
@@ -307,12 +314,14 @@ def run_file(code: str, name: str, h1_dir: Path, out_root: Path, log=print,
         "code_hash": code_hash, "data_hash": data_hash(data_dir), "oos_views": oos_views,
         "data_source": src or source or "inne", "timeframe": tf,
         "d1_background": bool(meta.get("d1_background")),
-        "d1_hash": data_hash(Path(d1_dir)) if (tf == "H1" and meta.get("d1_background") and d1_dir) else None,
+        "d1_hash": data_hash(Path(d1_dir)) if ((tf == "H1" and meta.get("d1_background") or exe) and d1_dir) else None,
+        "execute": exe, "entry_hour": meta.get("entry_hour") if exe else None, "execute_skipped": exec_lost,
         "candles": "pełne" if full_candles else f"wycinki ±{CANDLE_PAD} świec wokół transakcji {TOP_FOR_CANDLES} najlepszych wariantów",
         "pairs": sorted(h1), "params": meta["params"], "n_variants": res["n_variants"], "n_exits": len(exits),
         "oos_cutoff": int(res["cutoff"]), "sizing": sizing, "pyramid": pyramid, "rules": rules, "swap_version": SWAP_VERSION,
         "max_pairs": max_pairs, "pair_rank": pair_rank,
-        "hours": ("D1: open dnia" if tf == "D1" else "bez okna" if hours is False
+        "hours": (f"sygnał D1, wejście na H1 o {meta.get('entry_hour')}:00 czasu polskiego" if exe else
+                  f"{tf}: open {'tygodnia' if tf == 'W1' else 'dnia'}" if tf in ("D1", "W1") else "bez okna" if hours is False
                   else (list(hours) if hours else "07–17 czasu polskiego (B11)")),
         "data_from": int(min(df.ts.iloc[0] for df in h1.values())), "data_to": int(max(df.ts.iloc[-1] for df in h1.values())),
         "data_clean": data_clean_info(data_dir, h1),

@@ -317,6 +317,8 @@ class Explorer:
         if meta["lookahead"]:
             return {"skipped": "look-ahead w oryginale"}
         self.tf = meta.get("timeframe", "H1")
+        if self.tf == "W1" or meta.get("execute"):   # D-075: odmiany liczone tylko na H1 i D1
+            return {"skipped": "eksploracja działa na H1 i D1 — W1 i wykonanie D1 na H1 bez odmian (D-075)"}
         folder = self.d1_dir if self.tf == "D1" else self.h1_dir
         self.data = _load(folder)
         self.frames = _frames(self.data, self.tf)

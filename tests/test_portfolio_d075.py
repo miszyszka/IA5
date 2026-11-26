@@ -66,7 +66,7 @@ def test_vol_target_uses_only_past():
 def test_settings_validation():
     s = read_settings({"SIZING_MODE": "risk", "SIZING": [0.5, 1], "VOL_TARGET": 10, "MAX_CCY": 2, "BRAKE": (10, 20)})
     assert s["sizing_mode"] == "risk" and s["vol_target"] == 10 and s["max_ccy"] == 2 and s["brake"] == [10, 20]
-    assert read_settings({})["sizing_mode"] == "margin"
+    assert "sizing_mode" not in read_settings({})       # domyślnie B4 — bez nowych kluczy
     for bad in ({"SIZING_MODE": "kelly"}, {"SIZING_MODE": "risk", "SIZING": [10]}, {"VOL_TARGET": 0}, {"MAX_CCY": 0},
                 {"BRAKE": (10,)}, {"BRAKE": (0, 5)}):
         with pytest.raises(StrategyError):

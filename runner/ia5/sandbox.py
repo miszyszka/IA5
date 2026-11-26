@@ -25,7 +25,7 @@ DENSE_CUTS = 24
 DENSE_BARS = 2000
 WARMUP = 300
 MIN_WEIGHT, MAX_WEIGHT = 0.1, 10.0   # D-034: |sygnał| = waga pozycji
-TIMEFRAMES = ("H1", "D1")            # D-058: interwał strategii; D1 = świece dzienne Yahoo (cała historia)
+TIMEFRAMES = ("H1", "D1", "W1")      # D-058: interwał strategii; D1 = świece dzienne Yahoo (cała historia); W1 = tygodniowe z D1 (D-075)
 H = 3600
 MAX_PYRAMID = 10
 W_MAX = 480   # D-035: do 20 dni handlu — strategie trendowe trzymają pozycje tygodniami
@@ -117,15 +117,25 @@ def _as_levels(lv, df) -> np.ndarray:
 def read_timeframe(ns: dict) -> str:
     tf = ns.get("TIMEFRAME", "H1")
     if tf not in TIMEFRAMES:
-        raise StrategyError(f"TIMEFRAME: {TIMEFRAMES[0]} (domyślnie) albo {TIMEFRAMES[1]} — świece dzienne (D-058)")
+        raise StrategyError(f"TIMEFRAME: {TIMEFRAMES[0]} (domyślnie), {TIMEFRAMES[1]} — świece dzienne (D-058) "
+                            f"albo {TIMEFRAMES[2]} — tygodniowe (D-075)")
     return tf
 
 
 def read_settings(ns: dict) -> dict:
     """Ustawienia modułu strategii poza PARAMS/EXITS/SIZING (D-034): PYRAMID i HOURS; TIMEFRAME (D-058)."""
     out = {"timeframe": read_timeframe(ns)}
-    if out["timeframe"] == "D1" and isinstance(ns.get("HOURS"), (list, tuple)):
-        raise StrategyError("HOURS: na świecach dziennych nie ma okna godzin (wejście na open dnia = północ w Londynie, D-058)")
+    if out["timeframe"] in ("D1", "W1") and isinstance(ns.get("HOURS"), (list, tuple)):
+        raise StrategyError("HOURS: na świecach dziennych nie ma okna godzin (wejście na open dnia = północ w Londynie, D-058); "
+                            "wejście o wybranej godzinie: EXECUTE = \"H1\" i ENTRY_HOUR (D-075)")
+    if ns.get("EXECUTE") is not None:   # D-075: sygnał D1, wykonanie na świecach H1 o ENTRY_HOUR czasu polskiego
+        if ns["EXECUTE"] != "H1" or out["timeframe"] != "D1":
+            raise StrategyError("EXECUTE = \"H1\" tylko przy TIMEFRAME = \"D1\" — sygnał z dnia, wejście i wyjścia na świecach H1")
+        hr = ns.get("ENTRY_HOUR", 8)
+        if not isinstance(hr, int) or isinstance(hr, bool) or not 7 <= hr <= 16:
+            raise StrategyError("ENTRY_HOUR: godzina czasu polskiego 7–16 (okno B11), np. 8")
+        out["execute"] = "H1"
+        out["entry_hour"] = hr
     pyr = ns.get("PYRAMID", 1)
     if not isinstance(pyr, int) or isinstance(pyr, bool) or not 1 <= pyr <= MAX_PYRAMID:
         raise StrategyError(f"PYRAMID musi być liczbą całkowitą 1–{MAX_PYRAMID}")
@@ -139,7 +149,9 @@ def read_settings(ns: dict) -> dict:
         if not isinstance(rank, (list, tuple)) or not all(isinstance(x, str) for x in rank):
             raise StrategyError("PAIR_RANK: lista nazw par, np. [\"USDCHF\", \"AUDUSD\"] — kolejność przy równoczesnych sygnałach")
         out["pair_rank"] = [str(x) for x in rank]
-    if out["timeframe"] == "D1":
+    if out.get("execute") == "H1":
+        out["hours"] = [out["entry_hour"], out["entry_hour"] + 1]   # D-075: wejście tylko o ENTRY_HOUR (też w benchmarku W3)
+    elif out["timeframe"] in ("D1", "W1"):
         out["hours"] = False   # D-058: B11 nie dotyczy D1 — wejście na open dnia
     elif "HOURS" in ns:
         h = ns["HOURS"]
@@ -199,7 +211,8 @@ def read_portfolio_rules(ns: dict) -> dict:
     mode = ns.get("SIZING_MODE", "margin")
     if mode not in ("margin", "risk"):
         raise StrategyError("SIZING_MODE: \"margin\" (domyślnie — % kapitału jako depozyt, B4) albo \"risk\" (% kapitału ryzykowany do SL)")
-    out["sizing_mode"] = mode
+    if mode == "risk":   # domyślny tryb depozytu (B4) nie trafia do ustawień — portfolio.rules_from przyjmuje "margin"
+        out["sizing_mode"] = mode
     if mode == "risk" and ns.get("SIZING") is not None:
         s = ns["SIZING"]
         if not isinstance(s, (list, tuple)) or not s or not all(_num(x) and 0 < x <= 5 for x in s):
@@ -273,11 +286,46 @@ def with_d1(frame: pd.DataFrame, d1: pd.DataFrame | None, factor: float | None =
     return frame
 
 
+PAIRS_API = ("ind.pairs", "ind.pair_close", "ind.strength")   # D-075: strategia korzysta z innych par
+
+
+def uses_pairs(code: str) -> bool:
+    return any(x in code for x in PAIRS_API)
+
+
+def with_pairs(frame: pd.DataFrame, allf: dict | None, factor: float | None = None, since=None) -> pd.DataFrame:
+    """D-075: świece wszystkich par przycięte do końca ramki (tylko świece zamknięte razem z ostatnią świecą ramki albo
+    wcześniej); własna para = sama ramka. factor/since: świece innych par po chwili `since` (Timestamp) × factor —
+    test, że sygnały ich nie widzą (jak tło D1)."""
+    from . import indicators as ind
+
+    if allf is None:
+        ind.attach_pairs(frame, None)
+        return frame
+    end = frame.index[-1]
+    own = frame.attrs.get("pair")
+    cut = {}
+    for name, f in allf.items():
+        if name == own:
+            cut[name] = frame[["open", "high", "low", "close"]]
+            continue
+        g = f.iloc[:int(f.index.searchsorted(end, side="right"))]
+        if factor is not None and since is not None:
+            fut = g.index > since
+            if fut.any():
+                g = g.copy()
+                g.loc[fut, ["open", "high", "low", "close"]] *= factor
+        cut[name] = g
+    ind.attach_pairs(frame, cut)
+    return frame
+
+
 def _lv_equal(a: np.ndarray, b: np.ndarray) -> bool:
     return np.array_equal(np.isnan(a), np.isnan(b)) and np.allclose(np.nan_to_num(a), np.nan_to_num(b), rtol=0, atol=1e-12)
 
 
-def lookahead_cuts(fn, df, p, ind, seed: int = 0, fn_lv=None, d1: pd.DataFrame | None = None) -> list[int]:
+def lookahead_cuts(fn, df, p, ind, seed: int = 0, fn_lv=None, d1: pd.DataFrame | None = None,
+                   allf: dict | None = None) -> list[int]:
     """B2: sygnały na danych obciętych w punkcie c muszą równać się sygnałom z pełnych danych (do c).
 
     Dwa przebiegi:
@@ -292,10 +340,13 @@ def lookahead_cuts(fn, df, p, ind, seed: int = 0, fn_lv=None, d1: pd.DataFrame |
     rng = np.random.default_rng(seed)
     bad = []
 
+    since_ts = None   # D-075: chwila cięcia dla zaburzenia innych par (Timestamp ostatniej świecy przed cięciem)
+
     def ev(frame, factor=None, since=None):
         """(sygnały, poziomy) na ramce; poziomy liczą się tylko tam, gdzie jest sygnał (D-057).
         Tło D1 (D-058) przycięte do dni zamkniętych przed końcem ramki — tak samo przy każdym cięciu."""
         frame = with_d1(frame, d1, factor, since)
+        frame = with_pairs(frame, allf, factor, since_ts)
         sg = _as_signal(fn(fresh(frame), p, ind), frame)
         if fn_lv is None:
             return sg, None
@@ -320,6 +371,7 @@ def lookahead_cuts(fn, df, p, ind, seed: int = 0, fn_lv=None, d1: pd.DataFrame |
     cols = ["open", "high", "low", "close"]
     for cut in np.unique(np.linspace(lo, len(seg) - 1, DENSE_CUTS).astype(int) + rng.integers(0, 4, DENSE_CUTS)):
         cut = int(min(cut, len(seg) - 1))
+        since_ts = None
         part = seg.iloc[:cut].copy()
         if not same(ev(part), seg_full, cut):
             bad.append(a + cut)
@@ -329,6 +381,7 @@ def lookahead_cuts(fn, df, p, ind, seed: int = 0, fn_lv=None, d1: pd.DataFrame |
         up.iloc[cut:, up.columns.get_indexer(cols)] *= 1.3
         dn.iloc[cut:, dn.columns.get_indexer(cols)] *= 0.7
         since = known_until(part) if d1 is not None else None   # tło D1: dni zamknięte po cięciu też zaburzone
+        since_ts = part.index[-1]                               # D-075: inne pary po cięciu też zaburzone
         if not same(ev(up, 1.3, since), ev(dn, 0.7, since), cut):
             bad.append(a + cut)
             break
@@ -355,26 +408,34 @@ def worker_main(code_path: str, h1_dir: str, out_dir: str, param_ids: list[int] 
         meta["exits"] = ns.get("EXITS")
         meta.update(read_settings(ns))
         tf = meta["timeframe"]
-        data_dir = Path(d1_dir) if tf == "D1" and d1_dir else Path(h1_dir)
-        if tf == "D1" and (not d1_dir or not any(data_dir.glob("*.parquet"))):
-            raise StrategyError("TIMEFRAME = \"D1\": brak świec dziennych do liczenia — na Macu uruchom ia5 start "
+        data_dir = Path(d1_dir) if tf in ("D1", "W1") and d1_dir else Path(h1_dir)
+        if tf in ("D1", "W1") and (not d1_dir or not any(data_dir.glob("*.parquet"))):
+            raise StrategyError(f"TIMEFRAME = \"{tf}\": brak świec dziennych do liczenia — na Macu uruchom ia5 start "
                                 "(po backfillD1 w Apps Script)")
         rows = []
+        code_txt = Path(code_path).read_text(encoding="utf-8")
+        frames = {}
         for f in sorted(data_dir.glob("*.parquet")):
-            pair = f.stem
             raw = pd.read_parquet(f)
-            df = raw.set_index(pd.to_datetime(raw["ts"], unit="s", utc=True))[["open", "high", "low", "close"]]
+            if tf == "W1":   # D-075: tygodniowe budowane z dziennych
+                from .frames import to_weekly
+
+                raw = to_weekly(raw)
+            frames[f.stem] = (raw, raw.set_index(pd.to_datetime(raw["ts"], unit="s", utc=True))[["open", "high", "low", "close"]])
+        allf = {k: v[1] for k, v in frames.items()} if uses_pairs(code_txt) else None   # D-075: inne pary dla ind.pairs/strength
+        meta["cross_pairs"] = allf is not None
+        for pair, (raw, df) in frames.items():
             df.attrs["pair"] = pair   # D-037: strategia może zależeć od pary (df.attrs["pair"], np. "EURUSD")
             df.attrs["timeframe"] = tf
             d1 = load_d1_background(d1_dir, pair) if tf == "H1" else None   # D-058: tło D1 dla strategii H1
             for pid, p in enumerate(params):
                 if param_ids is not None and pid not in param_ids:
                     continue
-                bad = lookahead_cuts(fn, df, p, ind, fn_lv=fn_lv, d1=d1)
+                bad = lookahead_cuts(fn, df, p, ind, fn_lv=fn_lv, d1=d1, allf=allf)
                 if bad:
                     meta["lookahead"].append({"pair": pair, "param_id": pid, "cuts": [int(raw.ts.iloc[c]) for c in bad]})
                     continue
-                full = with_d1(fresh(df), d1)
+                full = with_pairs(with_d1(fresh(df), d1), allf)
                 s = _as_signal(fn(fresh(full), p, ind), full)
                 nz = np.flatnonzero(s)
                 lv = _as_levels(fn_lv(fresh(full), p, ind), full) if fn_lv is not None else np.full((len(df), 3), np.nan)
@@ -399,6 +460,12 @@ def probe_main(code_path: str, h1_dir: str, out_dir: str, param_id: int, moves: 
         ns: dict = {"np": np, "pd": pd}
         exec(compile(Path(code_path).read_text(encoding="utf-8"), "strategia.py", "exec"), ns)  # noqa: S102
         p = param_grid(ns.get("PARAMS"))[param_id]
+        allf = None
+        if uses_pairs(Path(code_path).read_text(encoding="utf-8")):   # D-075: inne pary bez hipotetycznej świecy
+            allf = {}
+            for g in sorted(Path(h1_dir).glob("*.parquet")):
+                r_ = pd.read_parquet(g)
+                allf[g.stem] = r_.set_index(pd.to_datetime(r_["ts"], unit="s", utc=True))[["open", "high", "low", "close"]]
         for f in sorted(Path(h1_dir).glob("*.parquet")):
             raw = pd.read_parquet(f)[["ts", "open", "high", "low", "close"]]
             df = raw.set_index(pd.to_datetime(raw["ts"], unit="s", utc=True))[["open", "high", "low", "close"]]
@@ -413,6 +480,7 @@ def probe_main(code_path: str, h1_dir: str, out_dir: str, param_id: int, moves: 
                 x.attrs["pair"] = f.stem
                 x.attrs["timeframe"] = "H1"
                 x = with_d1(x, load_d1_background(d1_dir, f.stem))   # D-058: tło D1 jak przy liczeniu
+                x = with_pairs(x, allf)
                 v = float(_as_signal(ns["signals"](x, p, ind), x)[-1])
                 if v:
                     out["hits"].append({"pair": f.stem, "k": k, "level": c, "dir": int(np.sign(v))})

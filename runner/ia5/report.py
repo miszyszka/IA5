@@ -67,7 +67,12 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
         + ("; tło D1 (świece dzienne, cała historia Yahoo) w signals() — D-058" if m.get("d1_background") else "") + ".",
         f"- In-sample do {_d(m['oos_cutoff'])}, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS."
         + (f" {oos_log.line(m['oos_views'])}" if m.get("oos_views") else ""),
-        ("- Świece dzienne (D-058): sygnał na zamknięciu dnia (północ w Londynie), wejście na open następnego dnia; okno B11 nie dotyczy; "
+        (f"- Sygnał na zamknięciu dnia (D1, D-058), wejście na open świecy H1 o {m.get('entry_hour')}:00 czasu polskiego następnego "
+         "dnia handlu (EXECUTE = H1, D-075); wyjścia na świecach H1, liczenie tylko w okresie świec H1; "
+         if m.get("execute") else
+         "- Świece tygodniowe (W1, D-075, z dziennych): sygnał na zamknięciu tygodnia, wejście na open następnego; okno B11 nie dotyczy; "
+         if tf == "W1" else
+         "- Świece dzienne (D-058): sygnał na zamknięciu dnia (północ w Londynie), wejście na open następnego dnia; okno B11 nie dotyczy; "
          if tf == "D1" else
          "- Wejście na open świecy po sygnale, o dowolnej godzinie (strategia wyłączyła okno handlu, HOURS = False, D-034); "
          if m.get("hours") == "bez okna" else

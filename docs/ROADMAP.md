@@ -1,6 +1,6 @@
 # ROADMAP — jak IA5 ma się dalej rozwijać
 
-Wersja 0.4 · 2026-11-23 · Spisane po przeglądzie całego projektu (D-054–D-058); REV (D-063); FOREST usunięty, Stocks (D-071); eksploracja Maca i OOS na akcjach (D-072). Aktualizować, gdy zmienia się kierunek.
+Wersja 0.5 · 2026-11-26 · Spisane po przeglądzie całego projektu (D-054–D-058); REV (D-063); FOREST usunięty, Stocks (D-071); eksploracja Maca i OOS na akcjach (D-072); narzędzia do strategii o małych spadkach (D-075). Aktualizować, gdy zmienia się kierunek.
 
 ## Zasada nadrzędna
 
@@ -33,15 +33,15 @@ Najtańszy krok o największej szansie. Nic nowego w kodzie — tylko używanie 
 
 ## Etap B — gdy D1 da kandydatkę (miesiąc): z backtestu do rzeczywistości
 
-1. **Swapy naprawdę (zamknięcie O5).** Tabela stawek swap long/short dla 8 par od wybranego brokera, zapisywana ręcznie raz w miesiącu do `runner/ia5/config.py` (wersjonowana, jak spread). Silnik odejmuje `nights × stawka` — model zamiast stresu. Wymaga decyzji Michała (który broker) i wpisu w DECISIONS.
-2. **Spread zmienny w czasie** — stały spread z tabeli jest optymistyczny w nocy i w okolicy danych. Dla D1 (wejście o północy w Londynie = zaraz po rolowaniu, najszersze spready dnia!) to ważne: rozważyć wejście na open świecy H1 o 08:00 Londynu po sygnale D1 — „sygnał D1, wykonanie H1”. To naturalne rozszerzenie D-058 (strategia D1 z `ENTRY_HOUR`), ale **tylko jeśli** etap A coś znajdzie.
+1. **Swapy naprawdę (zamknięcie O5).** ✅ Mechanizm gotowy (D-075): `config.SWAP_PIPS` (long/short, pips za noc) + `SWAP_VERSION`, silnik odejmuje `nights × stawka`. **Zostało:** Michał wybiera brokera i wpisuje stawki (raz w miesiącu), wpis w DECISIONS.
+2. **Spread zmienny w czasie** — stały spread z tabeli jest optymistyczny w nocy i w okolicy danych. Dla D1 (wejście o północy w Londynie = zaraz po rolowaniu, najszersze spready dnia!) to ważne: rozważyć wejście na open świecy H1 o 08:00 Londynu po sygnale D1 — „sygnał D1, wykonanie H1”. To naturalne rozszerzenie D-058 (strategia D1 z `ENTRY_HOUR`), ale **tylko jeśli** etap A coś znajdzie. ✅ Gotowe (D-075): `EXECUTE = "H1"` + `ENTRY_HOUR` — używać jako drugiego testu kandydatki D1 (liczy się tylko na ~2 latach H1).
 3. **Forward na żywo ≥ 3 miesiące** w zakładce Inwestorzy, porównywany z blokiem `forward` (z-score wobec oczekiwania). Przy |z| ≥ 2 — stop i analiza.
 4. **Małe realne konto** (decyzja Michała, poza systemem): ta sama strategia, minimalny lot, ręcznie z maili inwestora. System już wysyła sygnał, otwarcie i zamknięcie.
 
 ## Etap C — gdy D1 nic nie da (opcje, w kolejności sensowności)
 
 1. **`ia5 search --d1`** — ta sama maszyna przeszukiwania (FDR, test zerowy, raz OOS), ale na świecach dziennych. Mało kodu (silnik już działa na D1), dużo nowej próby. Zrobić dopiero po etapie A, żeby nie zmarnować OOS D1 przeszukaniem przed sprawdzeniem prostych hipotez.
-2. **Portfel zamiast pojedynczej strategii** — kilka słabych (🟡), mało skorelowanych strategii na wspólnym kapitale. Inwestor już to umie (wspólny kapitał, wiele strategii); brakuje tylko raportu korelacji dziennych wyników między strategiami.
+2. **Portfel zamiast pojedynczej strategii** — kilka słabych (🟡), mało skorelowanych strategii na wspólnym kapitale. Inwestor już to umie (wspólny kapitał, wiele strategii). ✅ Raport korelacji (D-075): w walidacji każdej strategii i `ia5 korelacja`; do tego zasady portfela (stawka od ryzyka, limit walut, cel zmienności) i przykład `ksiega_v2.py`.
 3. **Inne dane (zmiana D7 — tylko za zgodą Michała):** stopy procentowe (różnica stóp = carry), kalendarz danych makro (unikanie / granie publikacji). To nowe źródło informacji, nie nowa kombinacja tych samych świec — jedyna droga, jeśli ceny same nie wystarczą.
 
 ## REV — osobny tor (D-063)
@@ -72,6 +72,12 @@ Portfel spółek Michała rebalansowany co wtorek na otwarciu, w paśmie ±20% u
 - Każda strategia dostaje po liczeniu godzinę „kreatywnego” liczenia na Macu — odmiany wybierane tylko po IS, kandydaci raz na OOS, DSR z wszystkich prób.
 - Strategie D1 mają drugi, niezależny OOS: świece dzienne spółek (pilotaż, poza werdyktem). Jeśli po kilku strategiach okaże się, że „akcje potwierdzają” idzie w parze z dobrym forwardem — rozważyć wpisanie go do werdyktu (decyzja Michała).
 - Następne kroki do rozważenia: odmiany H1 z tłem D1 (trend dzienny jako filtr), „ten sam wzór H1 na D1”, raport korelacji kandydatów z już zamrożonymi strategiami (portfel zamiast pojedynczej strategii — etap C2).
+
+## Małe spadki (D-075) — co jest gotowe i jak używać
+
+- Narzędzia: `SIZING_MODE = "risk"`, `VOL_TARGET`, `MAX_CCY`, `BRAKE` (portfel), opcje wyjść `be` / `stale` / `weekend` / `tp1`, wskaźniki reżimu (`efficiency_ratio`, `pct_rank`, `kama`, `ibs`…), `ind.strength` (siła walut ze wszystkich par), `TIMEFRAME = "W1"`, `EXECUTE = "H1"`, korelacja strategii.
+- Kolejność pracy: (1) `ksiega_v2.py` na Macu — porównać cfg 0 / 1 / 2 i korelację z `d1_skladana`; (2) jeśli trend obniża korelację i spadek — zamrozić cfg 0, inwestor; (3) nowa przewaga przekrojowa (`ind.strength`, momentum 3–12 miesięcy na W1) jako osobna strategia, potem do księgi tylko przy |r| < 0,3.
+- Nie stroić zasad portfela pod OOS — ustawić z góry (jak w przykładzie) i oceniać forwardem.
 
 ## Czego NIE robić (świadomie)
 
