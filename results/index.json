@@ -3,8 +3,8 @@
   {
    "id": "wSKI1vQ0WgIVXq2m53BL",
    "name": "Powrót",
-   "run_id": "20261126-032244",
-   "created": 1795663364,
+   "run_id": "20261126-102740",
+   "created": 1795688860,
    "verdict": "yellow",
    "verdict_note": "zaliczone 4 z 5 testów",
    "n_variants": 5,
@@ -20,7 +20,7 @@
     "USDJPY"
    ],
    "data_from": 1730073600,
-   "data_to": 1795658400,
+   "data_to": 1795683600,
    "source": "yahoo",
    "engine_version": "0.14.0",
    "best_exit": "ATR14 TP 1.5× SL 0× max 60",

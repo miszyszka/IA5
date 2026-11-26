@@ -1,6 +1,6 @@
 # Raport strategii: Powrót
 
-Run `20261126-032244` · silnik 0.14.0 · kod `12864a1b4312df32` · dane `73a7fff45fb145c1`
+Run `20261126-102740` · silnik 0.14.0 · kod `12864a1b4312df32` · dane `388443ce7abf7d77`
 
 ## Werdykt: 🟡 ŻÓŁTY — zaliczone 4 z 5 testów
 
@@ -8,7 +8,7 @@ Run `20261126-032244` · silnik 0.14.0 · kod `12864a1b4312df32` · dane `73a7ff
 |---|---|---|
 | expectancy netto OOS > 0 | ✔ | 11.01 |
 | percentyl benchmarku ≥ 95 | ✔ | 100.00 |
-| PBO < 0,3 | ✔ | 0.15 |
+| PBO < 0,3 | ✔ | 0.16 |
 | DSR ≥ 0,95 | ✘ | 0.69 |
 | dodatni przy spreadzie ×1,5 | ✔ | 9.85 |
 
@@ -34,7 +34,7 @@ na razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach 
 
 - Jedna pozycja na parę naraz (B8).
 
-- Świece H1 Yahoo po warstwie czyszczenia (D8, D-039): AUDUSD: odrzucone 0, uzupełnione 102 (luki ≤ 3 h), 3 przerw w danych (99 h); EURGBP: odrzucone 0, uzupełnione 101 (luki ≤ 3 h), 3 przerw w danych (98 h); EURJPY: odrzucone 0, uzupełnione 101 (luki ≤ 3 h), 3 przerw w danych (98 h); EURUSD: odrzucone 0, uzupełnione 104 (luki ≤ 3 h), 3 przerw w danych (98 h); GBPUSD: odrzucone 0, uzupełnione 102 (luki ≤ 3 h), 3 przerw w danych (98 h); USDCAD: odrzucone 0, uzupełnione 105 (luki ≤ 3 h), 3 przerw w danych (99 h); USDCHF: odrzucone 0, uzupełnione 104 (luki ≤ 3 h), 4 przerw w danych (98 h); USDJPY: odrzucone 0, uzupełnione 106 (luki ≤ 3 h), 3 przerw w danych (99 h). Transakcja nachodząca na przerwę w danych albo na świecę uzupełnioną jest anulowana; weekendy, święta i godziny, których brakuje we wszystkich parach, nie są przerwą (B12).
+- Świece H1 Yahoo po warstwie czyszczenia (D8, D-039): AUDUSD: odrzucone 0, uzupełnione 102 (luki ≤ 3 h), 3 przerw w danych (99 h); EURGBP: odrzucone 0, uzupełnione 101 (luki ≤ 3 h), 3 przerw w danych (98 h); EURJPY: odrzucone 0, uzupełnione 101 (luki ≤ 3 h), 3 przerw w danych (98 h); EURUSD: odrzucone 0, uzupełnione 103 (luki ≤ 3 h), 3 przerw w danych (98 h); GBPUSD: odrzucone 0, uzupełnione 102 (luki ≤ 3 h), 3 przerw w danych (98 h); USDCAD: odrzucone 0, uzupełnione 105 (luki ≤ 3 h), 3 przerw w danych (99 h); USDCHF: odrzucone 0, uzupełnione 104 (luki ≤ 3 h), 4 przerw w danych (98 h); USDJPY: odrzucone 0, uzupełnione 105 (luki ≤ 3 h), 3 przerw w danych (99 h). Transakcja nachodząca na przerwę w danych albo na świecę uzupełnioną jest anulowana; weekendy, święta i godziny, których brakuje we wszystkich parach, nie są przerwą (B12).
 
 - Kapitał 10,000 USD, dźwignia 30:1, depozyt na pozycję: 5%, 10%, 15%, 20%, 30%; suma depozytów ≤ 100% kapitału.
 
@@ -42,7 +42,7 @@ na razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach 
 
 - **Przetestowane warianty: 5** (1 wejścia × 5 wyjść).
 
-- Pominięte sygnały, średnio na wariant: 34 (limit otwartych pozycji w parze), 1.0 (brak danych do wyjścia); 0 wejść w rozgrzewce ATR, 0 sygnałów poza oknem 07:00–17:00 czasu polskiego (B11), anulowane transakcje, średnio na wariant: 5.0 (przerwa w dostępie do danych), 1.0 (sygnał, wejście lub wyjście na świecy uzupełnionej) — D-032.
+- Pominięte sygnały, średnio na wariant: 34 (limit otwartych pozycji w parze), 0.8 (brak danych do wyjścia); 0 wejść w rozgrzewce ATR, 0 sygnałów poza oknem 07:00–17:00 czasu polskiego (B11), anulowane transakcje, średnio na wariant: 5.0 (przerwa w dostępie do danych), 1.0 (sygnał, wejście lub wyjście na świecy uzupełnionej) — D-032.
 
 ## Top 10 wariantów (ranking po IS, min. 30 transakcji IS)
 
@@ -51,7 +51,7 @@ na razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach 
 | 1 | ATR14 TP 1.5× SL 0× max 60 | — | 210 | 0.52 | 10.49 | 83.3 | 75 | 0.56 | 11.01 |
 | 2 | ATR14 TP 1× SL 0× max 60 | — | 216 | 0.44 | 8.75 | 91.2 | 79 | 0.51 | 9.28 |
 | 3 | ATR14 TP 2× SL 0× max 60 | — | 200 | 0.10 | 4.83 | 72.0 | 73 | 0.52 | 11.42 |
-| 4 | po 60 świecach | — | 182 | -0.12 | -0.92 | 46.2 | 63 | -0.12 | 6.40 |
+| 4 | po 60 świecach | — | 182 | -0.12 | -0.92 | 46.2 | 64 | -0.02 | 7.92 |
 | 5 | ATR14 TP 3× SL 0× max 60 | — | 193 | -0.20 | -1.12 | 55.4 | 70 | 0.33 | 11.47 |
 
 ## Najlepszy wariant IS: ATR14 TP 1.5× SL 0× max 60 (—)
@@ -394,11 +394,11 @@ Dni = dni kalendarzowe od wejścia (open świecy) do wyjścia. Pozycja **OTWARTA
 
 ## Walidacja
 
-- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 10.63 pips/transakcję, percentyl **100.0** (losowe: 5%=-6.34, mediana=-1.79, 95%=2.62).
+- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 10.63 pips/transakcję, percentyl **100.0** (losowe: 5%=-6.41, mediana=-1.62, 95%=2.60).
 
 - **Deflated Sharpe Ratio**: 0.694 (Sharpe na transakcję 0.213, próg przy 5 próbach 0.160).
 
-- **PBO** (CSCV, 16 bloków, 5 wariantów): 0.148 — szansa, że najlepszy wariant IS wypada poniżej mediany poza próbą.
+- **PBO** (CSCV, 16 bloków, 5 wariantów): 0.158 — szansa, że najlepszy wariant IS wypada poniżej mediany poza próbą.
 
 - **Walk-forward** (okna kotwiczone, wybór najlepszego wariantu przed każdym oknem): 174 transakcji, śr. 9.04 pips, 0.53 R.
 
