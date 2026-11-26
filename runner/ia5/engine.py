@@ -25,7 +25,7 @@ import numpy as np
 import pandas as pd
 
 from . import indicators as ind
-from .config import instrument
+from .config import instrument, swap_cost
 from .session import in_trading_hours, nights
 
 W = 120  # najdłuższe trzymanie pozycji w świecach
@@ -43,12 +43,34 @@ class Exit:
     run: int = 0       # rsi_streak: ile kolejnych zamknięć RSI14 po złej stronie poziomu zamyka pozycję
     level: float = 0.0  # rsi_streak: poziom dla short (np. 70); dla long lustrzany 100 − level (30)
     trail: float = 0.0  # trail: odległość stopu kroczącego od najwyższego high (long) w × ATR(n)
+    # D-075: opcje dla KAŻDEGO rodzaju wyjścia (domyślnie wyłączone — wynik jak przed 0.15.0)
+    be: float = 0.0     # breakeven: gdy cena (high zamkniętych świec) przeszła be × ATR na plus, SL podniesiony do ceny wejścia
+    stale: int = 0      # stop czasowy bez zysku: po `stale` świecach zamknięcie ≤ cena wejścia → wyjście na tym zamknięciu
+    weekend: bool = False  # wyjście na zamknięciu ostatniej świecy przed weekendem / świętem (przerwa ≥ 24 h do następnej)
+    tp1: float = 0.0    # częściowe TP: `part` pozycji zamknięte na tp1 × ATR, reszta według wyjścia
+    part: float = 0.5   # udział pozycji zamykany na tp1 (0–1)
 
     @property
     def family(self) -> str:
         return {"time": "czas", "atr": "ATR", "trail": "stop kroczący", "level": "poziomy"}.get(self.kind, "wskaźnik")
 
     def label(self) -> str:
+        return self._base_label() + self._opt_label()
+
+    def _opt_label(self) -> str:
+        """D-075: opcje dopisane do nazwy wariantu."""
+        out = []
+        if self.tp1 > 0:
+            out.append(f"{self.part * 100:g}% na {self.tp1:g}×ATR")
+        if self.be > 0:
+            out.append(f"breakeven po {self.be:g}×ATR")
+        if self.stale > 0:
+            out.append(f"bez zysku po {self.stale} → wyjście")
+        if self.weekend:
+            out.append("zamknięcie przed weekendem")
+        return (", " + ", ".join(out)) if out else ""
+
+    def _base_label(self) -> str:
         if self.kind == "time":
             return f"po {self.n} świecach"
         if self.kind == "level":
@@ -90,11 +112,22 @@ def prepare(df: pd.DataFrame) -> dict:
         "atr5": ind.atr(df, 5).to_numpy(), "atr14": ind.atr(df, 14).to_numpy(),
         "rsi14": ind.rsi(df["close"], 14).to_numpy(),
         "sma20": ind.sma(df["close"], 20).to_numpy(),
+        # D-075: ostatnia świeca przed weekendem / świętem / przerwą — następna zaczyna się ≥ 24 h po jej zamknięciu
+        "wkend": _before_break(df),
         # D-031: warstwa czyszczenia (clean.py) — świece uzupełnione i długie luki; brak kolumn = dane bez luk
         "filled": df["filled"].to_numpy(bool) if "filled" in df else np.zeros(len(df), bool),
         "gapcum": np.concatenate([[0], np.cumsum(df["gap_before"].to_numpy(np.int64) > 0)])
         if "gap_before" in df else np.zeros(len(df) + 1, np.int64),
     }
+
+
+def _before_break(df: pd.DataFrame) -> np.ndarray:
+    ts = df["ts"].to_numpy(np.int64)
+    cts = df["close_ts"].to_numpy(np.int64) if "close_ts" in df else ts + H
+    out = np.zeros(len(ts), bool)
+    if len(ts) > 1:
+        out[:-1] = ts[1:] - cts[:-1] >= 24 * H
+    return out
 
 
 def data_cancel(P: dict, signal_i: np.ndarray, entry_i: np.ndarray, exit_i: np.ndarray, split: bool = False):
@@ -177,7 +210,8 @@ def _first(mask: np.ndarray) -> np.ndarray:
 def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | None = None) -> pd.DataFrame:
     """Wynik każdego wejścia dla jednego wariantu wyjścia (bez filtra B8)."""
     m = len(ent)
-    cols = ["exit_i", "exit_ts", "exit_px", "reason", "pips_gross", "r", "risk_pips", "mae", "mfe", "bars", "nights", "ambiguous"]
+    cols = ["exit_i", "exit_ts", "exit_px", "reason", "pips_gross", "r", "risk_pips", "mae", "mfe", "bars", "nights", "ambiguous",
+            "partial", "part_pips"]
     if m == 0:
         return pd.DataFrame(columns=cols)
     pip = instrument(pair).pip
@@ -201,6 +235,20 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     cap_r = np.clip(ent["max_bars"].to_numpy(np.int64), 1, cap) if "max_bars" in ent else np.full(m, cap)
     if unlimited:   # ostatnia dostępna świeca każdego wejścia = koniec danych
         cap_r = np.minimum(cap_r, n_bars - e)
+    short_reason = np.full(m, "", dtype=object)
+    if ex.weekend:   # D-075: wyjście na zamknięciu ostatniej świecy przed weekendem (skraca limit czasu tego wejścia)
+        wi = np.minimum(e[:, None] + np.arange(cap)[None, :], n_bars - 1)
+        wf = P["wkend"][wi] & (e[:, None] + np.arange(cap)[None, :] < n_bars)
+        fw = _first(wf)
+        mark = fw + 1 < cap_r
+        cap_r = np.where(mark, fw + 1, cap_r)
+        short_reason[mark] = "weekend"
+    if ex.stale > 0 and ex.stale <= cap:   # D-075: po `stale` świecach bez zysku (zamknięcie ≤ wejście) → wyjście na zamknięciu
+        j = ex.stale - 1
+        cj = w["C"][:, j]
+        mark = (j + 1 < cap_r) & np.isfinite(cj) & (cj <= ent["entry_px"].to_numpy() * d)
+        cap_r = np.where(mark, j + 1, cap_r)
+        short_reason[mark] = "bez zysku"
     beyond = np.arange(cap)[None, :] >= cap_r[:, None]
     if ex.kind == "level":
         # D-057: poziomy w cenie ze strategii (świeca sygnału), w przestrzeni „long” (× kierunek); brak poziomu = brak TP/SL
@@ -212,11 +260,15 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
         tp = En + ex.tp * atr if ex.kind == "atr" or (ex.kind in ("rsi_streak", "trail") and ex.tp > 0) else np.full(m, np.inf)
         sl = En - ex.sl * atr if ex.sl > 0 else np.full(m, -np.inf)
     Hw, Lw, Ow = w["H"][:, :cap], w["L"][:, :cap], w["O"][:, :cap]
-    if ex.kind == "trail":
+    if ex.kind == "trail" or ex.be > 0:
         # najwyższe high świec PRZED świecą j (w świecy wejścia: cena wejścia)
         hh = np.fmax.accumulate(np.where(np.isnan(Hw), -np.inf, Hw), axis=1)
         prev = np.maximum(np.concatenate([En[:, None], hh[:, :-1]], axis=1), En[:, None])
-        SLm = np.maximum(sl[:, None], prev - ex.trail * atr[:, None])
+        SLm = np.broadcast_to(sl[:, None], (m, cap))
+        if ex.kind == "trail":
+            SLm = np.maximum(SLm, prev - ex.trail * atr[:, None])
+        if ex.be > 0:   # D-075: breakeven — SL na cenę wejścia, gdy zamknięte świece przeszły be × ATR na plus
+            SLm = np.maximum(SLm, np.where(prev - En[:, None] >= ex.be * atr[:, None], En[:, None], -np.inf))
     else:
         SLm = np.broadcast_to(sl[:, None], (m, cap))
     hit_sl = Lw <= SLm
@@ -278,7 +330,10 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     exit_n = np.where(is_sl, np.where(gs, Ow[rows, j], sl_j), exit_n)
     exit_n = np.where(is_tp, tp, exit_n)
     reason[is_sl] = "SL"
-    reason[is_sl & (sl_j > sl + 1e-12)] = "stop kroczący"
+    moved = is_sl & (sl_j > sl + 1e-12)
+    reason[moved] = "stop kroczący"
+    if ex.be > 0:   # D-075: stop przesunięty na wejście (a nie wyżej przez stop kroczący)
+        reason[moved & (np.abs(sl_j - En) <= 1e-12 * np.maximum(1.0, np.abs(En)))] = "breakeven"
     reason[is_tp] = "TP"
     exit_j = np.where(stop, j, exit_j)
 
@@ -295,6 +350,8 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     exit_n = np.where(tw, w["C"][rows, cap_r - 1], exit_n)
     exit_j = np.where(tw, cap_r - 1, exit_j)
     reason[tw] = "otwarta" if unlimited else "czas"   # D-061: bez limitu, koniec danych — pozycja otwarta, wycena po ostatnim close
+    sr = tw & (short_reason != "")
+    reason[sr] = short_reason[sr]   # D-075: limit skrócony przez weekend albo brak zysku
 
     done = ~np.isnan(exit_n)
     # MAE/MFE: świece przed świecą wyjścia + cena wyjścia
@@ -306,13 +363,24 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     # świeca wyjścia wewnątrz-świecowego/czasowego sama też należy do przebiegu pozycji
     in_bar = ~exit_at_open
     jb = np.clip(exit_j, 0, cap)
-    timed = (reason == "czas") | (reason == "otwarta")
-    bar_max = np.where(in_bar & timed, w["H"][rows, jb], -np.inf)
-    bar_min = np.where(in_bar & timed, w["L"][rows, jb], np.inf)
+    bar_max = np.where(in_bar & tw, w["H"][rows, jb], -np.inf)
+    bar_min = np.where(in_bar & tw, w["L"][rows, jb], np.inf)
     mfe = np.maximum.reduce([prev_max, bar_max, exit_n, En]) - En
     mae = En - np.minimum.reduce([prev_min, bar_min, exit_n, En])
 
     gross = exit_n - En
+    part_gain = np.zeros(m)
+    partial = np.zeros(m, bool)
+    if ex.tp1 > 0:
+        # D-075: częściowe TP — `part` pozycji zamknięte na poziomie En + tp1 × ATR (luka przez poziom → poziom, B6).
+        # Liczy się, gdy poziom padł w świecy przed świecą wyjścia, albo w świecy wyjścia, jeśli to wyjście na zamknięciu
+        # (limit czasu) lub TP nie niższe niż tp1. SL w tej samej świecy co tp1 → bez częściowego (pesymistycznie, B5).
+        lvl1 = En + ex.tp1 * atr
+        f1 = _first((Hw >= lvl1[:, None]) & ~beyond)
+        same = (f1 == exit_j) & (tw | (is_tp & (tp >= lvl1)))
+        partial = done & (f1 < cap) & ((f1 < exit_j) | same)
+        part_gain = np.where(partial, ex.part * (lvl1 - En), 0.0)
+        gross = np.where(partial, part_gain + (1 - ex.part) * (exit_n - En), gross)
     if ex.kind == "level":   # R względem odległości do SL ze strategii; bez SL — względem 1 × ATR14 (8.4)
         risk = np.where(np.isfinite(sl) & (En - sl > 0), En - sl, ent["atr14"].to_numpy())
     else:
@@ -332,6 +400,8 @@ def simulate(P: dict, ent: pd.DataFrame, ex: Exit, pair: str, opp: np.ndarray | 
     df = pd.DataFrame(out)
     df["reason"] = reason
     df["ambiguous"] = amb
+    df["partial"] = partial            # D-075: częściowe TP wykonane
+    df["part_pips"] = part_gain / pip  # D-075: pipsy zablokowane częściowym TP (już × part)
     df.loc[~done, "reason"] = "brak danych"
     return df[cols]
 
@@ -480,6 +550,10 @@ def run(h1: dict[str, pd.DataFrame], signals: dict[tuple[int, str], np.ndarray],
         outcomes = outcomes.join(meta, on="entry_id")
         spread = outcomes["pair"].map(lambda q: instrument(q).spread_pips)
         outcomes["pips_net"] = outcomes["pips_gross"] - spread  # B3: spread jednorazowo
+        # D-075: swap za każdą noc według tabeli SWAP_PIPS (domyślnie 0 — O5 otwarte; stres 0,5/1 pips dalej w walidacji)
+        dirs = outcomes["entry_id"].map(entries.set_index("entry_id")["dir"]).to_numpy()
+        outcomes["swap_pips"] = swap_cost(outcomes["pair"].to_numpy(), dirs, outcomes["nights"].to_numpy(float))
+        outcomes["pips_net"] = outcomes["pips_net"] + outcomes["swap_pips"]
         outcomes["r_net"] = outcomes["pips_net"] / outcomes["risk_pips"]  # R po spreadzie
     variants = pd.DataFrame([
         {"variant_id": pid * len(exits) + xid, "param_id": pid, "params": params[pid],

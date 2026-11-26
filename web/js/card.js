@@ -6,7 +6,7 @@ import { openEditor } from './editor.js';
 import { freeze, unfreeze } from './fb.js';
 import { deleteStrategy } from './list.js';
 import {
-  PAIRS, SIZING, breakdown, drawdown, equityStats, filterTrades, sessionOf, simulateEquity, summarize, toCSV, weekdayOf, yearOf,
+  PAIRS, SIZING, breakdown, drawdown, equityStats, filterTrades, rulesFrom, sessionOf, simulateEquity, summarize, toCSV, weekdayOf, yearOf,
 } from './metrics.js';
 import { $, $$, cls, confirmDialog, copy, dateUTC, download, esc, h, num, pct, signed, store, toast } from './util.js';
 
@@ -252,7 +252,8 @@ function renderVerdict() {
       rowKV('Spread ×1 / ×1,5 / ×2', `${signed(sp.x1)} / ${signed(sp.x1_5)} / ${signed(sp.x2)}`, 'pips/transakcję'),
       rowKV('TP i SL w tej samej świecy', `${num(v.ambiguous_pct)}%`, 'kolejność nieznana → SL (B5)'),
       sw.nights_mean != null ? rowKV('Noce (swap pominięty)', `${num(sw.nights_mean, 1)} / transakcję`,
-        `${num(sw.overnight_pct, 0)}% transakcji przez 21:00 UTC; netto przy koszcie nocy 0,5 pipsa: ${signed(sw.x0_5)}, 1 pips: ${signed(sw.x1)} (O5, D-054)`) : null)));
+        `${num(sw.overnight_pct, 0)}% transakcji przez 21:00 UTC; netto przy koszcie nocy 0,5 pipsa: ${signed(sw.x0_5)}, 1 pips: ${signed(sw.x1)} (O5, D-054)`) : null,
+      corrRow(v.correlation, rowKV))));
   const fw = v.forward;
   if (fw) {   // D-056: forward test od zamrożenia — zamrożony wariant wobec oczekiwania sprzed zamrożenia
     const bs2 = fw.bootstrap || {};
@@ -274,6 +275,15 @@ function renderVerdict() {
   }
 }
 
+// D-075: korelacja tygodniowych wyników z innymi policzonymi strategiami (najbardziej skorelowane pierwsze)
+function corrRow(c, rowKV) {
+  if (!c) return null;
+  const o = [...(c.others || [])].sort((a, b) => Math.abs(b.corr) - Math.abs(a.corr)).slice(0, 6);
+  if (!o.length) return rowKV('Korelacja z innymi', '—', `brak innych strategii z ≥ ${c.min_weeks ?? 26} wspólnymi tygodniami`);
+  return rowKV('Korelacja z innymi', o.map((x) => `${x.name} ${x.corr >= 0 ? '+' : '−'}${Math.abs(x.corr).toFixed(2)}${x.frozen ? ' ❄' : ''}`).join(', '),
+    'tygodniowe sumy R; |r| < 0,3 = dobry składnik wspólnej księgi (D-075)');
+}
+
 function renderFilters() {
   const m = S.manifest, d = doc();
   const pairChip = (p) => h('button', { class: `chip toggle ${S.f.pairs.has(p) ? 'on' : ''}`, 'aria-pressed': S.f.pairs.has(p),
@@ -286,7 +296,7 @@ function renderFilters() {
       m.pairs.length > 1 ? h('button', { class: 'link small', onclick: () => { S.f.pairs = new Set(m.pairs); renderFilters(); renderVariant(); } }, 'wszystkie') : ''),
     h('div', { class: 'fgroup' }, h('span', { class: 'flabel' }, 'Kierunek'), seg('dir', [['all', 'oba'], ['long', 'long'], ['short', 'short']])),
     h('div', { class: 'fgroup' }, h('span', { class: 'flabel' }, 'Próba'), seg('sample', [['all', 'całość'], ['IS', 'IS'], ['OOS', 'OOS']])),
-    h('div', { class: 'fgroup' }, h('span', { class: 'flabel' }, 'Depozyt'), seg('sizing', sizing.map((s) => [s, `${s}%`]))),
+    h('div', { class: 'fgroup' }, h('span', { class: 'flabel' }, rulesFrom(m).sizingMode === 'risk' ? 'Ryzyko' : 'Depozyt'), seg('sizing', sizing.map((s) => [s, `${s}%`]))),
     d?.frozenAt ? h('label', { class: 'fgroup check' }, h('input', { type: 'checkbox', checked: S.f.forward, onchange: (e) => { S.f.forward = e.target.checked; renderVariant(); } }), 'tylko forward (od zamrożenia)') : '');
 }
 
@@ -364,8 +374,12 @@ function renderVariant() {
   const v = S.byId.get(S.selected);
   const t = filtered();
   const pctSz = +S.f.sizing;
-  $('#eq-title').textContent = `Kapitał od początku — ${v.exit} (${paramsLabel(v.params)}), depozyt ${pctSz}% × dźwignia 30:1`;
-  const curve = simulateEquity(t, pctSz);
+  const rules = rulesFrom(S.manifest);   // D-075: stawka od ryzyka, cel zmienności, limit walut, hamulec — jak w Pythonie
+  const rl = [rules.volTarget ? `cel zmienności ${rules.volTarget}%` : '', rules.maxCcy ? `max ${rules.maxCcy} na walutę` : '',
+    rules.brake ? `hamulec −${rules.brake[0]}% → ${rules.brake[1]} dni` : ''].filter(Boolean).join(', ');
+  $('#eq-title').textContent = `Kapitał od początku — ${v.exit} (${paramsLabel(v.params)}), `
+    + (rules.sizingMode === 'risk' ? `ryzyko ${pctSz}% kapitału do SL` : `depozyt ${pctSz}% × dźwignia 30:1`) + (rl ? ` · ${rl}` : '');
+  const curve = simulateEquity(t, pctSz, undefined, undefined, rules);
   const st = equityStats(curve);
   const sm = summarize(t);
   const k = (label, val, c = '') => h('div', { class: 'kpi' }, h('small', {}, label), h('b', { class: c }, val));
@@ -373,7 +387,7 @@ function renderVariant() {
     k('kapitał końcowy', st ? `${num(st.final, 0)} USD` : '—'), k('zwrot', st ? `${signed(st.returnPct, 1)}%` : '—', cls(st?.returnPct)),
     k('CAGR', st ? `${signed(st.cagrPct, 1)}%` : '—', cls(st?.cagrPct)), k('max obsunięcie', st ? `${num(st.maxDdPct, 1)}%` : '—', 'neg'),
     k('obsunięcie z otwartymi (MAE)', st ? `${num(st.maxDdMaePct, 1)}%` : '—', 'neg'),
-    k('Sharpe (dzienny)', st?.sharpe == null ? '—' : num(st.sharpe)), k('transakcje', `${num(curve.taken, 0)}${curve.skipped ? ` (+${curve.skipped} bez depozytu)` : ''}`),
+    k('Sharpe (dzienny)', st?.sharpe == null ? '—' : num(st.sharpe)), k('transakcje', `${num(curve.taken, 0)}${curve.skipped ? ` (+${curve.skipped} bez depozytu)` : ''}${curve.skippedCcy ? ` (+${curve.skippedCcy} limit walut)` : ''}${curve.skippedBrake ? ` (+${curve.skippedBrake} hamulec)` : ''}`),
     k('win rate', pct(sm.winRate)), k('śr. pips netto', signed(sm.expPips), cls(sm.expPips)), k('profit factor', num(sm.pf)));
   const marks = [{ ts: S.manifest.oos_cutoff, label: 'start OOS' }];
   const d = doc();

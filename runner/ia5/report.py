@@ -82,8 +82,10 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
          "kapitału; pipsy, R, ranking, DSR, PBO i benchmark losowy liczone są na pozycję, bez wag."
          if m.get("pyramid", 1) > 1 else "- Jedna pozycja na parę naraz (B8)."),
         _clean_line(m),
-        f"- Kapitał {START_CAPITAL:,.0f} USD, dźwignia {LEVERAGE}:1, depozyt na pozycję: "
+        f"- Kapitał {START_CAPITAL:,.0f} USD, dźwignia {LEVERAGE}:1, "
+        + ("ryzyko na pozycję (do SL, D-075): " if (m.get("rules") or {}).get("sizing_mode") == "risk" else "depozyt na pozycję: ")
         + ", ".join(f"{x:g}%" for x in m["sizing"]) + "; suma depozytów ≤ 100% kapitału.",
+        _rules_line(m.get("rules") or {}),
         "## Skala przeszukiwania",
         f"- **Przetestowane warianty: {n_var}** ({len(m['params'])} wejścia × {m['n_exits']} wyjść).",
         f"- Pominięte sygnały, średnio na wariant: {sk['B8'] / n_var:,.0f} (limit otwartych pozycji w parze), "
@@ -109,7 +111,8 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
         eq = pd.DataFrame([{"depozyt": f"{k}%", "kapitał końcowy": _f(e.get("final"), 0), "zwrot %": _f(e.get("return_pct"), 1),
                             "CAGR %": _f(e.get("cagr_pct"), 1), "max obsunięcie %": _f(e.get("max_dd_pct"), 1),
                             "obsunięcie z otwartymi (MAE) %": _f(e.get("max_dd_mae_pct"), 1),
-                            "Sharpe": _f(e.get("sharpe")), "pominięte (depozyt)": e.get("skipped_margin", 0)}
+                            "Sharpe": _f(e.get("sharpe")), "pominięte (depozyt)": e.get("skipped_margin", 0),
+                            "pominięte (limit walut)": e.get("skipped_ccy", 0), "pominięte (hamulec)": e.get("skipped_brake", 0)}
                            for k, e in v["equity"].items()])
         wf = v["walk_forward"]
         parts += [
@@ -133,6 +136,7 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
             + " pips/transakcję.",
             f"- TP i SL w tej samej świecy bez rozstrzygnięcia: {_f(v['ambiguous_pct'])}% transakcji.",
             _swap_line(v.get("swap") or {}),
+            _corr_lines(v.get("correlation")),
         ]
     fw = v.get("forward")
     if fw:
@@ -144,7 +148,8 @@ def write_report(out: Path, m: dict, variants: pd.DataFrame, trades: pd.DataFram
          if tf == "D1" else
          "- Dane: świece H1 Yahoo (jedno źródło, D-039) — historia od ok. 2 lat wstecz i rośnie; krótka historia = mało transakcji "
          "w OOS, a wyniki są wrażliwe na jeden reżim rynku. Yahoo nie podaje bid/ask ani wolumenu."),
-        f"- Brak swapów. Spread stały z tabeli. TP i SL w tej samej świecy {tf} — przyjmowany SL (brak danych wewnątrz świecy).",
+        f"- Swapy: tabela {m.get('swap_version') or 'brak'} (D-075; przy 0 — pominięte, O5). Spread stały z tabeli. "
+        f"TP i SL w tej samej świecy {tf} — przyjmowany SL (brak danych wewnątrz świecy).",
         "- Kapitał: zwrot liczony na nominale w walucie kwotowanej (dla EUR/GBP, EUR/JPY, USD/JPY, USD/CHF, USD/CAD "
         "przybliżenie — pomija zmianę kursu przeliczenia w trakcie transakcji).",
         "- Benchmark losowy nie stosuje reguły jednej pozycji na parę.",
@@ -255,6 +260,30 @@ def _swap_line(sw: dict) -> str:
     return (f"- **Noce (swap pominięty, O5)**: średnio {_f(sw.get('nights_mean'), 1)} nocy na transakcję, "
             f"{_f(sw.get('overnight_pct'), 0)}% transakcji przez 21:00 UTC; wynik netto przy koszcie nocy "
             f"0,5 pipsa: {_f(sw.get('x0_5'))}, 1 pips: {_f(sw.get('x1'))} pips/transakcję.")
+
+
+def _rules_line(r: dict) -> str:
+    """D-075: zasady portfela strategii (tylko symulacja kapitału — ranking i DSR na R, bez nowych prób)."""
+    bits = []
+    if r.get("vol_target"):
+        bits.append(f"cel zmienności {r['vol_target']:g}% rocznie (skala stawki 0,25–2× z ostatnich 60 dni)")
+    if r.get("max_ccy"):
+        bits.append(f"najwyżej {r['max_ccy']:g} pozycji w jedną stronę na walutę")
+    if r.get("brake"):
+        bits.append(f"hamulec: spadek {r['brake'][0]:g}% od szczytu → {r['brake'][1]:g} dni bez nowych wejść")
+    if not bits:
+        return "- Zasady portfela: bez limitu walut, hamulca i celu zmienności."
+    return "- Zasady portfela (D-075): " + "; ".join(bits) + "."
+
+
+def _corr_lines(c) -> str:
+    """D-075: korelacja tygodniowych wyników z innymi policzonymi strategiami."""
+    if not c or not c.get("others"):
+        return "- **Korelacja z innymi strategiami** (D-075): brak innych policzonych strategii do porównania."
+    rows = sorted(c["others"], key=lambda x: -abs(x["corr"]))[:8]
+    txt = ", ".join(f"{x['name']} {x['corr']:+.2f}{' (zamrożona)' if x.get('frozen') else ''}" for x in rows)
+    return (f"- **Korelacja z innymi strategiami** (D-075, tygodniowe sumy R najlepszego wariantu, min. {c.get('min_weeks')} "
+            f"wspólnych tygodni): {txt}. Niska (|r| < 0,3) = dobry składnik księgi.")
 
 
 def _clean_line(m: dict) -> str:

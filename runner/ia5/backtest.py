@@ -22,9 +22,9 @@ import numpy as np
 import pandas as pd
 
 from . import ENGINE_VERSION
-from .config import DEFAULT_SIZING
+from .config import DEFAULT_RISK_SIZING, DEFAULT_SIZING, SWAP_VERSION
 from .engine import Exit, default_exits, run, summarize
-from .portfolio import equity_stats, simulate_equity
+from .portfolio import equity_stats, rules_from, simulate_equity
 from .report import write_report
 from .sandbox import run_strategy_code
 from .validate import (
@@ -111,6 +111,10 @@ def trades_table(res: dict) -> pd.DataFrame:
         "r_net": t["r_net"].astype(np.float32), "mae": t["mae"].astype(np.float32), "mfe": t["mfe"].astype(np.float32),
         "bars": t["bars"].astype(np.int16), "nights": t["nights"].fillna(0).astype(np.int16),
         "ambiguous": t["ambiguous"].astype(bool),
+        # D-075: odległość do SL (stawka od ryzyka w karcie), swap z tabeli, częściowe TP
+        "risk_pips": t["risk_pips"].astype(np.float32),
+        "swap_pips": (t["swap_pips"] if "swap_pips" in t else pd.Series(0.0, index=t.index)).astype(np.float32),
+        "partial": (t["partial"] if "partial" in t else pd.Series(False, index=t.index)).fillna(False).astype(bool),
         "sample": t["sample"].astype(str), "weight": t["weight"].astype(np.float32), "entry_i": t["entry_i"].astype(np.int32),
     })
 
@@ -132,7 +136,7 @@ def clean(x):
 
 def validate_best(res: dict, variants: pd.DataFrame, trades: pd.DataFrame, exits: list[Exit], signals: dict,
                   h1: dict, sizing, log=print, hours=None, frozen_at: int | None = None,
-                  frozen_variant: int | None = None) -> dict:
+                  frozen_variant: int | None = None, rules: dict | None = None) -> dict:
     """Walidacja najlepszego wariantu IS. D-056: strategia zamrożona (W4) jest oceniana na ZAMROŻONYM wariancie —
     to on jest strategią, a nie ten, który po dopisaniu nowych świec akurat wyszedł na szczyt rankingu."""
     ranked = variants.dropna(subset=["rank_is"]).sort_values("rank_is")
@@ -170,9 +174,12 @@ def validate_best(res: dict, variants: pd.DataFrame, trades: pd.DataFrame, exits
     out["swap"] = swap_stress(bt)   # D-054: noce i koszt swapu, którego model nie liczy (O5)
     out["ambiguous_pct"] = float(bt["ambiguous"].mean() * 100)
     out["equity"] = {}
+    out["rules"] = rules or rules_from(None)   # D-075: zasady portfela użyte w symulacji kapitału
     for pct in sizing:
-        curve = simulate_equity(bt, pct)
-        out["equity"][str(pct)] = {**equity_stats(curve), "taken": curve["taken"], "skipped_margin": curve["skipped_margin"]}
+        curve = simulate_equity(bt, pct, rules=rules)
+        out["equity"][str(pct)] = {**equity_stats(curve), "taken": curve["taken"], "skipped_margin": curve["skipped_margin"],
+                                   "skipped_ccy": curve.get("skipped_ccy", 0), "skipped_brake": curve.get("skipped_brake", 0),
+                                   "capped": curve.get("capped", 0)}
     out["verdict"] = verdict(out)
     return out
 
@@ -251,7 +258,8 @@ def run_file(code: str, name: str, h1_dir: Path, out_root: Path, log=print,
                     lv[part["i"].to_numpy(int), 2] = part["bars"].to_numpy(float)
                 levels[(pid, pair)] = lv
     exits = exits_from(meta.get("exits"))
-    sizing = [float(x) for x in (meta.get("sizing") or DEFAULT_SIZING)]
+    rules = rules_from(meta)   # D-075
+    sizing = [float(x) for x in (meta.get("sizing") or (DEFAULT_RISK_SIZING if rules["sizing_mode"] == "risk" else DEFAULT_SIZING))]
     log(f"Silnik: {len(meta['params'])} wariant(y) wejścia × {len(exits)} wyjść × {len(h1)} par…")
     hours = meta.get("hours")  # D-034: None = okno z config (B11), False = bez okna, [od, do] = własne
     hours = tuple(hours) if isinstance(hours, list) else hours
@@ -262,10 +270,17 @@ def run_file(code: str, name: str, h1_dir: Path, out_root: Path, log=print,
     variants = variant_table(res)
     trades = trades_table(res)
     validation = validate_best(res, variants, trades, exits, signals, h1, sizing, log=log, hours=hours,
-                               frozen_at=frozen_at, frozen_variant=frozen_variant)
+                               frozen_at=frozen_at, frozen_variant=frozen_variant, rules=rules)
 
-    run_id = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     sid = strategy_id or name
+    if "best_variant_id" in validation:   # D-075: korelacja z innymi policzonymi strategiami (tylko informacja)
+        from .correlation import against_others
+
+        try:
+            validation["correlation"] = against_others(out_root, sid, trades[trades["variant_id"] == validation["best_variant_id"]])
+        except Exception as e:  # noqa: BLE001 — korelacja nigdy nie psuje liczenia
+            validation["correlation"] = {"error": str(e)[:200], "others": []}
+    run_id = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     out = out_root / sid / run_id
     (out / "candles").mkdir(parents=True, exist_ok=True)
 
@@ -295,7 +310,7 @@ def run_file(code: str, name: str, h1_dir: Path, out_root: Path, log=print,
         "d1_hash": data_hash(Path(d1_dir)) if (tf == "H1" and meta.get("d1_background") and d1_dir) else None,
         "candles": "pełne" if full_candles else f"wycinki ±{CANDLE_PAD} świec wokół transakcji {TOP_FOR_CANDLES} najlepszych wariantów",
         "pairs": sorted(h1), "params": meta["params"], "n_variants": res["n_variants"], "n_exits": len(exits),
-        "oos_cutoff": int(res["cutoff"]), "sizing": sizing, "pyramid": pyramid,
+        "oos_cutoff": int(res["cutoff"]), "sizing": sizing, "pyramid": pyramid, "rules": rules, "swap_version": SWAP_VERSION,
         "max_pairs": max_pairs, "pair_rank": pair_rank,
         "hours": ("D1: open dnia" if tf == "D1" else "bez okna" if hours is False
                   else (list(hours) if hours else "07–17 czasu polskiego (B11)")),

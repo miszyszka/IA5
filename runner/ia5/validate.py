@@ -15,7 +15,7 @@ from statistics import NormalDist
 import numpy as np
 import pandas as pd
 
-from .config import PAIRS, instrument
+from .config import PAIRS, instrument, swap_cost
 from .engine import Exit, data_cancel, simulate
 from .session import SWAP_STRESS_PIPS, in_trading_hours
 
@@ -74,7 +74,7 @@ def random_benchmark(preps: dict, trades: pd.DataFrame, ex: Exit, signals: dict 
             opp = signals.get(pair) if signals else None
             res = simulate(P, ent, ex, pair, opp=opp)
             if pct_cost is None:
-                net = np.array(res["pips_gross"] - spread, dtype=float)
+                net = np.array(res["pips_gross"] - spread, dtype=float) + swap_cost(np.full(len(d), pair), d, res["nights"])
             else:   # D-072: % ceny wejścia, koszt na obie strony (pips_gross w jednostkach ceny: pip = 1)
                 px = P["o"][e]
                 net = np.array((res["pips_gross"].to_numpy(float) * instrument(pair).pip - 2 * pct_cost * px) / px * 100, dtype=float)

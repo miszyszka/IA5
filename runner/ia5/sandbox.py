@@ -170,10 +170,55 @@ def read_settings(ns: dict) -> dict:
                 raise StrategyError("EXITS trail: sl > 0 (stop początkowy) i trail > 0 (odległość stopu kroczącego)")
             if ex.kind == "rsi_streak" and not (ex.run >= 1 and 50 < ex.level < 100):
                 raise StrategyError("EXITS rsi_streak: run ≥ 1 i level między 50 a 100 (np. 70)")
+            # D-075: opcje dla każdego wyjścia
+            if not (ex.be >= 0 and ex.tp1 >= 0):
+                raise StrategyError("EXITS: be (breakeven) i tp1 (częściowe TP) w × ATR, ≥ 0")
+            if ex.tp1 > 0 and not 0 < ex.part < 1:
+                raise StrategyError("EXITS: part (udział zamykany na tp1) między 0 a 1, np. 0.5")
+            if not isinstance(ex.stale, int) or isinstance(ex.stale, bool) or ex.stale < 0 or (ex.cap and ex.stale > ex.cap):
+                raise StrategyError("EXITS: stale = liczba świec (całkowita ≥ 0, nie większa niż cap) — stop czasowy bez zysku")
+            if not isinstance(ex.weekend, bool):
+                raise StrategyError("EXITS: weekend = True / False (zamknięcie przed weekendem)")
+    out.update(read_portfolio_rules(ns))
     if "levels" in ns and not callable(ns["levels"]):
         raise StrategyError("levels musi być funkcją levels(df, p, ind)")
     if "levels" in ns and not any(e.get("kind") == "level" for e in (ns.get("EXITS") or [])):
         raise StrategyError("Strategia ma levels(), ale żadne wyjście w EXITS nie jest rodzaju „level” — poziomy nie byłyby użyte")
+    return out
+
+
+def _num(x) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool)
+
+
+def read_portfolio_rules(ns: dict) -> dict:
+    """D-075: zasady portfela strategii — tylko w symulacji kapitału (ranking, DSR i PBO dalej na R, bez nowych prób).
+    SIZING_MODE = "risk": SIZING = % kapitału ryzykowany do SL (zamiast depozytu); VOL_TARGET = % rocznie;
+    MAX_CCY = najwięcej pozycji (suma wag) w jedną stronę na walutę; BRAKE = (spadek %, dni pauzy)."""
+    out: dict = {}
+    mode = ns.get("SIZING_MODE", "margin")
+    if mode not in ("margin", "risk"):
+        raise StrategyError("SIZING_MODE: \"margin\" (domyślnie — % kapitału jako depozyt, B4) albo \"risk\" (% kapitału ryzykowany do SL)")
+    out["sizing_mode"] = mode
+    if mode == "risk" and ns.get("SIZING") is not None:
+        s = ns["SIZING"]
+        if not isinstance(s, (list, tuple)) or not s or not all(_num(x) and 0 < x <= 5 for x in s):
+            raise StrategyError("SIZING przy SIZING_MODE = \"risk\": lista % ryzyka na transakcję, każde 0–5 (np. [0.25, 0.5, 1])")
+    if "VOL_TARGET" in ns and ns["VOL_TARGET"] is not None:
+        v = ns["VOL_TARGET"]
+        if not _num(v) or not 1 <= v <= 50:
+            raise StrategyError("VOL_TARGET: docelowa zmienność kapitału w % rocznie, 1–50 (np. 10)")
+        out["vol_target"] = float(v)
+    if "MAX_CCY" in ns and ns["MAX_CCY"] is not None:
+        v = ns["MAX_CCY"]
+        if not _num(v) or not 0.1 <= v <= 20:
+            raise StrategyError("MAX_CCY: najwięcej pozycji w jedną stronę na jedną walutę (suma wag), 0,1–20 (np. 2)")
+        out["max_ccy"] = float(v)
+    if "BRAKE" in ns and ns["BRAKE"] is not None:
+        b = ns["BRAKE"]
+        if not (isinstance(b, (list, tuple)) and len(b) == 2 and _num(b[0]) and _num(b[1]) and 0 < b[0] < 100 and 0 < b[1] <= 365):
+            raise StrategyError("BRAKE: (spadek %, dni pauzy), np. (10, 20) — po spadku 10% od szczytu 20 dni bez nowych wejść")
+        out["brake"] = [float(b[0]), float(b[1])]
     return out
 
 

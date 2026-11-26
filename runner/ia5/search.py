@@ -40,7 +40,7 @@ import pandas as pd
 from . import ENGINE_VERSION
 from . import indicators as ind
 from . import search_rules as R
-from .config import OOS_FRACTION, PAIRS
+from .config import OOS_FRACTION, PAIRS, swap_cost
 from .engine import Exit, data_cancel, find_entries, prepare, simulate
 from .session import in_trading_hours
 
@@ -193,6 +193,7 @@ def _outcomes(P: dict, F: dict, sig: np.ndarray, ex: Exit, pair: str, until: flo
     ok = ~np.isnan(xi)
     pip = PAIRS[pair]
     pn = res["pips_gross"].to_numpy(float) - pip.spread_pips
+    pn = pn + swap_cost(np.full(len(pn), pair), ent["dir"].to_numpy(), res["nights"].to_numpy(float))   # D-075 (domyślnie 0)
     rn = pn / res["risk_pips"].to_numpy(float)
     return {"i": ent["signal_i"].to_numpy()[ok], "d": ent["dir"].to_numpy().astype(int)[ok],
             "e": ent["entry_i"].to_numpy()[ok], "x": xi[ok], "ts": ent["entry_ts"].to_numpy()[ok],

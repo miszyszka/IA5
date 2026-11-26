@@ -180,6 +180,103 @@ def falling(x: pd.Series, n: int = 1) -> pd.Series:
     return x < x.shift(n)
 
 
+# ---------- D-075: wskaźniki reżimu, powrotu i wzorce świec ----------
+
+def roc(x: pd.Series, n: int = 10) -> pd.Series:
+    """Rate of change w %: (x[t] / x[t−n] − 1) × 100 (jak TA-Lib ROC)."""
+    return (x / x.shift(n) - 1.0) * 100.0
+
+
+def kama(x: pd.Series, n: int = 10, fast: int = 2, slow: int = 30) -> pd.Series:
+    """Kaufman Adaptive Moving Average jak TA-Lib KAMA: ER = |x[t] − x[t−n]| / Σ|Δx| z n świec,
+    sc = (ER·(2/(fast+1) − 2/(slow+1)) + 2/(slow+1))², KAMA[t] = KAMA[t−1] + sc·(x[t] − KAMA[t−1]); ziarno = x[n−1]."""
+    v = x.to_numpy(dtype=float)
+    out = np.full(len(v), np.nan)
+    if len(v) <= n:
+        return pd.Series(out, index=x.index)
+    f, s = 2.0 / (fast + 1), 2.0 / (slow + 1)
+    k = v[n - 1]
+    for t in range(n, len(v)):
+        noise = np.abs(np.diff(v[t - n:t + 1])).sum()
+        er = abs(v[t] - v[t - n]) / noise if noise != 0 else 1.0
+        sc = (er * (f - s) + s) ** 2
+        k = k + sc * (v[t] - k)
+        out[t] = k
+    return pd.Series(out, index=x.index)
+
+
+def efficiency_ratio(x: pd.Series, n: int = 10) -> pd.Series:
+    """Efficiency Ratio Kaufmana 0–1: |x[t] − x[t−n]| / Σ|x[k] − x[k−1]| z n ostatnich zmian.
+    Blisko 1 = czysty trend, blisko 0 = szarpanie w miejscu (filtr reżimu). Brak ruchu = 0."""
+    noise = x.diff().abs().rolling(n, min_periods=n).sum()
+    er = (x - x.shift(n)).abs() / noise
+    return er.where(noise != 0, 0.0).where(noise.notna())
+
+
+def ibs(df: pd.DataFrame) -> pd.Series:
+    """Internal Bar Strength 0–1: (close − low) / (high − low) — gdzie w zakresie świecy jest zamknięcie.
+    Blisko 0 = zamknięcie przy dołku (klasyczny sygnał powrotu na D1). Świeca bez zakresu = 0,5."""
+    rng = df["high"] - df["low"]
+    return ((df["close"] - df["low"]) / rng).where(rng > 0, 0.5)
+
+
+def keltner(df: pd.DataFrame, n: int = 20, k: float = 2.0, atr_n: int = 10) -> pd.DataFrame:
+    """Kanał Keltnera: środek = EMA(close, n), pasma = środek ± k × ATR(atr_n) (Wilder)."""
+    mid = ema(df["close"], n)
+    a = atr(df, atr_n)
+    return pd.DataFrame({"mid": mid, "upper": mid + k * a, "lower": mid - k * a}, index=df.index)
+
+
+def zscore(x: pd.Series, n: int = 20) -> pd.Series:
+    """Odległość od średniej w odchyleniach: (x − SMA(n)) / odchylenie standardowe z n świec (ddof = 0)."""
+    sd = x.rolling(n, min_periods=n).std(ddof=0)
+    return ((x - sma(x, n)) / sd).where(sd > 0)
+
+
+def pct_rank(x: pd.Series, n: int = 100) -> pd.Series:
+    """Percentyl bieżącej wartości w oknie n świec (włącznie z bieżącą), 0–100: odsetek wartości okna ≤ x[t].
+    Np. pct_rank(atr(df, 14), 250) > 80 = zmienność wysoka jak na ostatni rok."""
+    v = x.to_numpy(dtype=float)
+    out = np.full(len(v), np.nan)
+    if len(v) >= n:
+        win = np.lib.stride_tricks.sliding_window_view(v, n)
+        cur = win[:, -1:]
+        bad = np.isnan(win).any(axis=1)
+        out[n - 1:] = np.where(bad, np.nan, (win <= cur).sum(axis=1) / n * 100.0)
+    return pd.Series(out, index=x.index)
+
+
+def willr(df: pd.DataFrame, n: int = 14) -> pd.Series:
+    """Williams %R (−100…0) jak TA-Lib WILLR: −100 × (max high − close) / (max high − min low) z n świec."""
+    hh, ll = highest(df["high"], n), lowest(df["low"], n)
+    rng = hh - ll
+    return (-100.0 * (hh - df["close"]) / rng).where(rng != 0, 0.0).where(hh.notna())
+
+
+def cci(df: pd.DataFrame, n: int = 14) -> pd.Series:
+    """Commodity Channel Index jak TA-Lib CCI: (TP − SMA(TP)) / (0,015 × średnie odchylenie bezwzględne), TP = (H+L+C)/3."""
+    tp = ((df["high"] + df["low"] + df["close"]) / 3.0).to_numpy(float)
+    out = np.full(len(tp), np.nan)
+    if len(tp) >= n:
+        win = np.lib.stride_tricks.sliding_window_view(tp, n)
+        m = win.mean(axis=1)
+        md = np.abs(win - m[:, None]).mean(axis=1)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            out[n - 1:] = np.where(md > 0, (tp[n - 1:] - m) / (0.015 * md), 0.0)
+    return pd.Series(out, index=df.index)
+
+
+def inside_bar(df: pd.DataFrame) -> pd.Series:
+    """Świeca wewnętrzna: high < poprzedniego high i low > poprzedniego low (zawężenie przed ruchem)."""
+    return (df["high"] < df["high"].shift(1)) & (df["low"] > df["low"].shift(1))
+
+
+def narrowest(df: pd.DataFrame, n: int = 7) -> pd.Series:
+    """NR-n (np. NR7): zakres bieżącej świecy najmniejszy z ostatnich n (włącznie z bieżącą)."""
+    rng = df["high"] - df["low"]
+    return (rng <= rng.rolling(n, min_periods=n).min()) & rng.rolling(n, min_periods=n).min().notna()
+
+
 def hour(df: pd.DataFrame) -> pd.Series:
     """Godzina otwarcia świecy w UTC (0–23)."""
     return pd.Series(df.index.hour, index=df.index)

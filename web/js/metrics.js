@@ -39,33 +39,109 @@ export function tradeReturn(t) {
   return (t.pips_net * PAIRS[t.pair].pip) / t.entry_px;
 }
 
-/** Depozyt = pct% kapitału przy wejściu, nominał = dźwignia × depozyt, suma depozytów ≤ kapitał (B4). */
-export function simulateEquity(trades, pct, capital = START_CAPITAL, leverage = LEVERAGE) {
-  if (!trades.length) return { ts: [], equity: [], taken: 0, skipped: 0, final: capital };
+// D-075: cel zmienności — te same stałe co runner/ia5/portfolio.py
+const VOL_WINDOW_DAYS = 60, VOL_MIN_DAYS = 20, VOL_SCALE = [0.25, 2.0];
+
+/** Skala stawki z celu zmienności (jak portfolio.vol_scale): zmienność dziennych zmian kapitału z 60 dni przed dniem wejścia. */
+export function volScale(days, eqs, now, targetPct) {
+  if (!days.length) return 1;
+  const today = Math.floor(now / DAY), first = days[0];
+  if (today - first < VOL_MIN_DAYS) return 1;
+  const lo = Math.max(first, today - VOL_WINDOW_DAYS);
+  let j = 0;
+  { let a = 0, b = days.length; while (a < b) { const mid = (a + b) >> 1; if (days[mid] <= lo - 1) a = mid + 1; else b = mid; } j = a; }
+  let last = j > 0 ? eqs[j - 1] : null;
+  const vals = [];
+  for (let dd = lo - 1; dd < today; dd++) {
+    while (j < days.length && days[j] <= dd) { last = eqs[j]; j++; }
+    if (last != null) vals.push(last);
+  }
+  if (vals.length < 3) return 1;
+  const r = [];
+  for (let i = 1; i < vals.length; i++) r.push(vals[i] / vals[i - 1] - 1);
+  if (r.length < 2) return 1;
+  const mean = r.reduce((a, b) => a + b, 0) / r.length;
+  const sd = Math.sqrt(r.reduce((a, b) => a + (b - mean) ** 2, 0) / (r.length - 1));
+  if (!(sd > 0)) return 1;
+  return Math.min(VOL_SCALE[1], Math.max(VOL_SCALE[0], targetPct / 100 / (sd * Math.sqrt(365))));
+}
+
+/** Zasady portfela strategii z manifestu (D-075). */
+export function rulesFrom(manifest) {
+  const r = manifest?.rules || {};
+  return { sizingMode: r.sizing_mode || 'margin', volTarget: r.vol_target ?? null, maxCcy: r.max_ccy ?? null, brake: r.brake ?? null };
+}
+
+/** Depozyt = pct% kapitału przy wejściu, nominał = dźwignia × depozyt, suma depozytów ≤ kapitał (B4).
+ *  rules (D-075, jak portfolio.simulate_equity): sizingMode 'risk' (pct = % kapitału ryzykowany do SL), volTarget (% rocznie),
+ *  maxCcy (limit pozycji na walutę), brake [spadek %, dni]. */
+export function simulateEquity(trades, pct, capital = START_CAPITAL, leverage = LEVERAGE, rules = null) {
+  const R = rules || {};
+  const mode = R.sizingMode || 'margin', vt = R.volTarget, mcc = R.maxCcy, brake = R.brake;
+  if (!trades.length) return { ts: [], equity: [], taken: 0, skipped: 0, final: capital, skippedCcy: 0, skippedBrake: 0, capped: 0 };
   const ev = [];
   trades.forEach((t, k) => { ev.push([t.entry_ts, 1, k]); ev.push([t.exit_ts, 0, k]); });
   ev.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
-  let eq = capital, used = 0, skipped = 0;
+  let eq = capital, used = 0, skipped = 0, skippedCcy = 0, skippedBrake = 0, capped = 0;
   const open = new Map();
   const ts = [Math.min(...trades.map((t) => t.entry_ts))], equity = [capital];
   let peak = capital, worst = 0; // D-055: obsunięcie z otwartymi pozycjami w ich najgorszym punkcie (MAE)
   const maeRet = (t) => ((t.mae || 0) * PAIRS[t.pair].pip) / t.entry_px;
+  const expo = new Map();
+  let pauseUntil = -1, brakePeak = capital;
+  const eqDays = [], eqVals = [];
   for (const [time, kind, k] of ev) {
+    const t = trades[k];
     if (kind === 1) {
-      const m = ((eq * pct) / 100) * (trades[k].weight ?? 1); // D-034: waga pozycji mnoży depozyt
-      if (used + m > eq + 1e-9 || eq <= 0) { skipped++; continue; }
+      if (brake && time < pauseUntil) { skippedBrake++; continue; }
+      const scale = vt ? volScale(eqDays, eqVals, time, +vt) : 1;
+      const w = t.weight ?? 1;
+      let m;
+      if (mode === 'risk') {
+        const rr = (t.risk_pips * PAIRS[t.pair].pip) / t.entry_px;
+        m = rr > 0 ? (((eq * pct) / 100) * w * scale) / rr / leverage : ((eq * pct) / 100) * w * scale;
+      } else m = ((eq * pct) / 100) * w * scale; // D-034: waga pozycji mnoży depozyt
+      let b, q, sgn;
+      if (mcc) {
+        b = t.pair.slice(0, 3); q = t.pair.slice(3); sgn = (t.dir ?? 1) * w;
+        if (Math.abs((expo.get(b) || 0) + sgn) > mcc + 1e-9 || Math.abs((expo.get(q) || 0) - sgn) > mcc + 1e-9) { skippedCcy++; continue; }
+      }
+      if (eq <= 0) { skipped++; continue; }
+      if (used + m > eq + 1e-9) {
+        if (mode === 'risk' && eq - used > 1e-9) { m = eq - used; capped++; } else { skipped++; continue; }
+      }
       open.set(k, m); used += m;
+      if (mcc) { expo.set(b, (expo.get(b) || 0) + sgn); expo.set(q, (expo.get(q) || 0) - sgn); }
     } else if (open.has(k)) {
       const m = open.get(k); open.delete(k); used -= m;
-      eq += m * leverage * tradeReturn(trades[k]);
+      eq += m * leverage * tradeReturn(t);
       ts.push(time); equity.push(eq);
+      if (mcc) {
+        const b = t.pair.slice(0, 3), q = t.pair.slice(3), sgn = (t.dir ?? 1) * (t.weight ?? 1);
+        expo.set(b, (expo.get(b) || 0) - sgn); expo.set(q, (expo.get(q) || 0) + sgn);
+      }
+      if (vt) {
+        const dday = Math.floor(time / DAY);
+        if (eqDays.length && eqDays[eqDays.length - 1] === dday) eqVals[eqVals.length - 1] = eq;
+        else {
+          if (!eqDays.length) { eqDays.push(dday - 1); eqVals.push(capital); }
+          eqDays.push(dday); eqVals.push(eq);
+        }
+      }
+      if (brake) {
+        brakePeak = Math.max(brakePeak, eq);
+        if (brakePeak > 0 && ((brakePeak - eq) / brakePeak) * 100 >= +brake[0] - 1e-12) {
+          pauseUntil = time + Math.round(+brake[1] * DAY); brakePeak = eq;
+        }
+      }
     }
     peak = Math.max(peak, eq);
     let floor = eq;
-    for (const [j, m] of open) floor -= m * leverage * maeRet(trades[j]);
+    for (const [j, mm] of open) floor -= mm * leverage * maeRet(trades[j]);
     if (peak > 0) worst = Math.min(worst, (floor - peak) / peak);
   }
-  return { ts, equity, taken: trades.length - skipped, skipped, final: eq, maxDdMae: worst };
+  return { ts, equity, taken: trades.length - skipped - skippedCcy - skippedBrake, skipped, final: eq, maxDdMae: worst,
+    skippedCcy, skippedBrake, capped };
 }
 
 export function drawdown(equity) {

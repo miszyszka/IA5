@@ -14,6 +14,21 @@ test('kapitał = Python (runner/ia5/portfolio.py) dla każdego depozytu', () => 
   }
 });
 
+test('D-075: zasady portfela (ryzyko, cel zmienności, limit walut, hamulec) = Python', () => {
+  const fx = JSON.parse(readFileSync(process.env.IA5_EQUITY_FIXTURE, 'utf8'));
+  for (const e of fx.rules) {
+    const r = e.rules;
+    const c = simulateEquity(fx.trades, e.pct, 10000, 30, { sizingMode: r.sizing_mode, volTarget: r.vol_target, maxCcy: r.max_ccy, brake: r.brake });
+    const tag = JSON.stringify(r);
+    assert.ok(Math.abs(c.final - e.final) < 1e-6 * Math.max(1, Math.abs(e.final)), `${tag}: ${c.final} != ${e.final}`);
+    assert.equal(c.skipped, e.skipped, tag);
+    assert.equal(c.skippedCcy, e.skipped_ccy, tag);
+    assert.equal(c.skippedBrake, e.skipped_brake, tag);
+    assert.equal(c.capped, e.capped, tag);
+    assert.ok(Math.abs(c.maxDdMae - e.max_dd_mae) < 1e-9, tag);
+  }
+});
+
 test('filtry i podsumowanie', () => {
   const t = [{ pair: 'EURUSD', dir: 1, sample: 'IS', entry_ts: 1, pips_net: 10, r_net: 1 },
     { pair: 'USDJPY', dir: -1, sample: 'OOS', entry_ts: 2, pips_net: -5, r_net: -0.5 }];

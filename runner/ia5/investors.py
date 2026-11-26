@@ -28,10 +28,10 @@ import pandas as pd
 
 from . import ENGINE_VERSION
 from .backtest import exits_from
-from .config import LEVERAGE, PAIRS
+from .config import LEVERAGE, PAIRS, swap_cost
 from .engine import data_cancel, find_entries, no_overlap, prepare, simulate
 from .sandbox import StrategyError, run_probe, run_strategy_code
-from .session import in_trading_hours
+from .session import in_trading_hours, nights
 
 H = 3600
 PROBE_MOVES = [0.0, 0.25, -0.25, 0.5, -0.5, 0.75, -0.75, 1.0, -1.0]   # D-051: hipotetyczne zamknięcie, w ATR14 od ostatniej ceny
@@ -63,12 +63,19 @@ def paper_trades(P: dict, sig: np.ndarray, ex, pair: str, start: int, hours=None
     c = PAIRS[pair]
     px_last = float(P["c"][last])
     mark = (px_last - out["entry_px"].to_numpy()) * out["dir"].to_numpy() / c.pip
+    if getattr(ex, "tp1", 0) > 0:   # D-075: część zamknięta częściowym TP zostaje zyskiem, wycena tylko reszty
+        part = out["partial"].to_numpy(bool)
+        mark = np.where(part, out["part_pips"].to_numpy(float) + (1 - ex.part) * mark, mark)
     out["pips_gross"] = np.where(is_open, mark, out["pips_gross"].to_numpy(float))
     out["exit_px"] = np.where(is_open, px_last, out["exit_px"].to_numpy(float))
     out["exit_ts"] = np.where(is_open, np.nan, out["exit_ts"].to_numpy(float))
     out["bars"] = np.where(is_open, last - out["entry_i"].to_numpy() + 1, out["bars"].to_numpy(float))
     out["nights"] = np.where(is_open, np.nan, out["nights"].to_numpy(float))
     out["pips_net"] = out["pips_gross"] - c.spread_pips          # B3: spread jednorazowo, także przy wycenie
+    # D-075: swap z tabeli za noce (otwarta: noce do chwili wyceny) — przy domyślnej tabeli 0
+    n_sw = np.where(is_open, nights(out["entry_ts"].to_numpy(float), np.full(len(out), float(P["cts"][last]))),
+                    out["nights"].to_numpy(float))
+    out["pips_net"] = out["pips_net"] + swap_cost(np.full(len(out), pair), out["dir"].to_numpy(), n_sw)
     out["status"] = np.where(cancel, np.where(gap, "anulowana: przerwa w danych", "anulowana: świeca uzupełniona"),
                              np.where(is_open, "otwarta", "zamknięta"))
     out.loc[is_open, "reason"] = "wycena"
@@ -116,9 +123,31 @@ def pending_signals(P: dict, sig: np.ndarray, start: int, hours=None) -> list[di
     return [{"signal_ts": ts, "dir": int(np.sign(v)), "weight": abs(v)}]
 
 
-def book(trades: pd.DataFrame, capital: float, pct: float, leverage: float = LEVERAGE) -> dict:
+def merge_rules(rules: list[dict]) -> dict:
+    """D-075: zasady portfela kilku strategii inwestora na wspólnym kapitale — najostrzejsza z zadeklarowanych:
+    najmniejszy limit walut, najmniejszy cel zmienności, hamulec z najmniejszym progiem spadku.
+    SIZING_MODE = "risk" NIE działa u inwestora: jego % to zawsze depozyt (B4) — ustawienie Michała przy dodaniu."""
+    out: dict = {}
+    mc = [r["max_ccy"] for r in rules if r.get("max_ccy")]
+    vt = [r["vol_target"] for r in rules if r.get("vol_target")]
+    br = [r["brake"] for r in rules if r.get("brake")]
+    if mc:
+        out["max_ccy"] = min(mc)
+    if vt:
+        out["vol_target"] = min(vt)
+    if br:
+        out["brake"] = min(br, key=lambda b: (b[0], -b[1]))
+    return out
+
+
+def book(trades: pd.DataFrame, capital: float, pct: float, leverage: float = LEVERAGE, rules: dict | None = None) -> dict:
     """Wspólny kapitał inwestora (B4, 8.5): depozyt przy wejściu, suma depozytów ≤ kapitał, zysk przy wyjściu.
+    rules (D-075, merge_rules): limit walut, cel zmienności, hamulec — jak portfolio.simulate_equity.
     Zwraca transakcje z kwotami, krzywą kapitału i stan teraz (zrealizowany + wycena otwartych)."""
+    from .portfolio import DAY, vol_scale
+
+    rules = rules or {}
+    mcc, vt, brake = rules.get("max_ccy"), rules.get("vol_target"), rules.get("brake")
     t = trades.reset_index(drop=True).copy()
     for col in ("margin_usd", "nominal_usd", "pnl_usd", "equity_after"):
         t[col] = np.nan
@@ -138,15 +167,36 @@ def book(trades: pd.DataFrame, capital: float, pct: float, leverage: float = LEV
     eq, used, held = capital, 0.0, {}
     curve_ts, curve_eq = [], []
     skipped = 0
+    expo: dict[str, float] = {}
+    pause_until, brake_peak = -1, capital
+    eq_days: list[int] = []
+    eq_vals: list[float] = []
+    dirs = t["dir"].to_numpy(float) if "dir" in t else np.ones(len(t))
+
+    def ccy(k):
+        p_ = str(t.at[k, "pair"])
+        return p_[:3], p_[3:], dirs[k] * wts[k]
+
     for ts, kind, k in ev:
         if kind == 1:
-            m = eq * pct / 100 * wts[k]
+            if brake and ts < pause_until:
+                t.at[k, "status"] = "pominięta: hamulec konta"
+                continue
+            if mcc:
+                b, q, sg = ccy(k)
+                if abs(expo.get(b, 0.0) + sg) > mcc + 1e-9 or abs(expo.get(q, 0.0) - sg) > mcc + 1e-9:
+                    t.at[k, "status"] = "pominięta: limit na walutę"
+                    continue
+            m = eq * pct / 100 * wts[k] * (vol_scale(eq_days, eq_vals, ts, float(vt)) if vt else 1.0)
             if eq <= 0 or used + m > eq + 1e-9:
                 t.at[k, "status"] = "pominięta: brak wolnego depozytu"
                 skipped += 1
                 continue
             held[k] = m
             used += m
+            if mcc:
+                expo[b] = expo.get(b, 0.0) + sg
+                expo[q] = expo.get(q, 0.0) - sg
             t.at[k, "margin_usd"] = m
             t.at[k, "nominal_usd"] = m * leverage
         elif k in held:
@@ -158,6 +208,25 @@ def book(trades: pd.DataFrame, capital: float, pct: float, leverage: float = LEV
             t.at[k, "equity_after"] = eq
             curve_ts.append(ts)
             curve_eq.append(eq)
+            if mcc:
+                b, q, sg = ccy(k)
+                expo[b] = expo.get(b, 0.0) - sg
+                expo[q] = expo.get(q, 0.0) + sg
+            if vt:
+                dday = int(ts) // DAY
+                if eq_days and eq_days[-1] == dday:
+                    eq_vals[-1] = eq
+                else:
+                    if not eq_days:
+                        eq_days.append(dday - 1)
+                        eq_vals.append(capital)
+                    eq_days.append(dday)
+                    eq_vals.append(eq)
+            if brake:
+                brake_peak = max(brake_peak, eq)
+                if brake_peak > 0 and (brake_peak - eq) / brake_peak * 100 >= float(brake[0]) - 1e-12:
+                    pause_until = int(ts) + int(round(float(brake[1]) * DAY))
+                    brake_peak = eq
     unreal = 0.0
     for k, m in held.items():                       # pozostały tylko otwarte
         pnl = m * leverage * ret[k]
@@ -202,6 +271,7 @@ def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print, d1_dir: 
     d1_frames: dict = {}
     d1_preps: dict = {}
     frames, pending, strat_info, probes = [], [], [], []
+    all_rules: list[dict] = []   # D-075
     for k, s in enumerate(inv.get("strategies") or []):
         info = {"strategyId": s.get("strategyId"), "name": s.get("name"), "variantId": int(s.get("variantId", 0)),
                 "variantLabel": s.get("variantLabel"), "code_hash": hashlib.sha256((s.get("code") or "").encode()).hexdigest()[:16]}
@@ -221,6 +291,7 @@ def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print, d1_dir: 
             ex = exits[xid]
             tf = meta.get("timeframe", "H1")
             info.update({"params": meta["params"][pid], "exit": ex.label(), "timeframe": tf})
+            all_rules.append({k_: meta.get(k_) for k_ in ("max_ccy", "vol_target", "brake")})
             if tf == "D1":   # D-058: strategia na świecach dziennych
                 if not d1_frames:
                     d1_frames.update({f.stem: pd.read_parquet(f) for f in sorted(Path(d1_dir).glob("*.parquet"))})
@@ -271,7 +342,8 @@ def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print, d1_dir: 
     trades = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
     if not trades.empty:
         trades = trades.sort_values(["entry_ts", "strategy", "pair"], kind="stable").reset_index(drop=True)
-    b = book(trades, capital, pct)
+    inv_rules = merge_rules(all_rules)
+    b = book(trades, capital, pct, rules=inv_rules)
     t = b["trades"]
     now_eq = b["realized"] + b["unrealized"]
     curve_ts = [start] + b["curve"]["ts"] + ([data_to] if data_to > start else [])
@@ -314,7 +386,7 @@ def compute(inv: dict, h1_dir: Path, now: int | None = None, log=print, d1_dir: 
         si["pnl_usd"] = round(float(mine["pnl_usd"].fillna(0).sum()), 2) if not t.empty else 0.0
     st = t["status"] if not t.empty else pd.Series(dtype=str)
     return {
-        "id": inv["id"], "name": inv.get("name"), "capital": capital, "pct": pct, "leverage": LEVERAGE,
+        "id": inv["id"], "name": inv.get("name"), "capital": capital, "pct": pct, "leverage": LEVERAGE, "rules": inv_rules,
         "start": start, "computedAt": now, "dataTo": data_to, "engine_version": ENGINE_VERSION,
         "strategies": strat_info,
         "equity": {"now": round(float(now_eq), 2), "realized": round(float(b["realized"]), 2),

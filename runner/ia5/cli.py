@@ -1195,6 +1195,23 @@ def cmd_search(args) -> int:
     return 0
 
 
+def cmd_korelacja(args) -> int:
+    """D-075: macierz korelacji tygodniowych wyników wszystkich policzonych strategii (ostatni run każdej)."""
+    import pandas as pd
+
+    from .correlation import MIN_WEEKS, matrix
+
+    m = matrix(HOME / "results", int(args.tygodnie or MIN_WEEKS))
+    if m.empty:
+        print("Brak policzonych strategii w ~/.ia5/results.")
+        return 1
+    with pd.option_context("display.width", 200, "display.max_columns", 50, "display.float_format", "{:+.2f}".format):
+        print(m)
+    print(f"\nTygodniowe sumy R netto najlepszego (zamrożonego ❄) wariantu, min. {args.tygodnie or MIN_WEEKS} wspólnych tygodni. "
+          "|r| < 0,3 = dobry składnik wspólnej księgi.")
+    return 0
+
+
 def cmd_status(_args) -> int:
     print(f"IA5 runner · silnik {ENGINE_VERSION}")
     print("Pary:", ", ".join(PAIRS))
@@ -1248,6 +1265,9 @@ def main(argv=None) -> int:
     p_stk.add_argument("--sciezki", type=int, default=None, help="liczba losowych przesunięć (domyślnie 1000)")
     p_stk.set_defaults(func=cmd_stocks)
     sub.add_parser("live", help="jeden przebieg inwestorów i maili w GitHub Actions (D-052)").set_defaults(func=cmd_live)
+    p_kor = sub.add_parser("korelacja", help="macierz korelacji policzonych strategii — składanie księgi (D-075)")
+    p_kor.add_argument("--tygodnie", type=int, help="min. wspólnych tygodni (domyślnie 26)")
+    p_kor.set_defaults(func=cmd_korelacja)
     sub.add_parser("status").set_defaults(func=cmd_status)
     sub.add_parser("health", help="opisowy przegląd zdrowia danych i projektu").set_defaults(func=cmd_health)
     args = parser.parse_args(argv)
