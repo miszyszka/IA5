@@ -2,6 +2,10 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-26 — naprawa publikacji strony (Pages), CLAUDE.md 0.67
+
+- Wdrożenie strony padało: `deploy-pages` nie widział paczki z `upload-pages-artifact@v3` („No artifacts named github-pages”), także po ponowieniu. Workflow `pages.yml` przeszedł na `actions/upload-pages-artifact@v5`. Strona na żywo stała na wersji REV z tabelą — po tej poprawce pojawią się karty walut.
+
 ## 2026-11-25 — REV uproszczony do „Moje konto”, zakładka Stocks usunięta ze strony (D-074), CLAUDE.md 0.65
 
 **Zrobione (na prośbę Michała)**
