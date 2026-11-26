@@ -1,6 +1,6 @@
 # Raport strategii: Powrót
 
-Run `20261125-203518` · silnik 0.14.0 · kod `12864a1b4312df32` · dane `49017c6066ac224d`
+Run `20261126-032244` · silnik 0.14.0 · kod `12864a1b4312df32` · dane `73a7fff45fb145c1`
 
 ## Werdykt: 🟡 ŻÓŁTY — zaliczone 4 z 5 testów
 
@@ -24,7 +24,7 @@ na razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach 
 
 ## Dane i model wykonania
 
-- Pary: AUDUSD, EURGBP, EURJPY, EURUSD, GBPUSD, USDCAD, USDCHF, USDJPY; świece H1 od 2024-10-28 do 2026-11-25; źródło: yahoo; tło D1 (świece dzienne, cała historia Yahoo) w signals() — D-058.
+- Pary: AUDUSD, EURGBP, EURJPY, EURUSD, GBPUSD, USDCAD, USDCHF, USDJPY; świece H1 od 2024-10-28 do 2026-11-26; źródło: yahoo; tło D1 (świece dzienne, cała historia Yahoo) w signals() — D-058.
 
 - In-sample do 2026-05-20, out-of-sample (ostatnie 25%) od tej daty. Ranking i wybór wariantu tylko po IS. OOS tego okresu widziało już 3 wersji kodu strategii i 15 kandydatów eksploracji; ta strategia: 1 wersji.
 
@@ -34,7 +34,7 @@ na razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach 
 
 - Jedna pozycja na parę naraz (B8).
 
-- Świece H1 Yahoo po warstwie czyszczenia (D8, D-039): AUDUSD: odrzucone 0, uzupełnione 102 (luki ≤ 3 h), 3 przerw w danych (99 h); EURGBP: odrzucone 0, uzupełnione 101 (luki ≤ 3 h), 3 przerw w danych (98 h); EURJPY: odrzucone 0, uzupełnione 101 (luki ≤ 3 h), 3 przerw w danych (98 h); EURUSD: odrzucone 0, uzupełnione 103 (luki ≤ 3 h), 3 przerw w danych (98 h); GBPUSD: odrzucone 0, uzupełnione 102 (luki ≤ 3 h), 3 przerw w danych (98 h); USDCAD: odrzucone 0, uzupełnione 105 (luki ≤ 3 h), 3 przerw w danych (99 h); USDCHF: odrzucone 0, uzupełnione 104 (luki ≤ 3 h), 4 przerw w danych (98 h); USDJPY: odrzucone 0, uzupełnione 105 (luki ≤ 3 h), 3 przerw w danych (99 h). Transakcja nachodząca na przerwę w danych albo na świecę uzupełnioną jest anulowana; weekendy, święta i godziny, których brakuje we wszystkich parach, nie są przerwą (B12).
+- Świece H1 Yahoo po warstwie czyszczenia (D8, D-039): AUDUSD: odrzucone 0, uzupełnione 102 (luki ≤ 3 h), 3 przerw w danych (99 h); EURGBP: odrzucone 0, uzupełnione 101 (luki ≤ 3 h), 3 przerw w danych (98 h); EURJPY: odrzucone 0, uzupełnione 101 (luki ≤ 3 h), 3 przerw w danych (98 h); EURUSD: odrzucone 0, uzupełnione 104 (luki ≤ 3 h), 3 przerw w danych (98 h); GBPUSD: odrzucone 0, uzupełnione 102 (luki ≤ 3 h), 3 przerw w danych (98 h); USDCAD: odrzucone 0, uzupełnione 105 (luki ≤ 3 h), 3 przerw w danych (99 h); USDCHF: odrzucone 0, uzupełnione 104 (luki ≤ 3 h), 4 przerw w danych (98 h); USDJPY: odrzucone 0, uzupełnione 106 (luki ≤ 3 h), 3 przerw w danych (99 h). Transakcja nachodząca na przerwę w danych albo na świecę uzupełnioną jest anulowana; weekendy, święta i godziny, których brakuje we wszystkich parach, nie są przerwą (B12).
 
 - Kapitał 10,000 USD, dźwignia 30:1, depozyt na pozycję: 5%, 10%, 15%, 20%, 30%; suma depozytów ≤ 100% kapitału.
 
@@ -394,7 +394,7 @@ Dni = dni kalendarzowe od wejścia (open świecy) do wyjścia. Pozycja **OTWARTA
 
 ## Walidacja
 
-- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 10.63 pips/transakcję, percentyl **100.0** (losowe: 5%=-6.49, mediana=-1.80, 95%=2.94).
+- **Benchmark losowych wejść** (1000 losowań, te same pary, kierunki i wyjście): wynik 10.63 pips/transakcję, percentyl **100.0** (losowe: 5%=-6.34, mediana=-1.79, 95%=2.62).
 
 - **Deflated Sharpe Ratio**: 0.694 (Sharpe na transakcję 0.213, próg przy 5 próbach 0.160).
 
