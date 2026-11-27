@@ -1,10 +1,10 @@
 {
  "id": "wSKI1vQ0WgIVXq2m53BL",
  "name": "Powrót",
- "run_id": "20261126-190931",
+ "run_id": "20261127-022420",
  "engine_version": "0.15.0",
  "code_hash": "12864a1b4312df32",
- "data_hash": "e9cd4c18446167e5",
+ "data_hash": "7244be6545d91e87",
  "oos_views": {
   "strategy_versions": 1,
   "window_codes": 3,
@@ -13,7 +13,7 @@
  "data_source": "yahoo",
  "timeframe": "H1",
  "d1_background": true,
- "d1_hash": "15ac3b8adf1ac34a",
+ "d1_hash": "efd5b6ff90f34bd4",
  "execute": null,
  "entry_hour": null,
  "execute_skipped": null,
@@ -33,7 +33,7 @@
  ],
  "n_variants": 5,
  "n_exits": 5,
- "oos_cutoff": 1779305400,
+ "oos_cutoff": 1779321600,
  "sizing": [
   5.0,
   10.0,
@@ -53,7 +53,7 @@
  "pair_rank": null,
  "hours": "bez okna",
  "data_from": 1730073600,
- "data_to": 1795716000,
+ "data_to": 1795737600,
  "data_clean": {
   "AUDUSD": {
    "version": "6",
@@ -130,16 +130,16 @@
  },
  "skipped": {
   "B8": 169,
-  "brak_danych": 4,
+  "brak_danych": 0,
   "rozgrzewka": 0,
   "poza_godzinami": 0,
   "luka_danych": 25,
   "swieca_uzupelniona": 5
  },
  "hypothesis": "FX-POWRÓT v2 (pomysł z 20.10.2026, reguły z IA4 sekcja 7b). Po gwałtownym impulsie w górę (zamknięcie ≥ 2 × ATR100\nwyżej niż poprzednie) kurs często cofa się w stronę ceny sprzed impulsu. Pierwsza czerwona świeca w ciągu 3 świec\npo impulsie pokazuje, że kupujący się wyczerpali — short z celem w połowie drogi od szczytu do bazy, bez stopu,\nlimit 60 świec.\nRóżnice wobec oryginału (ograniczenia IA5): 8 par zamiast 10; warunek „open wejścia ≥ baza + 0,5 ATR” sprawdzany na\nzamknięciu świecy sygnału (open następnej nie jest znany w chwili sygnału); TP jako poziom ceny P − ½(P − B) silnik\nna razie nie obsługuje — wyjścia przybliżone przez TP w wielokrotnościach ATR14 (patrz EXITS).",
- "trades_rows": 1362,
- "created": 1795720171,
- "seconds": 4.1,
+ "trades_rows": 1366,
+ "created": 1795746260,
+ "seconds": 4.5,
  "verdict": "yellow",
  "frozen_at": 1794328953,
  "frozen_variant": 2
