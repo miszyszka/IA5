@@ -1,84 +1,84 @@
 {
  "files": {
   "candles_pln/AUD.parquet": {
-   "bars": 5502,
+   "bars": 5503,
    "first_day": "2005-07-19",
    "from": 1121727600,
-   "hash": "0e74b94c22e35e77",
-   "last_day": "2026-11-25",
-   "to": 1795564800
+   "hash": "25f37c06534aaa46",
+   "last_day": "2026-11-26",
+   "to": 1795651200
   },
   "candles_pln/CHF.parquet": {
-   "bars": 5789,
+   "bars": 5790,
    "first_day": "2004-08-03",
    "from": 1091487600,
-   "hash": "92aaf767da9b9415",
-   "last_day": "2026-11-25",
-   "to": 1795564800
+   "hash": "7c987fef34d93a7d",
+   "last_day": "2026-11-26",
+   "to": 1795651200
   },
   "candles_pln/DKK.parquet": {
-   "bars": 4358,
+   "bars": 4359,
    "first_day": "2010-03-03",
    "from": 1267574400,
-   "hash": "7984e7d626a75b84",
-   "last_day": "2026-11-25",
-   "to": 1795564800
+   "hash": "8c9ceb2bce6a1f76",
+   "last_day": "2026-11-26",
+   "to": 1795651200
   },
   "candles_pln/EUR.parquet": {
-   "bars": 6374,
+   "bars": 6375,
    "first_day": "2002-04-01",
    "from": 1017615600,
-   "hash": "2efdaf00f5254930",
-   "last_day": "2026-11-25",
-   "to": 1795564800
+   "hash": "505564a641a4293b",
+   "last_day": "2026-11-26",
+   "to": 1795651200
   },
   "candles_pln/GBP.parquet": {
-   "bars": 5962,
-   "first_day": "2003-12-01",
-   "from": 1070236800,
-   "hash": "0187ebc1eb8f1629",
-   "last_day": "2026-11-25",
-   "to": 1795564800
-  },
-  "candles_pln/HKD.parquet": {
-   "bars": 5542,
-   "first_day": "2005-07-13",
-   "from": 1121209200,
-   "hash": "68b9ebd74342db5b",
-   "last_day": "2026-11-25",
-   "to": 1795564800
-  },
-  "candles_pln/JPY.parquet": {
-   "bars": 5541,
-   "first_day": "2005-07-13",
-   "from": 1121209200,
-   "hash": "e446f11c4b82653e",
-   "last_day": "2026-11-25",
-   "to": 1795564800
-  },
-  "candles_pln/NZD.parquet": {
-   "bars": 5414,
-   "first_day": "2005-07-19",
-   "from": 1121727600,
-   "hash": "4248b2d56de8d3e8",
-   "last_day": "2026-11-25",
-   "to": 1795564800
-  },
-  "candles_pln/SGD.parquet": {
-   "bars": 5724,
-   "first_day": "2004-10-29",
-   "from": 1099004400,
-   "hash": "b53d19aa7ffaabfd",
-   "last_day": "2026-11-25",
-   "to": 1795564800
-  },
-  "candles_pln/USD.parquet": {
    "bars": 5963,
    "first_day": "2003-12-01",
    "from": 1070236800,
-   "hash": "78172db7988d8954",
-   "last_day": "2026-11-25",
-   "to": 1795564800
+   "hash": "1bd5a42e5927e667",
+   "last_day": "2026-11-26",
+   "to": 1795651200
+  },
+  "candles_pln/HKD.parquet": {
+   "bars": 5543,
+   "first_day": "2005-07-13",
+   "from": 1121209200,
+   "hash": "8a8c3c05b1936978",
+   "last_day": "2026-11-26",
+   "to": 1795651200
+  },
+  "candles_pln/JPY.parquet": {
+   "bars": 5542,
+   "first_day": "2005-07-13",
+   "from": 1121209200,
+   "hash": "501b3bfb6dc6cd4f",
+   "last_day": "2026-11-26",
+   "to": 1795651200
+  },
+  "candles_pln/NZD.parquet": {
+   "bars": 5415,
+   "first_day": "2005-07-19",
+   "from": 1121727600,
+   "hash": "bfc1ede156ead3b6",
+   "last_day": "2026-11-26",
+   "to": 1795651200
+  },
+  "candles_pln/SGD.parquet": {
+   "bars": 5725,
+   "first_day": "2004-10-29",
+   "from": 1099004400,
+   "hash": "f71c309714f961bf",
+   "last_day": "2026-11-26",
+   "to": 1795651200
+  },
+  "candles_pln/USD.parquet": {
+   "bars": 5964,
+   "first_day": "2003-12-01",
+   "from": 1070236800,
+   "hash": "cce459659efafc49",
+   "last_day": "2026-11-26",
+   "to": 1795651200
   }
  },
  "interval": "1d",
