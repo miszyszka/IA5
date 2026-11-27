@@ -13,10 +13,10 @@
    "to": 1767222000
   },
   "candles/AUDUSD/2026.parquet": {
-   "bars": 5530,
+   "bars": 5531,
    "from": 1767225600,
-   "hash": "54ed7bb5a635ef83",
-   "to": 1795788000
+   "hash": "a7964aa71c01ddac",
+   "to": 1795791600
   },
   "candles/EURGBP/2024.parquet": {
    "bars": 1108,
@@ -31,10 +31,10 @@
    "to": 1767222000
   },
   "candles/EURGBP/2026.parquet": {
-   "bars": 5519,
+   "bars": 5520,
    "from": 1767225600,
-   "hash": "4a0d82661086c752",
-   "to": 1795788000
+   "hash": "ea9f780519eba135",
+   "to": 1795791600
   },
   "candles/EURJPY/2024.parquet": {
    "bars": 1108,
@@ -49,10 +49,10 @@
    "to": 1767218400
   },
   "candles/EURJPY/2026.parquet": {
-   "bars": 5513,
+   "bars": 5514,
    "from": 1767229200,
-   "hash": "27c34430ca461c99",
-   "to": 1795788000
+   "hash": "189155b9a455cc4d",
+   "to": 1795791600
   },
   "candles/EURUSD/2024.parquet": {
    "bars": 1105,
@@ -67,10 +67,10 @@
    "to": 1767222000
   },
   "candles/EURUSD/2026.parquet": {
-   "bars": 5512,
+   "bars": 5513,
    "from": 1767225600,
-   "hash": "b4f32448f91ecd5e",
-   "to": 1795788000
+   "hash": "85a2cf3e19886626",
+   "to": 1795791600
   },
   "candles/GBPUSD/2024.parquet": {
    "bars": 1106,
@@ -85,10 +85,10 @@
    "to": 1767222000
   },
   "candles/GBPUSD/2026.parquet": {
-   "bars": 5514,
+   "bars": 5515,
    "from": 1767225600,
-   "hash": "9d0c825118904b31",
-   "to": 1795788000
+   "hash": "62e835abb689e3d8",
+   "to": 1795791600
   },
   "candles/USDCAD/2024.parquet": {
    "bars": 1117,
@@ -103,10 +103,10 @@
    "to": 1767222000
   },
   "candles/USDCAD/2026.parquet": {
-   "bars": 5528,
+   "bars": 5529,
    "from": 1767225600,
-   "hash": "1d84b428eb046a32",
-   "to": 1795788000
+   "hash": "c749038b41365163",
+   "to": 1795791600
   },
   "candles/USDCHF/2024.parquet": {
    "bars": 1102,
@@ -121,10 +121,10 @@
    "to": 1767214800
   },
   "candles/USDCHF/2026.parquet": {
-   "bars": 5488,
+   "bars": 5489,
    "from": 1767229200,
-   "hash": "a6c5b4299fae0df8",
-   "to": 1795788000
+   "hash": "4561dfa6511bad54",
+   "to": 1795791600
   },
   "candles/USDJPY/2024.parquet": {
    "bars": 1101,
@@ -139,10 +139,10 @@
    "to": 1767214800
   },
   "candles/USDJPY/2026.parquet": {
-   "bars": 5482,
+   "bars": 5483,
    "from": 1767290400,
-   "hash": "520850cd72c9523a",
-   "to": 1795788000
+   "hash": "79ebceff929bee02",
+   "to": 1795791600
   }
  },
  "source": "yahoo"
