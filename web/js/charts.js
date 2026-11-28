@@ -261,3 +261,24 @@ export function candles(el, bars, trades) {
   if (last) show(last); else ch.timeScale().fitContent();
   return { shown, hidden, focus, show, remove: () => { instances.delete(ch); ch.remove(); } };
 }
+
+/** D-076: prognoza zasięgu 3 dni (mediana i pasmo 80%) obok zrealizowanego zasięgu, w pipsach. */
+export function rangeBand(el, hist) {
+  const b = base();
+  const ax = b.axisDefaults;
+  const pts = (k) => hist.ts.map((t, i) => [t * 1000, hist[k][i]]);
+  return chart(el, {
+    ...b,
+    grid: { left: 56, right: 16, top: 32, bottom: 36 },
+    legend: { top: 0, textStyle: { color: ax.axisLabel.color } },
+    tooltip: { ...b.tooltip, trigger: 'axis', valueFormatter: (v) => (v == null ? '—' : `${Math.round(v)} pips`) },
+    xAxis: { type: 'time', ...ax, splitLine: { show: false }, axisLabel: { ...ax.axisLabel, formatter: (v) => fmtDate(v).slice(5) } },
+    yAxis: { type: 'value', scale: true, ...ax, name: 'pips', nameTextStyle: { color: ax.axisLabel.color } },
+    series: [
+      { name: 'pasmo 80% (dół)', type: 'line', showSymbol: false, data: pts('low'), lineStyle: { color: css('--dim'), width: 1, type: 'dashed' }, itemStyle: { color: css('--dim') } },
+      { name: 'prognoza (mediana)', type: 'line', showSymbol: false, data: pts('mid'), lineStyle: { color: css('--muted'), width: 1.5 }, itemStyle: { color: css('--muted') } },
+      { name: 'pasmo 80% (góra)', type: 'line', showSymbol: false, data: pts('high'), lineStyle: { color: css('--dim'), width: 1, type: 'dashed' }, itemStyle: { color: css('--dim') } },
+      { name: 'zrealizowany zasięg', type: 'line', showSymbol: false, data: pts('real'), lineStyle: { color: css('--text'), width: 1.75 }, itemStyle: { color: css('--text') } },
+    ],
+  });
+}

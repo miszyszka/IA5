@@ -1,6 +1,6 @@
 # ROADMAP — jak IA5 ma się dalej rozwijać
 
-Wersja 0.5 · 2026-11-26 · Spisane po przeglądzie całego projektu (D-054–D-058); REV (D-063); FOREST usunięty, Stocks (D-071); eksploracja Maca i OOS na akcjach (D-072); narzędzia do strategii o małych spadkach (D-075). Aktualizować, gdy zmienia się kierunek.
+Wersja 0.6 · 2026-11-28 · Spisane po przeglądzie całego projektu (D-054–D-058); REV (D-063); FOREST usunięty, Stocks (D-071); eksploracja Maca i OOS na akcjach (D-072); narzędzia do strategii o małych spadkach (D-075); zakładka Zasięg (D-076). Aktualizować, gdy zmienia się kierunek.
 
 ## Zasada nadrzędna
 
@@ -78,6 +78,11 @@ Portfel spółek Michała rebalansowany co wtorek na otwarciu, w paśmie ±20% u
 - Narzędzia: `SIZING_MODE = "risk"`, `VOL_TARGET`, `MAX_CCY`, `BRAKE` (portfel), opcje wyjść `be` / `stale` / `weekend` / `tp1`, wskaźniki reżimu (`efficiency_ratio`, `pct_rank`, `kama`, `ibs`…), `ind.strength` (siła walut ze wszystkich par), `TIMEFRAME = "W1"`, `EXECUTE = "H1"`, korelacja strategii.
 - Kolejność pracy: (1) `ksiega_v2.py` na Macu — porównać cfg 0 / 1 / 2 i korelację z `d1_skladana`; (2) jeśli trend obniża korelację i spadek — zamrozić cfg 0, inwestor; (3) nowa przewaga przekrojowa (`ind.strength`, momentum 3–12 miesięcy na W1) jako osobna strategia, potem do księgi tylko przy |r| < 0,3.
 - Nie stroić zasad portfela pod OOS — ustawić z góry (jak w przykładzie) i oceniać forwardem.
+
+## Zasięg (D-076) — prognoza zmienności zamiast kierunku
+
+- Zakładka pokazuje prognozę zasięgu 1/3/5 dni i poziomy wybicia z ściśnięcia (TP = 3 × SL). Najpierw backtest `zasieg_wybicie.py` (tp 2/3/4) — dopiero wynik mówi, czy reguła zarabia.
+- Następne kroki, jeśli prognoza na prawdziwych danych okaże się wyraźnie lepsza od naiwnej: prognoza zasięgu jako filtr dla innych strategii (np. `ksiega_v2` tylko przy „spokojniej niż zwykle”), stawka odwrotnie do prognozy (`VOL_TARGET` z prognozy zamiast z przeszłości), wybicia z ściśnięcia na D1 (20 lat historii zamiast 2).
 
 ## Czego NIE robić (świadomie)
 

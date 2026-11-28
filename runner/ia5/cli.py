@@ -437,6 +437,7 @@ def cmd_start(_args) -> int:
     beat_now()
     enqueue_frozen(jobs, owner)
     jobs.put((REV_JOB, None))                                      # D-063: badanie REV przy pierwszym starcie, potem portfel
+    jobs.put((ZASIEG_JOB, None))                                   # D-076: prognoza zasięgu i poziomy wybicia
     jobs.put((STOCKS_JOB, False))                                  # D-071: backtest Stocks przy pierwszym starcie, potem portfel
     enqueue_explore_backlog(jobs, owner)                           # D-072: eksploracja strategii policzonych bez niej
     log("Połączony. Czekam na strategie (Ctrl+C kończy).")
@@ -460,6 +461,7 @@ def cmd_start(_args) -> int:
                     last_forward = time.time()
                 queue_investors()                                  # nowe świece → paper trading inwestorów (D-045)
                 jobs.put((REV_JOB, None))                          # nowe kursy PLN → REV (D-063)
+                jobs.put((ZASIEG_JOB, None))                       # nowe świece → zakładka Zasięg (D-076)
                 jobs.put((STOCKS_JOB, False))                      # nowe świece spółek → portfel Stocks (D-071)
             continue
         if sid == INVESTORS_JOB:
@@ -468,6 +470,9 @@ def cmd_start(_args) -> int:
             continue
         if sid == REV_JOB:
             handle_rev(state)
+            continue
+        if sid == ZASIEG_JOB:
+            handle_zasieg()
             continue
         if sid == STOCKS_JOB:
             handle_stocks(state, bool(data))
@@ -517,6 +522,7 @@ FORWARD_SECONDS = 6 * 3600   # W4: forward test zamrożonych strategii
 INVESTORS_JOB = "__inwestorzy__"
 EXPLORE_JOB = "__eksploracja__"
 REV_JOB = "__rev__"
+ZASIEG_JOB = "__zasieg__"   # D-076: zakładka Zasięg
 STOCKS_JOB = "__stocks__"
 SYNC_OFFSET = 300            # kopia świec 5 min po pełnej godzinie
 
@@ -807,6 +813,7 @@ def cmd_live(_args) -> None:
         ready.build_pln(pln, PLN_READY, tz=pln_tz, log=log)
     handle_investors(cloud.list_investors(), config().get("owner_uid"), {}, source="actions")
     handle_rev({}, source="actions")    # D-063: portfel REV (wtorek 08:00, wycena dzienna)
+    handle_zasieg(source="actions")     # D-076: zakładka Zasięg
     from . import stk_run
     from .store import YAHOO_STK
 
@@ -937,6 +944,36 @@ def handle_rev(state: dict, source: str = "mac") -> None:
         if source == "mac":
             state["now"], state["job"] = "idle", None
             beat("idle")
+
+
+def handle_zasieg(source: str = "mac") -> None:
+    """D-076: zakładka Zasięg — prognoza zasięgu 1/3/5 dni, ściśnięcie H1, poziomy wybicia, sygnały reguły z 7 dni →
+    range/state.json na gałęzi data. Normalnie co godzinę w GitHub Actions; Mac tylko, gdy Actions nie działało od 2 h.
+    Błąd nie zatrzymuje programu (na Macu); poprzedni stan na gałęzi data zostaje."""
+    from . import publish, zasieg
+    from .store import D1_READY, DATA_REPO, READY
+
+    now = int(time.time())
+    try:
+        publish.ensure_repo()
+        if source == "mac" and cloud_active(DATA_REPO, now):
+            log("Zasięg: liczy GitHub Actions — Mac pomija.")
+            return
+        h1, d1 = zasieg.load_ready(READY), zasieg.load_ready(D1_READY)
+        if not d1:
+            log("Zasięg: brak świec dziennych (data/d1_ready) — najpierw backfillD1 w Apps Script i ia5 start.")
+            return
+        st = zasieg.compute_state(h1, d1, now)
+        st["source"] = source
+        armed = [p for p, x in st["pairs"].items() if (x.get("box") or {}).get("armed")]
+        q = st.get("quality") or {}
+        log(f"Zasięg: {len(st['pairs'])} par, ściśnięte i gotowe do wybicia: {', '.join(armed) or 'żadna'}"
+            + (f"; model lepszy od naiwnego o {q['better_pct']:.0f}%, pasmo 80% trafia {q['band80']:.0f}%" if q else ""))
+        publish.publish_files("range", "Zasięg", {"state.json": zasieg.to_json(st)}, log=log)
+    except Exception as e:  # noqa: BLE001 — błąd zakładki nie może zatrzymać programu
+        log(f"Zasięg: błąd — {type(e).__name__}: {e}")
+        if source != "mac":
+            raise
 
 
 def handle_stocks(state: dict, want_research: bool, source: str = "mac") -> None:

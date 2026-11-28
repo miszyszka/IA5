@@ -2,6 +2,22 @@
 
 Aktualizowany na koniec każdej sesji (zasada G5 w `CLAUDE.md`).
 
+## 2026-11-28 — zakładka Zasięg: prognoza zasięgu ruchu i wybicia z ściśnięcia (D-076), CLAUDE.md 0.69, STRATEGIE.md 0.53
+
+**Zrobione (na prośbę Michała: „zakładka, która pokazuje przewidywany zakres ruchu… sygnały wybicia po konwergencjach z TP 3 × SL”)**
+- `ind.range_forecast` (model HAR na dziennych zakresach, pasmo 80%, bez look-ahead), `ind.realized_range` (tylko do pomiaru), `ind.squeeze` (pudełko 24 h, percentyl wysokości).
+- Strategia `strategies/examples/zasieg_wybicie.py` — wybicie z ściśnięcia na H1, SL za drugą stroną pudełka (albo w połowie, gdy cel byłby za daleko), TP = 2 / 3 / 4 × SL, wejście tylko gdy cel mieści się w prognozie 3 dni; 3 warianty; kontrola OK.
+- `runner/ia5/zasieg.py` + `handle_zasieg` — co godzinę w Actions (`ia5 live`), Mac zapasowo → `range/state.json`.
+- Zakładka **Zasięg**: karty par (zasięg 1/3/5 dni, ściśnięcie, poziomy wybicia), wykres prognozy wobec rzeczywistości, sygnały z 7 dni z wynikiem; sprawdzona w przeglądarce na danych syntetycznych.
+- Testy: `test_range_d076.py`, `test_zasieg_d076.py` (reguła zakładki = kod strategii), `tests/web/zasieg.test.mjs`.
+
+**Do zrobienia przez Michała**
+1. Nic na Macu nie jest konieczne — zakładkę policzy GitHub Actions po najbliższej pełnej godzinie (przy rynku otwartym). Mac: `git pull`, `uv tool install -e runner --force`, restart `ia5 start` — dla zapasu i dla strategii.
+2. Wkleić `strategies/examples/zasieg_wybicie.py` w dashboard — backtest pokaże, czy wybicia z TP 3 × SL zarabiają po kosztach (porównaj tp = 2 / 3 / 4).
+3. Jeśli wynik będzie 🟢/🟡 — zamrozić wariant i dodać inwestora (maile z sygnałami).
+
+**Znane ograniczenia:** na danych syntetycznych (stała zmienność) model jest tylko ~2% lepszy od naiwnego — na prawdziwych kursach (zmienność skupia się w czasie) powinien być wyraźnie lepszy; liczba na stronie to pokaże. H1 ma ~2 lata historii.
+
 ## 2026-11-26 — narzędzia do strategii o małych spadkach, silnik 0.15.0 (D-075), CLAUDE.md 0.68, STRATEGIE.md 0.52
 
 **Zrobione (na prośbę Michała: „czego brakuje… zrób całość i odpowiednio udokumentuj”)** — wszystko opcjonalne; strategia bez nowych ustawień liczy się jak dotąd.

@@ -293,6 +293,92 @@ def session(df: pd.DataFrame) -> pd.Series:
     return pd.Series(np.select([h < 7, h < 13, h < 21], ["azja", "europa", "usa"], "poza"), index=df.index)
 
 
+# ---------- D-076: prognoza zasięgu ruchu (zakładka Zasięg) i ściśnięcie ----------
+
+RANGE_MIN_ROWS = 250      # tyle zrealizowanych dni historii, zanim model zacznie prognozować
+RANGE_Z80 = 1.2815515655446004   # kwantyl 90% rozkładu normalnego → pasmo 80%
+
+
+def _range_features(d: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    """Cechy HAR na dziennych zakresach (high − low): log(zakres dnia / śr. 20 dni), log(śr. 5 / śr. 20), log(śr. 60 / śr. 20)
+    + stała. Zwraca (X [n×4], m20)."""
+    dr = (d["high"] - d["low"]).astype(float).where(lambda s: s > 0)
+    m5, m20, m60 = (dr.rolling(k, min_periods=k).mean() for k in (5, 20, 60))
+    x = np.column_stack([np.ones(len(d)), np.log(dr / m20), np.log(m5 / m20), np.log(m60 / m20)])
+    return x, m20.to_numpy(float)
+
+
+def range_forecast(d: pd.DataFrame, h: int = 3) -> pd.DataFrame:
+    """Prognoza zasięgu ruchu (max high − min low) na h NASTĘPNYCH świec, liczona na zamknięciu bieżącej (D-076).
+
+    Model HAR (Corsi 2009) na dziennych zakresach: log(zasięg_h ÷ (h × śr. zakres 20)) = β·[1, log dzień/20, log 5/20, log 60/20].
+    Współczynniki z regresji na CAŁEJ dotychczasowej historii tej pary, ale tylko z dni, których zasięg już się zrealizował
+    (s + h ≤ t) — bez look-ahead, prognoza na t nie zmienia się po dopisaniu przyszłych świec. Pasmo 80% z odchylenia reszt
+    (rozkład log-normalny). Kolumny (w jednostkach ceny): mid (mediana), low, high (pasmo 80%), base (h × śr. zakres 20 —
+    naiwna prognoza „jak ATR”), ratio = mid ÷ base (> 1: oczekiwany większy ruch niż zwykle). Pierwsze RANGE_MIN_ROWS
+    dni = NaN. Do strategii H1: ind.d1_to_h1(df, ind.range_forecast(ind.d1(df), 3)).
+    """
+    n = len(d)
+    x, m20 = _range_features(d)
+    hi, lo = d["high"].to_numpy(float), d["low"].to_numpy(float)
+    fut = np.full(n, np.nan)
+    if n > h:
+        win_hi = np.lib.stride_tricks.sliding_window_view(hi, h).max(axis=1)   # okno [s, s+h−1]
+        win_lo = np.lib.stride_tricks.sliding_window_view(lo, h).min(axis=1)
+        fut[:n - h] = (win_hi - win_lo)[1:]                                      # okno [s+1, s+h]
+    base = h * m20
+    with np.errstate(divide="ignore", invalid="ignore"):
+        y = np.log(fut / base)
+    ok = np.isfinite(y) & np.isfinite(x).all(axis=1)
+    xz = np.where(ok[:, None], x, 0.0)
+    yz = np.where(ok, y, 0.0)
+    xx = np.cumsum(xz[:, :, None] * xz[:, None, :], axis=0)
+    xy = np.cumsum(xz * yz[:, None], axis=0)
+    yy = np.cumsum(yz * yz)
+    cnt = np.cumsum(ok)
+    out = {k: np.full(n, np.nan) for k in ("mid", "low", "high")}
+    t = np.arange(n)
+    src = t - h                                      # ostatni dzień, którego zasięg zrealizował się najpóźniej na zamknięciu t
+    use = (src >= 0) & np.isfinite(x).all(axis=1) & np.isfinite(base)
+    use[use] &= cnt[src[use]] >= RANGE_MIN_ROWS
+    if use.any():
+        s = src[use]
+        A = xx[s] + 1e-9 * np.eye(4)[None]
+        b = xy[s]
+        beta = np.linalg.solve(A, b[:, :, None])[:, :, 0]
+        sse = yy[s] - 2 * np.einsum("ij,ij->i", beta, b) + np.einsum("ij,ijk,ik->i", beta, xx[s], beta)
+        sig = np.sqrt(np.maximum(sse, 0) / np.maximum(cnt[s] - 4, 1))
+        yhat = np.einsum("ij,ij->i", beta, x[use])
+        bu = base[use]
+        out["mid"][use] = bu * np.exp(yhat)
+        out["low"][use] = bu * np.exp(yhat - RANGE_Z80 * sig)
+        out["high"][use] = bu * np.exp(yhat + RANGE_Z80 * sig)
+    res = pd.DataFrame(out, index=d.index)
+    res["base"] = base
+    res["ratio"] = res["mid"] / res["base"]
+    return res
+
+
+def realized_range(d: pd.DataFrame, h: int = 3) -> pd.Series:
+    """Zrealizowany zasięg (max high − min low) h NASTĘPNYCH świec — do oceny prognozy (patrzy w przyszłość: NIE do sygnałów)."""
+    hi, lo = d["high"].to_numpy(float), d["low"].to_numpy(float)
+    n = len(d)
+    out = np.full(n, np.nan)
+    if n > h:
+        out[:n - h] = (np.lib.stride_tricks.sliding_window_view(hi, h).max(axis=1)
+                       - np.lib.stride_tricks.sliding_window_view(lo, h).min(axis=1))[1:]
+    return pd.Series(out, index=d.index)
+
+
+def squeeze(df: pd.DataFrame, n: int = 24, ref: int = 500) -> pd.DataFrame:
+    """Ściśnięcie (konwergencja, D-076): pudełko z n ostatnich świec (włącznie z bieżącą) — upper = max high, lower = min low,
+    height = upper − lower; pct = percentyl wysokości pudełka wśród ostatnich `ref` świec (0–100; ≤ 20 = wyjątkowo wąsko).
+    Wybicie z pudełka sprzed świecy: close > upper.shift(1) albo close < lower.shift(1)."""
+    up, lo = highest(df["high"], n), lowest(df["low"], n)
+    hgt = up - lo
+    return pd.DataFrame({"upper": up, "lower": lo, "height": hgt, "pct": pct_rank(hgt, ref)}, index=df.index)
+
+
 # ---------- D-075: wszystkie pary naraz — siła walut, ceny innych par ----------
 
 _PAIRS: dict[int, dict] = {}
