@@ -1,6 +1,38 @@
 {
  "strategies": [
   {
+   "id": "100m48OCHrKOBBln7aHa",
+   "name": "zasięg wybicie",
+   "run_id": "20261128-085035",
+   "created": 1795855835,
+   "verdict": "red",
+   "verdict_note": "brak przewagi",
+   "n_variants": 3,
+   "hypothesis": "Wybicie z ściśnięcia z celem dopasowanym do prognozy zasięgu (D-076, zakładka Zasięg).\nKierunku nie przewidujemy — przewidujemy, JAK DALEKO rynek może dojść: zmienność skupia się w czasie i wraca do średniej,\nwięc zasięg najbliższych 3 dni da się prognozować (model HAR na dziennych zakresach, ind.range_forecast). Gdy na H1 rynek\nstoi w wąskim pudełku z 24 godzin (wysokość w dolnych 20% z ostatnich 500 godzin), zlecenia stoją po obu stronach i to\nwybicie wybiera kierunek: zamknięcie godziny nad pudełkiem = long, pod nim = short. Stop za drugą stroną pudełka\n(gdy cel byłby wtedy nieosiągalny — w połowie pudełka), cel = 2 / 3 / 4 × stop. Wejście tylko wtedy, gdy cel mieści się\nw prognozowanym zasięgu 3 dni — inaczej TP 3 × SL i tak zwykle by nie padł. Płatnik: uczestnicy, których stopy i zlecenia\nstoją tuż za granicą konsolidacji, a po wybiciu muszą gonić cenę.",
+   "pairs": [
+    "AUDUSD",
+    "EURGBP",
+    "EURJPY",
+    "EURUSD",
+    "GBPUSD",
+    "USDCAD",
+    "USDCHF",
+    "USDJPY"
+   ],
+   "data_from": 1730073600,
+   "data_to": 1795816800,
+   "source": "yahoo",
+   "engine_version": "0.15.0",
+   "best_exit": "poziomy TP/SL ze strategii, max 72",
+   "is_mean_r": 0.005912,
+   "oos_mean_r": 0.088266,
+   "oos_mean_pips": -0.061515,
+   "oos_trades": 118,
+   "demo": false,
+   "timeframe": "H1",
+   "d1_background": true
+  },
+  {
    "id": "wSKI1vQ0WgIVXq2m53BL",
    "name": "Powrót",
    "run_id": "20261128-084954",
