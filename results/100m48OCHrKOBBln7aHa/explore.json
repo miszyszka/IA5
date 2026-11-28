@@ -1,0 +1,944 @@
+{
+ "version": "1",
+ "timeframe": "H1",
+ "units": 53,
+ "trials": 53,
+ "mutations": [
+  "adx_silny",
+  "adx_slaby",
+  "cofniecie20",
+  "odwrocony",
+  "odwrocony+przeciw200",
+  "odwrocony+trend50",
+  "odwrocony+tylko_long",
+  "oryginal",
+  "przeciw200",
+  "przeciw200+tylko_long",
+  "siatka",
+  "trend200",
+  "trend50",
+  "tylko_long",
+  "tylko_long+trend50",
+  "tylko_short",
+  "zmiennosc_niska",
+  "zmiennosc_wysoka"
+ ],
+ "interrupted": null,
+ "reference": {
+  "mutation": "oryginal",
+  "label": "oryginał",
+  "family": "oryginał",
+  "params": {
+   "tp": 2
+  },
+  "exit": "poziomy TP/SL ze strategii, max 72",
+  "is_trades": 491,
+  "is_mean_r": -0.010242,
+  "is_mean_pips": -0.206882,
+  "is_sharpe_a": -0.007524,
+  "is_sharpe_b": -0.008439,
+  "score": -0.008439,
+  "oos": {
+   "trades": 148,
+   "mean_r": 0.135308,
+   "mean_pips": 2.026014,
+   "t_stat": 0.501326,
+   "bootstrap": {
+    "low": -5.740267,
+    "high": 9.891052,
+    "n": 148
+   }
+  }
+ },
+ "candidates": [
+  {
+   "rank": 1,
+   "mutation": "odwrocony+przeciw200",
+   "label": "odwrócony sygnał + tylko przeciw trendowi SMA200",
+   "family": "połączenie",
+   "params": {
+    "tp": 4
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is": {
+    "trades": 331,
+    "mean_r": 1.953187,
+    "mean_pips": 24.814742,
+    "sharpe_a": 5.126957,
+    "sharpe_b": 4.350936,
+    "score": 4.350936
+   },
+   "oos": {
+    "trades": 134,
+    "mean_r": 2.455278,
+    "mean_pips": 18.677678,
+    "t_stat": 28.490728,
+    "bootstrap": {
+     "low": 17.451505,
+     "high": 19.95739,
+     "n": 134
+    }
+   },
+   "dsr": {
+    "dsr": 0.999997,
+    "sharpe": 4.672815,
+    "sharpe0": 3.744112,
+    "trials": 47,
+    "trades": 331,
+    "skew": 0.714198,
+    "kurtosis": 3.976858
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 23.046212,
+    "percentile": 0.0,
+    "p5": 56.541688,
+    "p50": 63.065621,
+    "p95": 70.560426
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "import numpy as np\nimport pandas as pd\n\nHYPOTHESIS = \"\"\"Wybicie z ściśnięcia z celem dopasowanym do prognozy zasięgu (D-076, zakładka Zasięg).\nKierunku nie przewidujemy — przewidujemy, JAK DALEKO rynek może dojść: zmienność skupia się w czasie i wraca do średniej,\nwięc zasięg najbliższych 3 dni da się prognozować (model HAR na dziennych zakresach, ind.range_forecast). Gdy na H1 rynek\nstoi w wąskim pudełku z 24 godzin (wysokość w dolnych 20% z ostatnich 500 godzin), zlecenia stoją po obu stronach i to\nwybicie wybiera kierunek: zamknięcie godziny nad pudełkiem = long, pod nim = short. Stop za drugą stroną pudełka\n(gdy cel byłby wtedy nieosiągalny — w połowie pudełka), cel = 2 / 3 / 4 × stop. Wejście tylko wtedy, gdy cel mieści się\nw prognozowanym zasięgu 3 dni — inaczej TP 3 × SL i tak zwykle by nie padł. Płatnik: uczestnicy, których stopy i zlecenia\nstoją tuż za granicą konsolidacji, a po wybiciu muszą gonić cenę.\"\"\"\n\nPARAMS = {\"tp\": [2, 3, 4]}     # TP = tyle × odległość do SL (3 = reguła Michała, 2 i 4 — porównanie)\nBOX, REF, PCT = 24, 500, 20    # pudełko z 24 godzin; ściśnięte = wysokość w dolnych 20% z ostatnich 500 godzin\nH = 3                          # prognoza zasięgu na 3 najbliższe dni\nEXITS = [{\"kind\": \"level\", \"cap\": 72}]   # TP i SL z levels(); najwyżej 72 godziny (horyzont prognozy)\n\n\ndef _ksiega(df, p, ind):\n    \"\"\"Kierunek (+1/−1/0) i ceny SL/TP na zamknięciu świecy sygnału.\"\"\"\n    n = len(df)\n    zero = np.zeros(n)\n    d = ind.d1(df)\n    if d is None or len(d) < 300:\n        return zero, np.full(n, np.nan), np.full(n, np.nan)\n    zasieg = ind.d1_to_h1(df, ind.range_forecast(d, H)[\"mid\"]).to_numpy(float)   # prognoza 3 dni, znana od zamknięcia dnia\n    sq = ind.squeeze(df, BOX, REF)\n    up, lo, pct = (sq[k].shift(1).to_numpy(float) for k in (\"upper\", \"lower\", \"pct\"))   # pudełko SPRZED świecy wybicia\n    c = df[\"close\"].to_numpy(float)\n    m = float(p[\"tp\"])\n    with np.errstate(invalid=\"ignore\"):\n        scisk = pct <= PCT\n        dlugi = scisk & (c > up)\n        krotki = scisk & (c < lo)\n        srodek = (up + lo) / 2\n        sl = np.where(dlugi, lo, np.where(krotki, up, np.nan))\n        # stop za drugą stroną; gdy cel byłby poza prognozą zasięgu — stop w połowie pudełka\n        za_daleko = m * np.abs(c - sl) > zasieg\n        sl = np.where(za_daleko, srodek, sl)\n        ryzyko = np.abs(c - sl)\n        ok = (dlugi | krotki) & (ryzyko > 0) & (m * ryzyko <= zasieg)\n    kier = np.where(ok, np.where(dlugi, 1, -1), 0)\n    tp = np.where(ok, c + kier * m * ryzyko, np.nan)\n    return kier, np.where(ok, sl, np.nan), tp\n\n\ndef signals(df, p, ind):\n    kier, _, _ = _ksiega(df, p, ind)\n    return pd.Series(kier, index=df.index).astype(\"int8\")\n\n\ndef levels(df, p, ind):\n    _, sl, tp = _ksiega(df, p, ind)\n    return pd.DataFrame({\"tp\": tp, \"sl\": sl}, index=df.index)\n\n\n# ---- Eksploracja Maca (D-072): odwrócony sygnał + tylko przeciw trendowi SMA200 ----\n# Wybrane tylko po IS spośród 53 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_odwrocony(df, s, p, ind):\n    return -s\n\ndef _ia5_przeciw200(df, s, p, ind):\n    m = ind.sma(df.close, 200)\n    return s.where(((s > 0) & (df.close < m)) | ((s < 0) & (df.close > m)), 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_odwrocony(df, s, p, ind)\n    s = _ia5_przeciw200(df, s, p, ind)\n    return s\n\nPARAMS = {'tp': [4]}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: odwrócony sygnał + tylko przeciw trendowi SMA200. Wybrana po IS spośród 53 prób.'\n",
+   "code_hash": "06accb8df0eea70d",
+   "verdict": {
+    "color": "red",
+    "text": "nie przetrwała OOS"
+   }
+  },
+  {
+   "rank": 2,
+   "mutation": "odwrocony",
+   "label": "odwrócony sygnał",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 4
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is": {
+    "trades": 507,
+    "mean_r": 1.93096,
+    "mean_pips": 24.858999,
+    "sharpe_a": 5.161766,
+    "sharpe_b": 4.104103,
+    "score": 4.104103
+   },
+   "oos": {
+    "trades": 175,
+    "mean_r": 2.386571,
+    "mean_pips": 18.519142,
+    "t_stat": 33.91325,
+    "bootstrap": {
+     "low": 17.43405,
+     "high": 19.55651,
+     "n": 175
+    }
+   },
+   "dsr": {
+    "dsr": 1.0,
+    "sharpe": 4.524804,
+    "sharpe0": 3.744112,
+    "trials": 47,
+    "trades": 507,
+    "skew": 0.536639,
+    "kurtosis": 3.630589
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 23.232203,
+    "percentile": 0.0,
+    "p5": 52.758512,
+    "p50": 57.624194,
+    "p95": 62.668311
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "import numpy as np\nimport pandas as pd\n\nHYPOTHESIS = \"\"\"Wybicie z ściśnięcia z celem dopasowanym do prognozy zasięgu (D-076, zakładka Zasięg).\nKierunku nie przewidujemy — przewidujemy, JAK DALEKO rynek może dojść: zmienność skupia się w czasie i wraca do średniej,\nwięc zasięg najbliższych 3 dni da się prognozować (model HAR na dziennych zakresach, ind.range_forecast). Gdy na H1 rynek\nstoi w wąskim pudełku z 24 godzin (wysokość w dolnych 20% z ostatnich 500 godzin), zlecenia stoją po obu stronach i to\nwybicie wybiera kierunek: zamknięcie godziny nad pudełkiem = long, pod nim = short. Stop za drugą stroną pudełka\n(gdy cel byłby wtedy nieosiągalny — w połowie pudełka), cel = 2 / 3 / 4 × stop. Wejście tylko wtedy, gdy cel mieści się\nw prognozowanym zasięgu 3 dni — inaczej TP 3 × SL i tak zwykle by nie padł. Płatnik: uczestnicy, których stopy i zlecenia\nstoją tuż za granicą konsolidacji, a po wybiciu muszą gonić cenę.\"\"\"\n\nPARAMS = {\"tp\": [2, 3, 4]}     # TP = tyle × odległość do SL (3 = reguła Michała, 2 i 4 — porównanie)\nBOX, REF, PCT = 24, 500, 20    # pudełko z 24 godzin; ściśnięte = wysokość w dolnych 20% z ostatnich 500 godzin\nH = 3                          # prognoza zasięgu na 3 najbliższe dni\nEXITS = [{\"kind\": \"level\", \"cap\": 72}]   # TP i SL z levels(); najwyżej 72 godziny (horyzont prognozy)\n\n\ndef _ksiega(df, p, ind):\n    \"\"\"Kierunek (+1/−1/0) i ceny SL/TP na zamknięciu świecy sygnału.\"\"\"\n    n = len(df)\n    zero = np.zeros(n)\n    d = ind.d1(df)\n    if d is None or len(d) < 300:\n        return zero, np.full(n, np.nan), np.full(n, np.nan)\n    zasieg = ind.d1_to_h1(df, ind.range_forecast(d, H)[\"mid\"]).to_numpy(float)   # prognoza 3 dni, znana od zamknięcia dnia\n    sq = ind.squeeze(df, BOX, REF)\n    up, lo, pct = (sq[k].shift(1).to_numpy(float) for k in (\"upper\", \"lower\", \"pct\"))   # pudełko SPRZED świecy wybicia\n    c = df[\"close\"].to_numpy(float)\n    m = float(p[\"tp\"])\n    with np.errstate(invalid=\"ignore\"):\n        scisk = pct <= PCT\n        dlugi = scisk & (c > up)\n        krotki = scisk & (c < lo)\n        srodek = (up + lo) / 2\n        sl = np.where(dlugi, lo, np.where(krotki, up, np.nan))\n        # stop za drugą stroną; gdy cel byłby poza prognozą zasięgu — stop w połowie pudełka\n        za_daleko = m * np.abs(c - sl) > zasieg\n        sl = np.where(za_daleko, srodek, sl)\n        ryzyko = np.abs(c - sl)\n        ok = (dlugi | krotki) & (ryzyko > 0) & (m * ryzyko <= zasieg)\n    kier = np.where(ok, np.where(dlugi, 1, -1), 0)\n    tp = np.where(ok, c + kier * m * ryzyko, np.nan)\n    return kier, np.where(ok, sl, np.nan), tp\n\n\ndef signals(df, p, ind):\n    kier, _, _ = _ksiega(df, p, ind)\n    return pd.Series(kier, index=df.index).astype(\"int8\")\n\n\ndef levels(df, p, ind):\n    _, sl, tp = _ksiega(df, p, ind)\n    return pd.DataFrame({\"tp\": tp, \"sl\": sl}, index=df.index)\n\n\n# ---- Eksploracja Maca (D-072): odwrócony sygnał ----\n# Wybrane tylko po IS spośród 53 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_odwrocony(df, s, p, ind):\n    return -s\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_odwrocony(df, s, p, ind)\n    return s\n\nPARAMS = {'tp': [4]}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: odwrócony sygnał. Wybrana po IS spośród 53 prób.'\n",
+   "code_hash": "4132ebb86216e7cd",
+   "verdict": {
+    "color": "red",
+    "text": "nie przetrwała OOS"
+   }
+  },
+  {
+   "rank": 3,
+   "mutation": "odwrocony+tylko_long",
+   "label": "odwrócony sygnał + tylko long",
+   "family": "połączenie",
+   "params": {
+    "tp": 4
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is": {
+    "trades": 242,
+    "mean_r": 1.96869,
+    "mean_pips": 24.34417,
+    "sharpe_a": 5.189347,
+    "sharpe_b": 3.953931,
+    "score": 3.953931
+   },
+   "oos": {
+    "trades": 63,
+    "mean_r": 2.142184,
+    "mean_pips": 17.463986,
+    "t_stat": 19.812941,
+    "bootstrap": {
+     "low": 15.925507,
+     "high": 19.270852,
+     "n": 63
+    }
+   },
+   "dsr": {
+    "dsr": 0.999605,
+    "sharpe": 4.437768,
+    "sharpe0": 3.744112,
+    "trials": 47,
+    "trades": 242,
+    "skew": 0.583147,
+    "kurtosis": 3.413466
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 22.923017,
+    "percentile": 0.0,
+    "p5": 39.473238,
+    "p50": 45.212736,
+    "p95": 50.883229
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "import numpy as np\nimport pandas as pd\n\nHYPOTHESIS = \"\"\"Wybicie z ściśnięcia z celem dopasowanym do prognozy zasięgu (D-076, zakładka Zasięg).\nKierunku nie przewidujemy — przewidujemy, JAK DALEKO rynek może dojść: zmienność skupia się w czasie i wraca do średniej,\nwięc zasięg najbliższych 3 dni da się prognozować (model HAR na dziennych zakresach, ind.range_forecast). Gdy na H1 rynek\nstoi w wąskim pudełku z 24 godzin (wysokość w dolnych 20% z ostatnich 500 godzin), zlecenia stoją po obu stronach i to\nwybicie wybiera kierunek: zamknięcie godziny nad pudełkiem = long, pod nim = short. Stop za drugą stroną pudełka\n(gdy cel byłby wtedy nieosiągalny — w połowie pudełka), cel = 2 / 3 / 4 × stop. Wejście tylko wtedy, gdy cel mieści się\nw prognozowanym zasięgu 3 dni — inaczej TP 3 × SL i tak zwykle by nie padł. Płatnik: uczestnicy, których stopy i zlecenia\nstoją tuż za granicą konsolidacji, a po wybiciu muszą gonić cenę.\"\"\"\n\nPARAMS = {\"tp\": [2, 3, 4]}     # TP = tyle × odległość do SL (3 = reguła Michała, 2 i 4 — porównanie)\nBOX, REF, PCT = 24, 500, 20    # pudełko z 24 godzin; ściśnięte = wysokość w dolnych 20% z ostatnich 500 godzin\nH = 3                          # prognoza zasięgu na 3 najbliższe dni\nEXITS = [{\"kind\": \"level\", \"cap\": 72}]   # TP i SL z levels(); najwyżej 72 godziny (horyzont prognozy)\n\n\ndef _ksiega(df, p, ind):\n    \"\"\"Kierunek (+1/−1/0) i ceny SL/TP na zamknięciu świecy sygnału.\"\"\"\n    n = len(df)\n    zero = np.zeros(n)\n    d = ind.d1(df)\n    if d is None or len(d) < 300:\n        return zero, np.full(n, np.nan), np.full(n, np.nan)\n    zasieg = ind.d1_to_h1(df, ind.range_forecast(d, H)[\"mid\"]).to_numpy(float)   # prognoza 3 dni, znana od zamknięcia dnia\n    sq = ind.squeeze(df, BOX, REF)\n    up, lo, pct = (sq[k].shift(1).to_numpy(float) for k in (\"upper\", \"lower\", \"pct\"))   # pudełko SPRZED świecy wybicia\n    c = df[\"close\"].to_numpy(float)\n    m = float(p[\"tp\"])\n    with np.errstate(invalid=\"ignore\"):\n        scisk = pct <= PCT\n        dlugi = scisk & (c > up)\n        krotki = scisk & (c < lo)\n        srodek = (up + lo) / 2\n        sl = np.where(dlugi, lo, np.where(krotki, up, np.nan))\n        # stop za drugą stroną; gdy cel byłby poza prognozą zasięgu — stop w połowie pudełka\n        za_daleko = m * np.abs(c - sl) > zasieg\n        sl = np.where(za_daleko, srodek, sl)\n        ryzyko = np.abs(c - sl)\n        ok = (dlugi | krotki) & (ryzyko > 0) & (m * ryzyko <= zasieg)\n    kier = np.where(ok, np.where(dlugi, 1, -1), 0)\n    tp = np.where(ok, c + kier * m * ryzyko, np.nan)\n    return kier, np.where(ok, sl, np.nan), tp\n\n\ndef signals(df, p, ind):\n    kier, _, _ = _ksiega(df, p, ind)\n    return pd.Series(kier, index=df.index).astype(\"int8\")\n\n\ndef levels(df, p, ind):\n    _, sl, tp = _ksiega(df, p, ind)\n    return pd.DataFrame({\"tp\": tp, \"sl\": sl}, index=df.index)\n\n\n# ---- Eksploracja Maca (D-072): odwrócony sygnał + tylko long ----\n# Wybrane tylko po IS spośród 53 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_odwrocony(df, s, p, ind):\n    return -s\n\ndef _ia5_tylko_long(df, s, p, ind):\n    return s.where(s > 0, 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_odwrocony(df, s, p, ind)\n    s = _ia5_tylko_long(df, s, p, ind)\n    return s\n\nPARAMS = {'tp': [4]}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: odwrócony sygnał + tylko long. Wybrana po IS spośród 53 prób.'\n",
+   "code_hash": "f3314edca4e62003",
+   "verdict": {
+    "color": "red",
+    "text": "nie przetrwała OOS"
+   }
+  },
+  {
+   "rank": 4,
+   "mutation": "przeciw200+tylko_long",
+   "label": "tylko przeciw trendowi SMA200 + tylko long",
+   "family": "połączenie",
+   "params": {
+    "tp": 4
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is": {
+    "trades": 61,
+    "mean_r": 0.241216,
+    "mean_pips": 9.205602,
+    "sharpe_a": 0.101152,
+    "sharpe_b": 0.126714,
+    "score": 0.101152
+   },
+   "oos": {
+    "trades": 7,
+    "mean_r": -1.11548,
+    "mean_pips": -18.891426,
+    "t_stat": -4.987805,
+    "bootstrap": {
+     "low": -26.050703,
+     "high": -12.992954,
+     "n": 7
+    }
+   },
+   "dsr": {
+    "dsr": 0.0,
+    "sharpe": 0.116896,
+    "sharpe0": 3.744112,
+    "trials": 47,
+    "trades": 61,
+    "skew": 1.110242,
+    "kurtosis": 2.476124
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 6.313261,
+    "percentile": 85.3,
+    "p5": -13.52505,
+    "p50": -2.092593,
+    "p95": 11.479496
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "import numpy as np\nimport pandas as pd\n\nHYPOTHESIS = \"\"\"Wybicie z ściśnięcia z celem dopasowanym do prognozy zasięgu (D-076, zakładka Zasięg).\nKierunku nie przewidujemy — przewidujemy, JAK DALEKO rynek może dojść: zmienność skupia się w czasie i wraca do średniej,\nwięc zasięg najbliższych 3 dni da się prognozować (model HAR na dziennych zakresach, ind.range_forecast). Gdy na H1 rynek\nstoi w wąskim pudełku z 24 godzin (wysokość w dolnych 20% z ostatnich 500 godzin), zlecenia stoją po obu stronach i to\nwybicie wybiera kierunek: zamknięcie godziny nad pudełkiem = long, pod nim = short. Stop za drugą stroną pudełka\n(gdy cel byłby wtedy nieosiągalny — w połowie pudełka), cel = 2 / 3 / 4 × stop. Wejście tylko wtedy, gdy cel mieści się\nw prognozowanym zasięgu 3 dni — inaczej TP 3 × SL i tak zwykle by nie padł. Płatnik: uczestnicy, których stopy i zlecenia\nstoją tuż za granicą konsolidacji, a po wybiciu muszą gonić cenę.\"\"\"\n\nPARAMS = {\"tp\": [2, 3, 4]}     # TP = tyle × odległość do SL (3 = reguła Michała, 2 i 4 — porównanie)\nBOX, REF, PCT = 24, 500, 20    # pudełko z 24 godzin; ściśnięte = wysokość w dolnych 20% z ostatnich 500 godzin\nH = 3                          # prognoza zasięgu na 3 najbliższe dni\nEXITS = [{\"kind\": \"level\", \"cap\": 72}]   # TP i SL z levels(); najwyżej 72 godziny (horyzont prognozy)\n\n\ndef _ksiega(df, p, ind):\n    \"\"\"Kierunek (+1/−1/0) i ceny SL/TP na zamknięciu świecy sygnału.\"\"\"\n    n = len(df)\n    zero = np.zeros(n)\n    d = ind.d1(df)\n    if d is None or len(d) < 300:\n        return zero, np.full(n, np.nan), np.full(n, np.nan)\n    zasieg = ind.d1_to_h1(df, ind.range_forecast(d, H)[\"mid\"]).to_numpy(float)   # prognoza 3 dni, znana od zamknięcia dnia\n    sq = ind.squeeze(df, BOX, REF)\n    up, lo, pct = (sq[k].shift(1).to_numpy(float) for k in (\"upper\", \"lower\", \"pct\"))   # pudełko SPRZED świecy wybicia\n    c = df[\"close\"].to_numpy(float)\n    m = float(p[\"tp\"])\n    with np.errstate(invalid=\"ignore\"):\n        scisk = pct <= PCT\n        dlugi = scisk & (c > up)\n        krotki = scisk & (c < lo)\n        srodek = (up + lo) / 2\n        sl = np.where(dlugi, lo, np.where(krotki, up, np.nan))\n        # stop za drugą stroną; gdy cel byłby poza prognozą zasięgu — stop w połowie pudełka\n        za_daleko = m * np.abs(c - sl) > zasieg\n        sl = np.where(za_daleko, srodek, sl)\n        ryzyko = np.abs(c - sl)\n        ok = (dlugi | krotki) & (ryzyko > 0) & (m * ryzyko <= zasieg)\n    kier = np.where(ok, np.where(dlugi, 1, -1), 0)\n    tp = np.where(ok, c + kier * m * ryzyko, np.nan)\n    return kier, np.where(ok, sl, np.nan), tp\n\n\ndef signals(df, p, ind):\n    kier, _, _ = _ksiega(df, p, ind)\n    return pd.Series(kier, index=df.index).astype(\"int8\")\n\n\ndef levels(df, p, ind):\n    _, sl, tp = _ksiega(df, p, ind)\n    return pd.DataFrame({\"tp\": tp, \"sl\": sl}, index=df.index)\n\n\n# ---- Eksploracja Maca (D-072): tylko przeciw trendowi SMA200 + tylko long ----\n# Wybrane tylko po IS spośród 53 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_przeciw200(df, s, p, ind):\n    m = ind.sma(df.close, 200)\n    return s.where(((s > 0) & (df.close < m)) | ((s < 0) & (df.close > m)), 0.0)\n\ndef _ia5_tylko_long(df, s, p, ind):\n    return s.where(s > 0, 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_przeciw200(df, s, p, ind)\n    s = _ia5_tylko_long(df, s, p, ind)\n    return s\n\nPARAMS = {'tp': [4]}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: tylko przeciw trendowi SMA200 + tylko long. Wybrana po IS spośród 53 prób.'\n",
+   "code_hash": "395f34ef7f7122e2",
+   "verdict": {
+    "color": "mute",
+    "text": "za mało transakcji OOS"
+   }
+  },
+  {
+   "rank": 5,
+   "mutation": "przeciw200",
+   "label": "tylko przeciw trendowi SMA200",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 2
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is": {
+    "trades": 192,
+    "mean_r": 0.093446,
+    "mean_pips": 7.517357,
+    "sharpe_a": 0.057162,
+    "sharpe_b": 0.087265,
+    "score": 0.057162
+   },
+   "oos": {
+    "trades": 48,
+    "mean_r": -0.173905,
+    "mean_pips": -5.056149,
+    "t_stat": -0.737757,
+    "bootstrap": {
+     "low": -18.168913,
+     "high": 8.955836,
+     "n": 48
+    }
+   },
+   "dsr": {
+    "dsr": 0.0,
+    "sharpe": 0.072757,
+    "sharpe0": 3.744112,
+    "trials": 47,
+    "trades": 192,
+    "skew": 0.48445,
+    "kurtosis": 1.515246
+   },
+   "benchmark": {
+    "sims": 1000,
+    "actual_mean_pips": 5.002656,
+    "percentile": 93.3,
+    "p5": -10.463678,
+    "p50": -2.785851,
+    "p95": 5.689267
+   },
+   "check": {
+    "ok": true,
+    "why": ""
+   },
+   "code": "import numpy as np\nimport pandas as pd\n\nHYPOTHESIS = \"\"\"Wybicie z ściśnięcia z celem dopasowanym do prognozy zasięgu (D-076, zakładka Zasięg).\nKierunku nie przewidujemy — przewidujemy, JAK DALEKO rynek może dojść: zmienność skupia się w czasie i wraca do średniej,\nwięc zasięg najbliższych 3 dni da się prognozować (model HAR na dziennych zakresach, ind.range_forecast). Gdy na H1 rynek\nstoi w wąskim pudełku z 24 godzin (wysokość w dolnych 20% z ostatnich 500 godzin), zlecenia stoją po obu stronach i to\nwybicie wybiera kierunek: zamknięcie godziny nad pudełkiem = long, pod nim = short. Stop za drugą stroną pudełka\n(gdy cel byłby wtedy nieosiągalny — w połowie pudełka), cel = 2 / 3 / 4 × stop. Wejście tylko wtedy, gdy cel mieści się\nw prognozowanym zasięgu 3 dni — inaczej TP 3 × SL i tak zwykle by nie padł. Płatnik: uczestnicy, których stopy i zlecenia\nstoją tuż za granicą konsolidacji, a po wybiciu muszą gonić cenę.\"\"\"\n\nPARAMS = {\"tp\": [2, 3, 4]}     # TP = tyle × odległość do SL (3 = reguła Michała, 2 i 4 — porównanie)\nBOX, REF, PCT = 24, 500, 20    # pudełko z 24 godzin; ściśnięte = wysokość w dolnych 20% z ostatnich 500 godzin\nH = 3                          # prognoza zasięgu na 3 najbliższe dni\nEXITS = [{\"kind\": \"level\", \"cap\": 72}]   # TP i SL z levels(); najwyżej 72 godziny (horyzont prognozy)\n\n\ndef _ksiega(df, p, ind):\n    \"\"\"Kierunek (+1/−1/0) i ceny SL/TP na zamknięciu świecy sygnału.\"\"\"\n    n = len(df)\n    zero = np.zeros(n)\n    d = ind.d1(df)\n    if d is None or len(d) < 300:\n        return zero, np.full(n, np.nan), np.full(n, np.nan)\n    zasieg = ind.d1_to_h1(df, ind.range_forecast(d, H)[\"mid\"]).to_numpy(float)   # prognoza 3 dni, znana od zamknięcia dnia\n    sq = ind.squeeze(df, BOX, REF)\n    up, lo, pct = (sq[k].shift(1).to_numpy(float) for k in (\"upper\", \"lower\", \"pct\"))   # pudełko SPRZED świecy wybicia\n    c = df[\"close\"].to_numpy(float)\n    m = float(p[\"tp\"])\n    with np.errstate(invalid=\"ignore\"):\n        scisk = pct <= PCT\n        dlugi = scisk & (c > up)\n        krotki = scisk & (c < lo)\n        srodek = (up + lo) / 2\n        sl = np.where(dlugi, lo, np.where(krotki, up, np.nan))\n        # stop za drugą stroną; gdy cel byłby poza prognozą zasięgu — stop w połowie pudełka\n        za_daleko = m * np.abs(c - sl) > zasieg\n        sl = np.where(za_daleko, srodek, sl)\n        ryzyko = np.abs(c - sl)\n        ok = (dlugi | krotki) & (ryzyko > 0) & (m * ryzyko <= zasieg)\n    kier = np.where(ok, np.where(dlugi, 1, -1), 0)\n    tp = np.where(ok, c + kier * m * ryzyko, np.nan)\n    return kier, np.where(ok, sl, np.nan), tp\n\n\ndef signals(df, p, ind):\n    kier, _, _ = _ksiega(df, p, ind)\n    return pd.Series(kier, index=df.index).astype(\"int8\")\n\n\ndef levels(df, p, ind):\n    _, sl, tp = _ksiega(df, p, ind)\n    return pd.DataFrame({\"tp\": tp, \"sl\": sl}, index=df.index)\n\n\n# ---- Eksploracja Maca (D-072): tylko przeciw trendowi SMA200 ----\n# Wybrane tylko po IS spośród 53 prób eksploracji; OOS tej wersji był już raz oglądany (dziennik OOS).\nimport numpy as np\nimport pandas as pd\n\n_ia5_baza = signals\n\ndef _ia5_przeciw200(df, s, p, ind):\n    m = ind.sma(df.close, 200)\n    return s.where(((s > 0) & (df.close < m)) | ((s < 0) & (df.close > m)), 0.0)\n\ndef signals(df, p, ind):\n    s = _ia5_baza(df, p, ind)\n    s = pd.Series(np.nan_to_num(np.asarray(s, dtype=float)), index=df.index)\n    s = _ia5_przeciw200(df, s, p, ind)\n    return s\n\nPARAMS = {'tp': [2]}\nHYPOTHESIS = HYPOTHESIS + '\\n\\n' + 'Wersja z eksploracji Maca: tylko przeciw trendowi SMA200. Wybrana po IS spośród 53 prób.'\n",
+   "code_hash": "aecb7236fdce6349",
+   "verdict": {
+    "color": "red",
+    "text": "nie przetrwała OOS"
+   }
+  }
+ ],
+ "is_table": [
+  {
+   "mutation": "odwrocony+przeciw200",
+   "label": "odwrócony sygnał + tylko przeciw trendowi SMA200",
+   "family": "połączenie",
+   "params": {
+    "tp": 4
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 331,
+   "is_mean_r": 1.953187,
+   "is_mean_pips": 24.814742,
+   "is_sharpe_a": 5.126957,
+   "is_sharpe_b": 4.350936,
+   "score": 4.350936
+  },
+  {
+   "mutation": "odwrocony",
+   "label": "odwrócony sygnał",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 4
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 507,
+   "is_mean_r": 1.93096,
+   "is_mean_pips": 24.858999,
+   "is_sharpe_a": 5.161766,
+   "is_sharpe_b": 4.104103,
+   "score": 4.104103
+  },
+  {
+   "mutation": "odwrocony+tylko_long",
+   "label": "odwrócony sygnał + tylko long",
+   "family": "połączenie",
+   "params": {
+    "tp": 4
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 242,
+   "is_mean_r": 1.96869,
+   "is_mean_pips": 24.34417,
+   "is_sharpe_a": 5.189347,
+   "is_sharpe_b": 3.953931,
+   "score": 3.953931
+  },
+  {
+   "mutation": "odwrocony+przeciw200",
+   "label": "odwrócony sygnał + tylko przeciw trendowi SMA200",
+   "family": "połączenie",
+   "params": {
+    "tp": 2
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 584,
+   "is_mean_r": 3.579299,
+   "is_mean_pips": 48.047008,
+   "is_sharpe_a": 4.436073,
+   "is_sharpe_b": 3.946864,
+   "score": 3.946864
+  },
+  {
+   "mutation": "odwrocony",
+   "label": "odwrócony sygnał",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 2
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 845,
+   "is_mean_r": 3.56711,
+   "is_mean_pips": 47.883696,
+   "is_sharpe_a": 4.475502,
+   "is_sharpe_b": 3.877061,
+   "score": 3.877061
+  },
+  {
+   "mutation": "odwrocony+tylko_long",
+   "label": "odwrócony sygnał + tylko long",
+   "family": "połączenie",
+   "params": {
+    "tp": 2
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 393,
+   "is_mean_r": 3.629002,
+   "is_mean_pips": 47.615878,
+   "is_sharpe_a": 4.448204,
+   "is_sharpe_b": 3.866405,
+   "score": 3.866405
+  },
+  {
+   "mutation": "odwrocony+tylko_long",
+   "label": "odwrócony sygnał + tylko long",
+   "family": "połączenie",
+   "params": {
+    "tp": 3
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 355,
+   "is_mean_r": 2.26821,
+   "is_mean_pips": 29.439386,
+   "is_sharpe_a": 3.952256,
+   "is_sharpe_b": 3.723252,
+   "score": 3.723252
+  },
+  {
+   "mutation": "odwrocony",
+   "label": "odwrócony sygnał",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 3
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 758,
+   "is_mean_r": 2.247401,
+   "is_mean_pips": 29.823675,
+   "is_sharpe_a": 3.989538,
+   "is_sharpe_b": 3.672848,
+   "score": 3.672848
+  },
+  {
+   "mutation": "odwrocony+przeciw200",
+   "label": "odwrócony sygnał + tylko przeciw trendowi SMA200",
+   "family": "połączenie",
+   "params": {
+    "tp": 3
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 514,
+   "is_mean_r": 2.261453,
+   "is_mean_pips": 29.961211,
+   "is_sharpe_a": 4.193617,
+   "is_sharpe_b": 3.546428,
+   "score": 3.546428
+  },
+  {
+   "mutation": "przeciw200+tylko_long",
+   "label": "tylko przeciw trendowi SMA200 + tylko long",
+   "family": "połączenie",
+   "params": {
+    "tp": 4
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 61,
+   "is_mean_r": 0.241216,
+   "is_mean_pips": 9.205602,
+   "is_sharpe_a": 0.101152,
+   "is_sharpe_b": 0.126714,
+   "score": 0.101152
+  },
+  {
+   "mutation": "przeciw200+tylko_long",
+   "label": "tylko przeciw trendowi SMA200 + tylko long",
+   "family": "połączenie",
+   "params": {
+    "tp": 3
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 85,
+   "is_mean_r": 0.207987,
+   "is_mean_pips": 13.782788,
+   "is_sharpe_a": 0.175371,
+   "is_sharpe_b": 0.064195,
+   "score": 0.064195
+  },
+  {
+   "mutation": "przeciw200+tylko_long",
+   "label": "tylko przeciw trendowi SMA200 + tylko long",
+   "family": "połączenie",
+   "params": {
+    "tp": 2
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 89,
+   "is_mean_r": 0.221518,
+   "is_mean_pips": 20.24596,
+   "is_sharpe_a": 0.296289,
+   "is_sharpe_b": 0.062618,
+   "score": 0.062618
+  },
+  {
+   "mutation": "przeciw200",
+   "label": "tylko przeciw trendowi SMA200",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 2
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 192,
+   "is_mean_r": 0.093446,
+   "is_mean_pips": 7.517357,
+   "is_sharpe_a": 0.057162,
+   "is_sharpe_b": 0.087265,
+   "score": 0.057162
+  },
+  {
+   "mutation": "tylko_long",
+   "label": "tylko long",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 4
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 200,
+   "is_mean_r": 0.160132,
+   "is_mean_pips": 5.53703,
+   "is_sharpe_a": 0.044434,
+   "is_sharpe_b": 0.10353,
+   "score": 0.044434
+  },
+  {
+   "mutation": "tylko_long+trend50",
+   "label": "tylko long + tylko z trendem SMA50",
+   "family": "połączenie",
+   "params": {
+    "tp": 4
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 190,
+   "is_mean_r": 0.169695,
+   "is_mean_pips": 5.737194,
+   "is_sharpe_a": 0.04157,
+   "is_sharpe_b": 0.113714,
+   "score": 0.04157
+  },
+  {
+   "mutation": "tylko_long",
+   "label": "tylko long",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 2
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 293,
+   "is_mean_r": 0.049302,
+   "is_mean_pips": 4.012716,
+   "is_sharpe_a": 0.017776,
+   "is_sharpe_b": 0.055184,
+   "score": 0.017776
+  },
+  {
+   "mutation": "przeciw200",
+   "label": "tylko przeciw trendowi SMA200",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 3
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 188,
+   "is_mean_r": 0.070875,
+   "is_mean_pips": 5.170032,
+   "is_sharpe_a": 0.011495,
+   "is_sharpe_b": 0.070292,
+   "score": 0.011495
+  },
+  {
+   "mutation": "tylko_long+trend50",
+   "label": "tylko long + tylko z trendem SMA50",
+   "family": "połączenie",
+   "params": {
+    "tp": 2
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 284,
+   "is_mean_r": 0.035862,
+   "is_mean_pips": 3.792049,
+   "is_sharpe_a": 0.004299,
+   "is_sharpe_b": 0.04793,
+   "score": 0.004299
+  },
+  {
+   "mutation": "trend50",
+   "label": "tylko z trendem SMA50",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 2
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 481,
+   "is_mean_r": -0.001048,
+   "is_mean_pips": 0.469363,
+   "is_sharpe_a": 0.008495,
+   "is_sharpe_b": -0.009334,
+   "score": -0.009334
+  },
+  {
+   "mutation": "adx_slaby",
+   "label": "tylko bez wyraźnego trendu (ADX14 < 20)",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 2
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 302,
+   "is_mean_r": -0.006945,
+   "is_mean_pips": 1.511163,
+   "is_sharpe_a": -0.010453,
+   "is_sharpe_b": -0.000648,
+   "score": -0.010453
+  },
+  {
+   "mutation": "tylko_long",
+   "label": "tylko long",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 3
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 280,
+   "is_mean_r": 0.047455,
+   "is_mean_pips": 3.321454,
+   "is_sharpe_a": -0.018218,
+   "is_sharpe_b": 0.065157,
+   "score": -0.018218
+  },
+  {
+   "mutation": "adx_slaby",
+   "label": "tylko bez wyraźnego trendu (ADX14 < 20)",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 4
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 215,
+   "is_mean_r": 0.028216,
+   "is_mean_pips": 2.548725,
+   "is_sharpe_a": -0.02138,
+   "is_sharpe_b": 0.043254,
+   "score": -0.02138
+  },
+  {
+   "mutation": "siatka",
+   "label": "szersza siatka parametrów",
+   "family": "parametry",
+   "params": {
+    "tp": 5
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 146,
+   "is_mean_r": 0.055636,
+   "is_mean_pips": 2.364044,
+   "is_sharpe_a": -0.024313,
+   "is_sharpe_b": 0.071593,
+   "score": -0.024313
+  },
+  {
+   "mutation": "zmiennosc_niska",
+   "label": "tylko przy spokojnym rynku (ATR14 < ATR100)",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 2
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 405,
+   "is_mean_r": -0.019548,
+   "is_mean_pips": 0.882097,
+   "is_sharpe_a": -0.034637,
+   "is_sharpe_b": 0.001231,
+   "score": -0.034637
+  },
+  {
+   "mutation": "trend200",
+   "label": "tylko z trendem SMA200",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 4
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 246,
+   "is_mean_r": 0.036725,
+   "is_mean_pips": 1.192,
+   "is_sharpe_a": -0.040763,
+   "is_sharpe_b": 0.063279,
+   "score": -0.040763
+  },
+  {
+   "mutation": "trend50",
+   "label": "tylko z trendem SMA50",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 4
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 346,
+   "is_mean_r": 0.038808,
+   "is_mean_pips": 1.451746,
+   "is_sharpe_a": -0.041975,
+   "is_sharpe_b": 0.066502,
+   "score": -0.041975
+  },
+  {
+   "mutation": "tylko_long+trend50",
+   "label": "tylko long + tylko z trendem SMA50",
+   "family": "połączenie",
+   "params": {
+    "tp": 3
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 269,
+   "is_mean_r": 0.034595,
+   "is_mean_pips": 2.849684,
+   "is_sharpe_a": -0.04504,
+   "is_sharpe_b": 0.073925,
+   "score": -0.04504
+  },
+  {
+   "mutation": "trend200",
+   "label": "tylko z trendem SMA200",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 2
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 377,
+   "is_mean_r": -0.039198,
+   "is_mean_pips": -3.039501,
+   "is_sharpe_a": -0.047,
+   "is_sharpe_b": -0.016245,
+   "score": -0.047
+  },
+  {
+   "mutation": "zmiennosc_niska",
+   "label": "tylko przy spokojnym rynku (ATR14 < ATR100)",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 4
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 315,
+   "is_mean_r": 0.001763,
+   "is_mean_pips": 0.434003,
+   "is_sharpe_a": -0.047288,
+   "is_sharpe_b": 0.037729,
+   "score": -0.047288
+  },
+  {
+   "mutation": "przeciw200",
+   "label": "tylko przeciw trendowi SMA200",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 4
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 138,
+   "is_mean_r": 0.059878,
+   "is_mean_pips": 2.780191,
+   "is_sharpe_a": -0.048981,
+   "is_sharpe_b": 0.092184,
+   "score": -0.048981
+  },
+  {
+   "mutation": "trend50",
+   "label": "tylko z trendem SMA50",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 3
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 480,
+   "is_mean_r": -0.041892,
+   "is_mean_pips": -0.611861,
+   "is_sharpe_a": -0.060509,
+   "is_sharpe_b": 0.005174,
+   "score": -0.060509
+  },
+  {
+   "mutation": "siatka",
+   "label": "szersza siatka parametrów",
+   "family": "parametry",
+   "params": {
+    "tp": 1
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 536,
+   "is_mean_r": -0.026978,
+   "is_mean_pips": -0.360415,
+   "is_sharpe_a": 0.009102,
+   "is_sharpe_b": -0.060584,
+   "score": -0.060584
+  },
+  {
+   "mutation": "zmiennosc_niska",
+   "label": "tylko przy spokojnym rynku (ATR14 < ATR100)",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 3
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 424,
+   "is_mean_r": -0.073266,
+   "is_mean_pips": -1.676761,
+   "is_sharpe_a": -0.061311,
+   "is_sharpe_b": -0.030736,
+   "score": -0.061311
+  },
+  {
+   "mutation": "adx_slaby",
+   "label": "tylko bez wyraźnego trendu (ADX14 < 20)",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 3
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 286,
+   "is_mean_r": -0.030772,
+   "is_mean_pips": 0.50268,
+   "is_sharpe_a": -0.066555,
+   "is_sharpe_b": 0.021955,
+   "score": -0.066555
+  },
+  {
+   "mutation": "zmiennosc_wysoka",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 4
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 46,
+   "is_mean_r": -0.004148,
+   "is_mean_pips": 0.67718,
+   "is_sharpe_a": -0.069791,
+   "is_sharpe_b": 0.054726,
+   "score": -0.069791
+  },
+  {
+   "mutation": "zmiennosc_wysoka",
+   "label": "tylko przy podwyższonej zmienności (ATR14 > ATR100)",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 2
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 130,
+   "is_mean_r": -0.05715,
+   "is_mean_pips": -6.868351,
+   "is_sharpe_a": -0.023898,
+   "is_sharpe_b": -0.074438,
+   "score": -0.074438
+  },
+  {
+   "mutation": "tylko_short",
+   "label": "tylko short",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 2
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 260,
+   "is_mean_r": -0.077383,
+   "is_mean_pips": -5.123399,
+   "is_sharpe_a": -0.089415,
+   "is_sharpe_b": -0.031914,
+   "score": -0.089415
+  },
+  {
+   "mutation": "adx_silny",
+   "label": "tylko przy silnym trendzie (ADX14 > 25)",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 2
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 152,
+   "is_mean_r": 0.003938,
+   "is_mean_pips": -1.755986,
+   "is_sharpe_a": -0.121503,
+   "is_sharpe_b": 0.112609,
+   "score": -0.121503
+  },
+  {
+   "mutation": "tylko_short",
+   "label": "tylko short",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 3
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 247,
+   "is_mean_r": -0.141042,
+   "is_mean_pips": -5.129307,
+   "is_sharpe_a": -0.123766,
+   "is_sharpe_b": -0.056292,
+   "score": -0.123766
+  },
+  {
+   "mutation": "trend200",
+   "label": "tylko z trendem SMA200",
+   "family": "przekształcenie",
+   "params": {
+    "tp": 3
+   },
+   "exit": "poziomy TP/SL ze strategii, max 72",
+   "is_trades": 361,
+   "is_mean_r": -0.077746,
+   "is_mean_pips": -2.949194,
+   "is_sharpe_a": -0.125665,
+   "is_sharpe_b": 0.016068,
+   "score": -0.125665
+  }
+ ],
+ "summary": "Mac sprawdził 53 odmian (18 rodzajów). 5 kandydatów otwartych na OOS — żaden nie przetrwał.",
+ "seconds": 1181.5,
+ "oos_views": {
+  "strategy_versions": 1,
+  "window_codes": 4,
+  "window_explore": 20
+ }
+}
